@@ -7,7 +7,7 @@
 Pi Studio 的扩展分为两层：
 
 - **Agent 扩展**在 Electron 主进程中运行受信任的 Node.js 模块，通过 Pi Durable 提供 tools、sections、hooks 和 tasks。
-- **UI 扩展**只提交 JSON 安全的声明式内容。渲染进程不会收到 HTML、CSS、JavaScript、React 组件、Electron 对象或任意 IPC 能力。
+- **UI 扩展**优先使用 JSON 安全的声明式内容；需要独立交互界面的侧栏面板，可通过 `panel.view` 在受控沙箱（`pi-ext://` + `iframe sandbox` + JSON `postMessage` 桥）中加载插件自身的 `ui/` 静态资源。主渲染进程不会接收任意可执行插件代码或直接 DOM 注入。
 
 两层可以写在同一个扩展中，也可以只实现其中一层。扩展契约面向普通主进程和 renderer；扩展不应读取 `~/.pi`、Pi CLI 配置或另一套宿主 API。
 
@@ -31,13 +31,13 @@ my-extension/
 <workspace>/.pi-studio/extensions/<manifest-id>/<version>/  # 项目范围代码
 <workspace>/.pi-studio/extensions/<manifest-id>/current.json
 
-<Studio userData>/extension-data/user/<manifest-id>/        # 用户范围运行数据
-<Studio userData>/extension-data/project-<hash>/<manifest-id>/
+<Studio userData>/data/extension-data/user/<manifest-id>/        # 用户范围运行数据
+<Studio userData>/data/extension-data/project-<hash>/<manifest-id>/
 ```
 
 清单必须位于所选目录根部。`runtime.durableEntry` 必须指向扩展目录内的 `.js` 或 `.mjs` 文件；`..`、绝对路径和通过符号链接逃出扩展目录的入口都会被拒绝。扩展不得把缓存或用户数据写入版本代码目录，`activate()` 提供的 `dataDirectory` 才是可持久化目录。
 
-插件包内的扩展使用同一个 `dataDirectory` 接口。Studio 为它分配 `<Studio userData>/plugin-data/<plugin-id>/<manifest-id>/`，详见[插件目录约定](../guides/plugins.md)。
+插件包内的扩展使用同一个 `dataDirectory` 接口。Studio 为它分配 `<Studio userData>/data/plugin-data/<plugin-id>/<manifest-id>/`，详见[插件目录约定](../guides/plugins.md)。
 
 Studio 先把本地目录、ZIP、HTTPS、GitHub 或 registry 来源复制到 quarantine，完成清单、依赖、兼容性、权限差异和逐文件摘要校验后才展示安装预览。安装器使用版本目录和活动指针原子切换；同一版本不可覆盖。升级通过同一套 `prepare → consent → installPrepared` 流程完成，并保留历史版本供回滚，不需要先卸载。完整流程见 [扩展发行规范](./distribution.md)。
 
@@ -147,9 +147,9 @@ Agent 扩展示例：
 | `agent.hooks` | 监听或拦截 Durable task 阶段 |
 | `agent.tasks` | 注册可持久化 Durable task |
 | `ui.commands` | 注册命令和 composer 命令 |
-| `ui.panels` | 注册声明式 slot 内容与面板 |
+| `ui.panels` | 注册声明式 slot 内容或 `panel.view` 沙箱侧栏面板 |
 | `ui.settings` | 在设置页注册声明式内容 |
-| `ui.data` | 通过 Durable provider 向已挂载的声明式 view 提供受控实时数据 |
+| `ui.data` | 通过 Durable provider 向已挂载的 `dataView` 或 `panel.view` 提供实时数据与受控 RPC |
 | `network` | 声明扩展会访问网络；这是审计标记，不是网络沙箱 |
 
 声明任何 `agent.*` 权限或 `ui.data` 时，必须提供 `runtime.durableEntry`。只使用静态 `ui.commands`、`ui.panels`、`ui.settings` 时不需要运行时代码。

@@ -22,7 +22,6 @@ import { useAppAppearance } from './useAppAppearance';
 import { usePermissionControl } from './usePermissionControl';
 import { useWorkspaceState } from './useWorkspaceState';
 import { useAppWorkbenchController } from './right-panel/useAppWorkbench';
-import { useNotifications } from './useNotifications';
 import { useComposerInputState } from './useComposerInputState';
 import {
   type ModelOption,
@@ -75,13 +74,6 @@ export function useAppFoundation() {
     maxAttempts: number;
     errorMessage?: string;
   } | null>(null);
-  const {
-    notifications,
-    setNotifications,
-    pushNotification,
-    markAllRead: markAllNotificationsRead,
-    clearNotifications,
-  } = useNotifications();
   const [compaction, setCompaction] = useState<{ active: boolean; reason?: string }>({ active: false });
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [queuedPromptsBySession, setQueuedPromptsBySession] = useState<Record<string, QueuedPrompt[]>>({});
@@ -331,11 +323,6 @@ export function useAppFoundation() {
     setShortcutsOpen,
     retryInfo,
     setRetryInfo,
-    notifications,
-    setNotifications,
-    pushNotification,
-    markAllNotificationsRead,
-    clearNotifications,
     compaction,
     setCompaction,
     confirmRequest,

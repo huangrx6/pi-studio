@@ -39,7 +39,10 @@ function loadAttachments(userData, { randomUUID, now } = {}) {
         return { randomUUID };
       }
       if (name === '../core/studio-paths.cjs') {
-        return { studioDataDirectory: () => userData };
+        return {
+          studioDataDirectory: () => userData,
+          attachmentsDirectory: (root = userData) => path.join(root, 'data', 'attachments'),
+        };
       }
       return nativeRequire(name);
     },
@@ -49,11 +52,12 @@ function loadAttachments(userData, { randomUUID, now } = {}) {
 
 test('managed attachment previews stay inside the Studio attachment root', () => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-attachments-'));
-  const root = path.join(userData, 'attachments');
+  const root = path.join(userData, 'data', 'attachments');
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-outside-'));
   try {
     fs.mkdirSync(path.join(root, 'session-a'), { recursive: true });
     const allowed = path.join(root, 'session-a', 'notes.txt');
+    const legacyAllowed = path.join(userData, 'attachments', 'session-a', 'notes.txt');
     const privateFile = path.join(outside, 'private.txt');
     const escapedLink = path.join(root, 'session-a', 'escaped.txt');
     fs.writeFileSync(allowed, 'managed attachment\n');
@@ -62,6 +66,7 @@ test('managed attachment previews stay inside the Studio attachment root', () =>
 
     const api = loadAttachments(userData);
     assert.equal(api.resolveAttachmentFile(allowed), fs.realpathSync(allowed));
+    assert.equal(api.resolveAttachmentFile(legacyAllowed), fs.realpathSync(allowed));
     assert.equal(api.readAttachmentFile({ path: allowed }).text, 'managed attachment\n');
     assert.throws(
       () => api.resolveAttachmentFile(privateFile),
@@ -87,7 +92,7 @@ test('managed attachment previews stay inside the Studio attachment root', () =>
 
 test('same-name attachment writes are exclusive, unique and private', async () => {
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-attachment-exclusive-'));
-  const root = path.join(userData, 'attachments');
+  const root = path.join(userData, 'data', 'attachments');
   const ids = ['first-id', 'second-id'];
   try {
     const api = loadAttachments(userData, {
@@ -141,26 +146,28 @@ test('attachment writes reject symlinked root and session directories without to
     data: Buffer.from('private').toString('base64'),
   };
   try {
-    fs.symlinkSync(outside, path.join(rootUserData, 'attachments'), 'dir');
+    fs.mkdirSync(path.join(rootUserData, 'data'), { recursive: true });
+    fs.symlinkSync(outside, path.join(rootUserData, 'data', 'attachments'), 'dir');
     const rootApi = loadAttachments(rootUserData);
     await assert.rejects(rootApi.saveUpload(payload), /附件根目录/);
     assert.deepEqual(fs.readdirSync(outside), []);
 
-    const sessionRoot = path.join(sessionUserData, 'attachments');
+    const sessionRoot = path.join(sessionUserData, 'data', 'attachments');
     fs.mkdirSync(sessionRoot, { recursive: true });
     fs.symlinkSync(outside, path.join(sessionRoot, 'session-a'), 'dir');
     const sessionApi = loadAttachments(sessionUserData);
     await assert.rejects(sessionApi.saveUpload(payload), /会话附件目录/);
     assert.deepEqual(fs.readdirSync(outside), []);
 
-    const rootFile = path.join(fileRootUserData, 'attachments');
+    fs.mkdirSync(path.join(fileRootUserData, 'data'), { recursive: true });
+    const rootFile = path.join(fileRootUserData, 'data', 'attachments');
     fs.writeFileSync(rootFile, 'keep root file');
     const fileRootApi = loadAttachments(fileRootUserData);
     await assert.rejects(fileRootApi.saveUpload(payload), /附件根目录/);
     assert.equal(fs.readFileSync(rootFile, 'utf8'), 'keep root file');
 
-    const fileSessionRoot = path.join(fileSessionUserData, 'attachments');
-    fs.mkdirSync(fileSessionRoot);
+    const fileSessionRoot = path.join(fileSessionUserData, 'data', 'attachments');
+    fs.mkdirSync(fileSessionRoot, { recursive: true });
     const sessionFile = path.join(fileSessionRoot, 'session-a');
     fs.writeFileSync(sessionFile, 'keep session file');
     const fileSessionApi = loadAttachments(fileSessionUserData);
@@ -179,7 +186,7 @@ test('attachment cleanup removes one managed session and refuses links or files'
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-attachment-cleanup-'));
   const linkedUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-attachment-root-link-cleanup-'));
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-attachment-cleanup-outside-'));
-  const root = path.join(userData, 'attachments');
+  const root = path.join(userData, 'data', 'attachments');
   try {
     fs.mkdirSync(path.join(root, 'session-a'), { recursive: true });
     fs.mkdirSync(path.join(root, 'session-b'), { recursive: true });
@@ -204,7 +211,8 @@ test('attachment cleanup removes one managed session and refuses links or files'
     assert.equal(fs.readFileSync(path.join(outside, 'session-a', 'keep.txt'), 'utf8'), 'outside session');
     assert.equal(api.removeAttachmentDirectory('../outside'), false);
 
-    fs.symlinkSync(outside, path.join(linkedUserData, 'attachments'), 'dir');
+    fs.mkdirSync(path.join(linkedUserData, 'data'), { recursive: true });
+    fs.symlinkSync(outside, path.join(linkedUserData, 'data', 'attachments'), 'dir');
     const linkedApi = loadAttachments(linkedUserData);
     assert.equal(linkedApi.removeAttachmentDirectory('session-a'), false);
     assert.equal(fs.readFileSync(path.join(outside, 'session-a', 'keep.txt'), 'utf8'), 'outside session');
@@ -219,7 +227,7 @@ test('startup cleanup removes only inactive managed session directories', () => 
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-attachment-gc-'));
   const linkedUserData = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-attachment-gc-link-'));
   const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-attachment-gc-outside-'));
-  const root = path.join(userData, 'attachments');
+  const root = path.join(userData, 'data', 'attachments');
   try {
     for (const name of ['active-public', '123', 'draft', 'orphan-a', 'orphan-b']) {
       fs.mkdirSync(path.join(root, name), { recursive: true });
@@ -231,7 +239,8 @@ test('startup cleanup removes only inactive managed session directories', () => 
     fs.mkdirSync(path.join(outside, 'outside-session'));
     fs.writeFileSync(path.join(outside, 'outside-session', 'keep.txt'), 'outside');
     fs.symlinkSync(outside, path.join(root, 'orphan-link'));
-    fs.symlinkSync(outside, path.join(linkedUserData, 'attachments'), 'dir');
+    fs.mkdirSync(path.join(linkedUserData, 'data'), { recursive: true });
+    fs.symlinkSync(outside, path.join(linkedUserData, 'data', 'attachments'), 'dir');
 
     const api = loadAttachments(userData);
     const cleanup = api.cleanupOrphanedAttachmentDirectories(['active-public', '123']);
@@ -268,7 +277,7 @@ test('long-message attachments keep a short name and report their real size', as
     assert.equal(saved.bytes, 11);
     assert.equal(saved.lines, 2);
     assert.equal(api.attachmentSize(saved.path), 11);
-    assert.equal(api.attachmentSize(path.join(userData, 'attachments', 'session-a', 'missing.txt')), 0);
+    assert.equal(api.attachmentSize(path.join(userData, 'data', 'attachments', 'session-a', 'missing.txt')), 0);
     assert.equal(api.attachmentSize('../outside.txt'), 0);
   } finally {
     fs.rmSync(userData, { recursive: true, force: true });

@@ -20,6 +20,7 @@ let model = {
   name: 'Text model',
   input: ['text'],
 };
+let safeExtensionEntries = [];
 
 function deferred() {
   let resolve;
@@ -65,7 +66,19 @@ function createMockRuntime() {
       MemoryStorage: MockMemoryStorage,
       createRegistry() {
         calls.push(['registry', 'create']);
-        return { kind: 'empty-registry' };
+        const installed = new Map();
+        return {
+          kind: 'mock-registry',
+          installed,
+          install(extension) {
+            calls.push(['registry', 'install', extension.name]);
+            installed.set(extension.name, extension);
+          },
+          uninstall(extension) {
+            calls.push(['registry', 'uninstall', extension.name]);
+            installed.delete(extension.name);
+          },
+        };
       },
     },
     harness: {
@@ -175,6 +188,11 @@ Module._load = function patchedLoad(request, parent, isMain) {
           modelId: String(value).slice(slash + 1),
         };
       },
+    };
+  }
+  if (request === './studio-extensions.cjs') {
+    return {
+      temporarySafeExtensions: () => safeExtensionEntries,
     };
   }
   if (request.endsWith('core/serialize.cjs')) {
@@ -386,4 +404,95 @@ test('stopping an unanswered temporary prompt is a normal cancellation', async (
 
   await temporaryChat.closeTemporary(505, 'stop-pending');
   assert.equal(currentRuntime.storage.closed, true);
+});
+
+test('temporary chat installs safe user plugin tools into memory runtime registry and exposes them to the conversation', async () => {
+  currentRuntime = createMockRuntime();
+  safeExtensionEntries = [
+    {
+      extension: {
+        name: 'studio.task-board',
+        tools: [{ name: 'task_board_summary', replay: 'safe' }],
+      },
+      toolNames: ['task_board_list', 'task_board_get', 'task_board_summary'],
+    },
+  ];
+  try {
+    const prompt = temporaryChat.temporaryPrompt(606, {
+      id: 'task-summary-chat',
+      text: '整理今日日报',
+      images: [],
+      modelRef: 'mock/text-model-2',
+      thinkingLevel: 'low',
+    }, () => {});
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const pending = currentRuntime.pendingSubmits.shift();
+    assert.deepEqual(pending.conversation.options.agent.extensions.map((ext) => ext.name), ['studio.task-board']);
+    assert.deepEqual(
+      pending.conversation.options.agent.tools.map((tool) => tool.name),
+      ['task_board_list', 'task_board_get', 'task_board_summary'],
+    );
+    assert.ok(pending.conversation.options.agent.instructions.includes('read-only user plugin tools are available'));
+    assert.ok(calls.some((entry) => entry[0] === 'registry' && entry[1] === 'install' && entry[2] === 'studio.task-board'));
+
+    pending.settlement.resolve({ status: 'completed' });
+    await prompt;
+    await temporaryChat.closeTemporary(606, 'task-summary-chat');
+  } finally {
+    safeExtensionEntries = [];
+  }
+});
+
+test('real Pi Durable MemoryStorage Harness accepts temporary chat extensions and tools without strict-JSON undefined errors', async () => {
+  const durable = await import('@earendil-works/pi-durable');
+  const chordContext = await import('@earendil-works/chord/context');
+  const { builtinModels } = await import('@earendil-works/pi-ai/providers/all');
+  const storage = new durable.MemoryStorage();
+  const registry = durable.createRegistry();
+  const safeExtension = {
+    name: 'studio.task-board',
+    tools: [
+      {
+        name: 'task_board_summary',
+        description: 'Summarize task board',
+        parameters: { type: 'object', properties: {} },
+        replay: 'safe',
+        async execute() { return { output: [{ type: 'text', text: '{}' }] }; },
+      },
+    ],
+  };
+  registry.install(safeExtension);
+  const models = builtinModels({
+    credentials: { async read() { return undefined; } },
+    authContext: { async env() { return undefined; }, async fileExists() { return false; } },
+    identity: { userAgent: 'detailed', attribution: { name: 'Pi Studio Test', url: 'https://example.com', categories: ['desktop-agent'] } },
+  });
+  const harness = await durable.Harness.open(storage, {
+    models,
+    registry,
+    settings: { afterFailedRun: 'withdraw' },
+  }, chordContext.BACKGROUND_CONTEXT);
+  try {
+    const conversation = await harness.createConversation({
+      ownership: { kind: 'ownerless' },
+      agent: {
+        model: { provider: 'deepseek', modelId: 'deepseek-chat' },
+        thinkingLevel: 'off',
+        cwd: os.tmpdir(),
+        extensions: [safeExtension],
+        tools: safeExtension.tools,
+        instructions: 'Test temporary chat with safe tools',
+      },
+    }, chordContext.BACKGROUND_CONTEXT);
+    assert.ok(conversation.id);
+    await conversation.configure({
+      model: { provider: 'deepseek', modelId: 'deepseek-chat' },
+      thinkingLevel: 'off',
+      extensions: [safeExtension],
+      tools: safeExtension.tools,
+    }, chordContext.BACKGROUND_CONTEXT);
+  } finally {
+    await harness.close(chordContext.BACKGROUND_CONTEXT);
+  }
 });

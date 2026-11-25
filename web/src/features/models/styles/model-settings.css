@@ -203,6 +203,7 @@
   border: 1px solid var(--divider);
   border-radius: var(--radius-control);
   background: var(--settings-page-bg);
+  animation: pi-disclosure-in var(--motion-expand) both;
 }
 .model-settings .provider-model-head { display: flex; align-items: center; justify-content: space-between; flex-direction: row; gap: var(--settings-row-gap); }
 .model-settings .provider-model-head h3 { display: flex; align-items: center; gap: 6px; }
@@ -232,7 +233,11 @@
 .model-settings-pagination { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding-top: 10px; color: var(--faint); font-size: var(--text-xs); }
 .model-settings-catalog-error { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; padding: 10px 0; }
 .model-settings-catalog-error p { color: var(--error); font-size: var(--text-sm); line-height: var(--leading-body); overflow-wrap: anywhere; }
-.model-settings .provider-discovery-panel { margin-block: var(--space-3); padding: var(--space-4); border: 1px solid var(--divider); border-radius: var(--radius-control); background: var(--surface-soft); }
+.model-settings .provider-discovery-panel { margin-block: var(--space-3); padding: var(--space-4); border: 1px solid var(--divider); border-radius: var(--radius-control); background: var(--surface-soft); animation: pi-disclosure-in var(--motion-expand) both; }
+@media (prefers-reduced-motion: reduce) {
+  .model-settings .provider-model-panel,
+  .model-settings .provider-discovery-panel { animation: none; }
+}
 .model-settings .provider-discovery-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .model-settings .provider-discovery-head > div { display: flex; min-width: 0; flex-direction: column; gap: 4px; }
 .model-settings .provider-discovery-head strong { color: var(--text); font-size: var(--text-sm); font-weight: var(--weight-medium); }

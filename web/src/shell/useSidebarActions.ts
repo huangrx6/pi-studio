@@ -1,7 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type { ActionConfirmOptions } from '../shared/ConfirmDialog';
 import { useSettingsToast } from '../shared/SettingsToast';
-import type { AppNotificationAction, NotificationTone } from './NotificationCenter';
 import type { SidebarAction } from './SidebarActions';
 import type { PiSessionSummary, PiWorkspace } from './app-types';
 import type { ConversationSummary } from '../types/durable-types';
@@ -53,13 +52,6 @@ type SidebarActionsDependencies = {
     start: (cwd: string) => Promise<void>;
   }>;
   actionConfirmation: { confirm: (options: ActionConfirmOptions) => Promise<boolean> };
-  pushNotification: (
-    message: string,
-    tone?: NotificationTone,
-    title?: string,
-    sessionId?: string,
-    action?: AppNotificationAction,
-  ) => void;
 };
 
 export function useSidebarActions({
@@ -82,7 +74,6 @@ export function useSidebarActions({
   persistDeletedComposerSessions,
   conversationNavigationRef,
   actionConfirmation,
-  pushNotification,
 }: SidebarActionsDependencies) {
   const showToast = useSettingsToast();
   async function refreshConversationList() {
@@ -98,7 +89,7 @@ export function useSidebarActions({
     id: string,
     action: SidebarAction | 'remove-archived',
     name?: string,
-    options: { preserveCurrentView?: boolean; notify?: boolean; sessionIds?: string[] } = {},
+    options: { preserveCurrentView?: boolean; showDeleteToast?: boolean; sessionIds?: string[] } = {},
   ) {
     if (sidebarMutationRef.current) throw new Error('会话操作正在完成，请稍后再试。');
     if (conversationListNeedsRefreshRef.current) throw new Error('请先刷新会话列表，再继续操作。');
@@ -139,7 +130,7 @@ export function useSidebarActions({
           setSession(value => value ? { ...value, title: name!.trim() } : value);
         }
       } catch {
-        pushNotification('操作已完成，但当前视图未能切换。请从会话列表选择会话。', 'warning', '会话视图待更新');
+        // Mutation already succeeded; list refresh below reconciles state.
       }
       for (const deletedId of deletedIds) {
         clearComposerDraft(composerDraftsRef.current, composerDraftKeyForSession(deletedId));
@@ -148,46 +139,13 @@ export function useSidebarActions({
       if (deletedIds.length || removingWorkspace) await persistDeletedComposerSessions(deletedIds);
       try { await loadStateRef.current(); }
       catch { setConversationListRefreshError(true); }
-      if ('pendingFileCleanups' in result && result.pendingFileCleanups) {
-        pushNotification('会话已删除。部分本地文件会在下次启动时重试清理。', 'warning', '会话文件待清理');
-      } else if (kind === 'session'
-        && action === 'archive'
-        && options.notify !== false
-        && targetSummary
-        && !targetSummary.archived) {
-        const title = targetSummary.title || '当前会话';
-        pushNotification(
-          `「${title}」已移到归档。`,
-          'success',
-          '会话已归档',
-          id,
-          {
-            kind: 'unarchive-session',
-            label: '撤销归档',
-            pendingLabel: '正在恢复…',
-            sessionId: id,
-            hideSessionLink: true,
-          },
-        );
-      } else if (removingWorkspace) {
-        const sessions = 'deletedSessions' in result ? Number(result.deletedSessions) || 0 : 0;
-        const subagents = 'deletedSubagents' in result ? Number(result.deletedSubagents) || 0 : 0;
-        pushNotification(
-          `已永久删除 ${sessions} 个会话${subagents ? `和 ${subagents} 个关联子智能体` : ''}。磁盘中的项目文件夹仍保留。`,
-          'success',
-          '工作区已从 Studio 删除',
-        );
-      } else if (kind === 'session' && action === 'remove') {
+      if (kind === 'session' && action === 'remove' && options.showDeleteToast) {
         const subagents = 'deletedSubagents' in result ? Number(result.deletedSubagents) || 0 : 0;
         const message = `会话数据已清理${subagents ? `，同时删除了 ${subagents} 个关联子智能体` : ''}。`;
-        if (options.notify === false) showToast(message);
-        else pushNotification(message, 'success', '会话已永久删除');
+        showToast(message);
       }
       if (action === 'fork' && 'id' in result && result.id) {
-        if (generation !== sessionLoadRef.current) {
-          pushNotification('分叉已创建，可从会话列表打开。', 'success', '会话分叉已创建', result.id);
-          return;
-        }
+        if (generation !== sessionLoadRef.current) return;
         await conversationNavigationRef.current.open({
           ...result,
           updatedAt: result.updatedAt,
@@ -212,7 +170,7 @@ export function useSidebarActions({
       confirmLabel: '永久删除',
       tone: 'danger',
     });
-    if (accepted) await sidebarAction('session', item.id, 'remove', undefined, { notify: false });
+    if (accepted) await sidebarAction('session', item.id, 'remove', undefined, { showDeleteToast: true });
   }
 
   async function deleteArchivedGroup(cwd: string, label: string, sessionIds: string[]) {

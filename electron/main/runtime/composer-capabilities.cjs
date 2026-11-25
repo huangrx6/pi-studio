@@ -5,8 +5,8 @@ const { readPluginIcon } = require('../services/plugin-icon.cjs');
 const { runtimeExtensionName } = require('../services/studio-extensions.cjs');
 
 // Another chip can contain punctuation in its filename or its role label.
-const MENTION = /(?<![A-Za-z0-9_])(?:@"(?:\\.|[^"\\])*"|[@#]\[agent:[a-f0-9-]{36}\|[a-z0-9-]+\|[^\]\r\n|]+\]|\$\[(skill|mcp|plugin):([^|\]\s]+)\|([^|\]\s]+)\])/gu;
-const LABEL = { skill: '技能', mcp: 'MCP 方法', plugin: '插件' };
+const MENTION = /(?<![A-Za-z0-9_])(?:@"(?:\\.|[^"\\])*"|[@#]\[agent:[a-f0-9-]{36}\|[a-z0-9-]+\|[^\]\r\n|]+\]|\$\[(skill|mcp|mcp-server|plugin):([^|\]\s]+)\|([^|\]\s]+)\])/gu;
+const LABEL = { skill: '技能', mcp: 'MCP 方法', 'mcp-server': 'MCP 服务', plugin: '插件' };
 
 function readableCapabilityReferences(text) {
   if (!text.includes('$[')) return text;
@@ -78,11 +78,15 @@ function composerCapabilityCatalog(cwd, selection, { skills = discoverSkills(cwd
     resources?.skills.push({ row, skill });
   }
   const mcp = mcpSnapshot();
-  const serverDescriptions = new Map(mcp.servers.map(server => [server.name, server.description]));
+  const serverDescriptions = new Map(mcp.servers.filter(server => server.connected)
+    .map(server => [server.name, server.description]));
+  const serverGroups = new Map();
   for (const method of mcp.tools) {
-    if (!offered.has(method.name) || method.exposure === 'hidden') continue;
+    if (!offered.has(method.name) || method.exposure === 'hidden' || method.enabledOverride === false
+      || !serverDescriptions.has(method.server)) continue;
     const resources = plugins.get(method.ownerPluginId);
     const source = method.ownerPluginId ? '插件 · ' + (resources?.plugin.name || method.ownerPluginId) : '个人配置';
+    const serverId = JSON.stringify([method.ownerPluginId || '', method.server]);
     const id = JSON.stringify([method.ownerPluginId || '', method.server, method.originalName]);
     const serverText = serverDescriptions.get(method.server) || '';
     const useServerText = /\p{Script=Han}/u.test(serverText) && !/\p{Script=Han}/u.test(method.description);
@@ -90,15 +94,29 @@ function composerCapabilityCatalog(cwd, selection, { skills = discoverSkills(cwd
       server: method.server, method: method.originalName,
       ...toolReference({ name: method.name, deferred: method.exposure === 'deferred' }),
     };
+    let group = serverGroups.get(serverId);
+    if (!group) {
+      group = { name: method.server, source, description: serverText, tools: [], deferredTools: [] };
+      serverGroups.set(serverId, group);
+    }
+    (method.exposure === 'deferred' ? group.deferredTools : group.tools).push(method.name);
     rows.push({
       option: {
-        type: 'mcp', id, name: method.originalName, server: method.server, source,
+        type: 'mcp', id, name: method.originalName, server: method.server, serverId, source,
         description: useServerText ? '服务说明 · ' + serverText : method.description,
         ...(useServerText && { originalDescription: method.description }),
       },
       context: () => 'The user referenced this available MCP method. ' + JSON.stringify(reference),
     });
     resources?.methods.push(reference);
+  }
+  for (const [id, { name, description, source, tools, deferredTools }] of serverGroups) {
+    rows.push({
+      option: { type: 'mcp-server', id, name, server: name, source, description, methodCount: tools.length + deferredTools.length },
+      context: () => 'The user referenced this MCP service. Choose the methods relevant to their request. ' + JSON.stringify({
+        server: name, tools, ...(deferredTools.length && { deferredTools, discoverWith: 'tool_search' }),
+      }),
+    });
   }
   if (plugins.size) {
     const extensionOwners = new Map(db.listExtensions()

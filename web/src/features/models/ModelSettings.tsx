@@ -242,7 +242,7 @@ export function ModelSettings({ providers, quotaAvailable, models, enabledModels
       </>}
     </div>
     {enabledOpen && providers.length > 0 && <EnabledModelsDialog enabledModels={enabledModels} modelById={modelById} defaultId={defaultModelSelection.modelRef}
-      view={modelView} busy={settingsBusy || recoveryPending} defaultBusy={defaultModelBusy} actions={actions} onClose={() => setEnabledOpen(false)} />}
+      view={modelView} busy={settingsBusy || recoveryPending} defaultBusy={defaultModelBusy} actions={actions} onClose={() => { setEnabledOpen(false); actions.onModelViewChange('all'); }} />}
     {quotaProvider && <ProviderQuotaDialog key={quotaProvider.id} id={quotaProvider.id} name={quotaProvider.name} onClose={() => setQuotaProviderId('')} />}
   </div>;
 }

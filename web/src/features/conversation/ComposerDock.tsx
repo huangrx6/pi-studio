@@ -1,7 +1,6 @@
 import { memo, useMemo, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import {
-  PanelRightOpen,
   ShieldCheck,
   SlidersHorizontal,
   X,
@@ -30,11 +29,10 @@ import type { PermissionMode, PermissionUiState, SettingsTab } from '../../shell
 import { permissionOptions } from '../../shell/app-shell-config';
 import type { ExtensionNotice } from '../extensions/ExtensionSlot';
 import { ExtensionSummaries } from '../extensions/ExtensionSummaries';
-import { AttachmentIcon } from '../../shared/AttachmentIcon';
+import { AttachmentFileDetails } from './AttachmentFileDetails';
 import { formatShortcut } from '../../shared/shortcuts';
 import { WorkspacePicker } from '../../shell/WorkspacePicker';
 import { Select } from '../../shared/Select';
-import { formatFileSize } from '../../shared/filesize';
 import { composerKeyAction } from './composer-submit';
 import { ComposerEditor, type ComposerEditorHandle } from './ComposerEditor';
 import { planComposerPaste } from './composer-paste';
@@ -229,6 +227,7 @@ function ComposerDockComponent({
   // 而不是把用户挡在输入框外。
   const hasUsableModel = Boolean(modelSelection.modelRef) && !modelSelection.unavailable;
   const [modelHintOpen, setModelHintOpen] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
   const extensionContext = {
     surface: extensionSurface,
     cwd: session?.cwd || workspace,
@@ -240,8 +239,32 @@ function ComposerDockComponent({
     onOpenPanel: openExtensionPanel,
   };
 
-  function backToCapabilityCategories() {
+  function moveWithinMcpMenu(server: ComposerMenuState['mcpServer'], query: string) {
+    if (!composerMenu) return;
+    const { start, end } = composerMenu;
+    const caret = start + 1 + query.length;
+    const editor = composerEditorRef.current;
+    if (composerMenu.query !== query && editor) {
+      editor.replaceText(editor.value.slice(0, start + 1) + query + editor.value.slice(end), caret);
+    }
+    setComposerMenu({ ...composerMenu, mcpServer: server, query, end: caret });
+    setComposerMenuIndex(0);
+    editor?.focus();
+  }
+
+  function openMcpMethods(index: number) {
+    const item = composerMentionOptions[index];
+    if (composerMenu?.capabilityType === 'mcp' && item?.type === 'mcp-server') {
+      moveWithinMcpMenu({ id: item.id, name: item.name, parentQuery: composerMenu.query }, '');
+    }
+  }
+
+  function backInCapabilityMenu() {
     if (composerMenu?.kind !== 'capability') return;
+    if (composerMenu.mcpServer) {
+      moveWithinMcpMenu(undefined, composerMenu.mcpServer.parentQuery);
+      return;
+    }
     setComposerMenu({ ...composerMenu, capabilityType: undefined });
     setComposerMenuIndex(0);
   }
@@ -260,7 +283,31 @@ function ComposerDockComponent({
     />}
     {isNewConversation && !workspace && <p id="workspace-selection-hint" className="sr-only" role="status">选择工作区后才能发送第一条消息</p>}
     <ExtensionSummaries {...extensionContext} items={extensionAboveItems} slot="composer.above" />
-    <div className="composer-wrap" ref={composerWrapRef}>
+    <div
+      className="composer-wrap"
+      ref={composerWrapRef}
+      onDragEnter={(event) => {
+        if (event.dataTransfer.types.includes('Files')) setDragOver(true);
+      }}
+      onDragOver={(event) => {
+        if (event.dataTransfer.types.includes('Files')) {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = 'copy';
+          if (!dragOver) setDragOver(true);
+        }
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setDragOver(false);
+      }}
+      onDrop={(event) => {
+        setDragOver(false);
+        const dropped = Array.from(event.dataTransfer.files);
+        if (dropped.length > 0) {
+          event.preventDefault();
+          void addComposerFiles(dropped);
+        }
+      }}
+    >
       {composerMenu && <ComposerSuggestions
         menu={composerMenu}
         commandOptions={composerCommandOptions}
@@ -282,7 +329,8 @@ function ComposerDockComponent({
             composerEditorRef.current?.setSelectionRange(end, end);
           });
         }}
-        onBack={backToCapabilityCategories}
+        onBack={backInCapabilityMenu}
+        onOpenMethods={openMcpMethods}
         onRetry={retryComposerSuggestions}
       />}
       {session?.id && compaction.active && <div className="compaction-banner" role="status"><LoadingIndicator /><span>正在压缩我们的对话内容，以便继续对话…</span></div>}
@@ -307,57 +355,37 @@ function ComposerDockComponent({
         tone={scopedComposerFeedback.tone}
         onDismiss={() => setComposerFeedback(null)}
       />}
-      <div
-        className="composer"
-        onDragOver={(event) => {
-          if (event.dataTransfer.types.includes('Files')) {
-            event.preventDefault();
-            event.dataTransfer.dropEffect = 'copy';
-          }
-        }}
-        onDrop={(event) => {
-          const dropped = Array.from(event.dataTransfer.files);
-          if (dropped.length > 0) {
-            event.preventDefault();
-            void addComposerFiles(dropped);
-          }
-        }}
-      >
-        {composerAttachments.length > 0 && <div className="composer-attachments">
-          {composerAttachments.map((attachment) => attachment.kind === 'image'
-            ? <ComposerImageAttachment
-              key={attachment.id}
-              images={composerImages}
-              index={composerImageIndexes.get(attachment.id) ?? 0}
-              onRemove={() => removeComposerAttachment(attachment.id)}
-            />
-            : <div
-              className="composer-attachment is-file is-openable"
-              key={attachment.id}
-              title={attachment.path}
-              role={attachment.path ? 'button' : undefined}
-              tabIndex={attachment.path ? 0 : undefined}
-              aria-label={attachment.path ? `在右侧面板查看 ${attachment.name}` : undefined}
-              onClick={() => { if (attachment.path) void openFile(attachment.path, session?.id, 'attachment'); }}
-              onKeyDown={(event) => {
-                if (attachment.path && (event.key === 'Enter' || event.key === ' ')) {
-                  event.preventDefault();
-                  void openFile(attachment.path, session?.id, 'attachment');
-                }
-              }}
-            >
-              <AttachmentIcon name={attachment.name} mime={attachment.mime} />
-              <span><strong>{attachment.name}</strong><small>{formatFileSize(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</small></span>
-              {attachment.path && <span className="attachment-open-cue" title="在右侧面板查看" aria-hidden="true"><PanelRightOpen /></span>}
-              <button
+      {composerAttachments.length > 0 && <div className="attachment-strip composer-attachments" role="group" aria-label="待发送附件">
+        {composerAttachments.map((attachment) => {
+          if (attachment.kind === 'image') return <ComposerImageAttachment
+            key={attachment.id}
+            images={composerImages}
+            index={composerImageIndexes.get(attachment.id) ?? 0}
+            onRemove={() => removeComposerAttachment(attachment.id)}
+          />;
+          const path = attachment.path;
+          const content = <AttachmentFileDetails attachment={attachment} />;
+          return <div className="composer-attachment is-file" key={attachment.id}>
+            {path
+              ? <button
                 type="button"
-                className="composer-attachment-remove"
-                aria-label={`移除 ${attachment.name}`}
-                onClick={(event) => { event.stopPropagation(); removeComposerAttachment(attachment.id); }}
-                onKeyDown={(event) => event.stopPropagation()}
-              ><X /></button>
-            </div>)}
-        </div>}
+                className="composer-file-content"
+                title={path}
+                aria-label={`在右侧面板查看 ${attachment.name}`}
+                onClick={() => void openFile(path, session?.id, 'attachment')}
+              >{content}</button>
+              : <div className="composer-file-content" title={attachment.name}>{content}</div>}
+            <button
+              type="button"
+              className="composer-attachment-remove"
+              aria-label={`移除 ${attachment.name}`}
+              title="移除"
+              onClick={() => removeComposerAttachment(attachment.id)}
+            ><X /></button>
+          </div>;
+        })}
+      </div>}
+      <div className={`composer${dragOver ? ' is-drag-over' : ''}`}>
         <div className="composer-input">
           <ComposerEditor
             ref={composerEditorRef}
@@ -405,6 +433,7 @@ function ComposerDockComponent({
                 busy: turnActive,
                 menuOpen: Boolean(composerMenu),
                 optionCount: composerOptionsCount,
+                canOpenMethods: composerMentionOptions[composerMenuIndex]?.type === 'mcp-server',
                 pending: composerMenuLoading || Boolean(composerMenuError || composerMenu?.capabilityType),
               });
               if (action === 'none') return;
@@ -412,8 +441,9 @@ function ComposerDockComponent({
               if (action === 'previous') setComposerMenuIndex(index => (index - 1 + composerOptionsCount) % composerOptionsCount);
               else if (action === 'next') setComposerMenuIndex(index => (index + 1) % composerOptionsCount);
               else if (action === 'select') selectComposerOption(composerMenuIndex);
+              else if (action === 'methods') openMcpMethods(composerMenuIndex);
               else if (action === 'close') {
-                if (composerMenu?.capabilityType) backToCapabilityCategories();
+                if (composerMenu?.capabilityType) backInCapabilityMenu();
                 else setComposerMenu(null);
               }
               else if (action === 'queue') void send(undefined, 'queue');
@@ -431,12 +461,12 @@ function ComposerDockComponent({
             className={queuedPrompts.length > 0 ? 'has-queued' : undefined}
             aria-expanded={Boolean(composerMenu)}
             placeholder={compaction.active
-              ? '正在压缩我们的对话内容，以便继续对话…'
+              ? '正在压缩上下文…'
               : queuedEditContext
-                ? `编辑排队消息 · ${formatShortcut('Mod+Enter')} 放回原位置 · Shift+Enter 换行`
+                ? `编辑排队消息，${formatShortcut('Mod+Enter')} 保存`
                 : turnActive
-                  ? `Enter 补充当前任务 · ${formatShortcut('Mod+Enter')} 排队 · Shift+Enter 换行`
-                  : '输入问题，或用 @ 引用文件、# 引用智能体、$ 引用能力…'}
+                  ? `补充当前任务，或 ${formatShortcut('Mod+Enter')} 排队`
+                  : '输入消息…'}
           />
         </div>
         <ComposerToolbar
@@ -459,7 +489,10 @@ function ComposerDockComponent({
           context={<>
             {isNewConversation && <WorkspacePicker value={workspace} workspaces={workspaces} onChange={selectDraftWorkspace} onBrowse={chooseFile} />}
             {visiblePermission?.status === 'ready' && visiblePermission.available && (
-              <span className="composer-mode" title="Studio 工具权限模式">
+              <span
+                className={`composer-mode${visiblePermission.mode === 'full' ? ' is-permission-full' : ''}`}
+                title={visiblePermission.mode === 'full' ? '完全权限：操作将直接执行，不再询问' : 'Studio 工具权限模式'}
+              >
                 <Select
                   label="权限模式"
                   className="composer-mode-select"

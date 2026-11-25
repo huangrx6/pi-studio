@@ -1,5 +1,5 @@
 import type { RuntimeRefreshSnapshot } from './runtime-types';
-import type iconCatalog from '../../../assets/settings/harness-profile-icons.json';
+import type { ProfileIcon } from './profile-icon';
 
 export type HarnessSectionId =
   | 'preamble'
@@ -17,13 +17,11 @@ export type HarnessSectionDefinition = {
   description: string;
 };
 
-export type HarnessProfileIcon = { shape: keyof typeof iconCatalog.shapes; ink: keyof typeof iconCatalog.inks };
-
 export type HarnessProfile = {
   id: string;
   name: string;
   builtin: boolean;
-  icon?: HarnessProfileIcon | null;
+  icon?: ProfileIcon | null;
   sections: Record<HarnessSectionId, boolean>;
   sectionOverrides: Partial<Record<HarnessSectionId, string>>;
   customInstructions: string;
@@ -64,6 +62,7 @@ export type HarnessSettingsSnapshot = {
   activeProfileId: string;
   globalProfileId: string;
   workspaceProfileId: string;
+  temporaryProfileId?: string;
   sections: HarnessSectionDefinition[];
   profiles: HarnessProfile[];
   activeProfile: HarnessProfile;

@@ -48,6 +48,9 @@ test('sigils dispatch to distinct pickers and keep emails, issue numbers and she
     assert.equal(composerMenuAt(text, text.length), null, text);
   }
   assert.equal(composerMenuAt('$echo', 5, { kind: 'capability', start: 0, capabilityType: 'mcp' }).capabilityType, 'mcp');
+  const serverMenu = { kind: 'capability', start: 0, capabilityType: 'mcp', mcpServer: { id: 'dev', name: 'DevTools', parentQuery: 'dev' } };
+  assert.deepEqual(composerMenuAt('$click', 6, serverMenu).mcpServer, serverMenu.mcpServer);
+  assert.equal(composerMenuAt('$click $', 8, serverMenu).mcpServer, undefined);
   const menu = composerMenuAt('$Toolkit', 8);
   assert.equal(composerMenuAt('$Toolkit Starter', 16, menu).query, 'Toolkit Starter');
   assert.equal(composerMenuAt('$MCP', 4).kind, 'capability');
@@ -56,7 +59,10 @@ test('sigils dispatch to distinct pickers and keep emails, issue numbers and she
 test('dollar suggestions wait for a category and filter resources within that category', async () => {
   let calls = 0;
   const caps = [{ type: 'skill', id: 'a', name: 'echo', description: '', source: '插件 · 同源' },
-    { type: 'mcp', id: 'b', name: 'echo', description: '', server: 'api', source: '插件 · 同源' },
+    { type: 'mcp-server', id: 'plugin-api', name: 'api', description: '参考文档', server: 'api', source: '插件 · 同源', methodCount: 1 },
+    { type: 'mcp-server', id: 'user-api', name: 'api', description: '', server: 'api', source: '个人配置', methodCount: 1 },
+    { type: 'mcp', id: 'b', name: 'echo', description: '', server: 'api', serverId: 'plugin-api', source: '插件 · 同源' },
+    { type: 'mcp', id: 'c', name: 'echo', description: '', server: 'api', serverId: 'user-api', source: '个人配置' },
     { type: 'plugin', id: 'studio.shared', name: '同源', description: '', source: 'Studio' }];
   const h = harness({ composerResources: async () => { calls++; return { commands: [], skills: [], capabilities: caps }; },
     searchFiles: async () => ({ files: [{ name: 'README', path: 'README', type: 'file' }] }) }, [
@@ -72,7 +78,12 @@ test('dollar suggestions wait for a category and filter resources within that ca
   const mcp = { ...menu, capabilityType: 'mcp' };
   assert.equal(h.render(mcp).loading, true);
   h.commit(); await flush();
-  assert.deepEqual(Array.from(h.render(mcp).mentions, x => x.id), ['b']);
+  const ids = overrides => Array.from(h.render({ ...mcp, ...overrides }).mentions, x => x.id);
+  assert.deepEqual(ids({}), ['plugin-api']);
+  assert.deepEqual(ids({ query: '' }), ['plugin-api', 'user-api']);
+  assert.deepEqual(ids({ query: 'echo' }), ['b', 'c']);
+  assert.deepEqual(ids({ query: 'api/echo' }), ['b', 'c']);
+  assert.deepEqual(ids({ mcpServer: { id: 'user-api', name: 'api', parentQuery: '' }, query: '' }), ['c']);
   assert.deepEqual(Array.from(h.render({ ...menu, query: 'studio.shared', capabilityType: 'plugin' }).mentions, x => x.id), ['studio.shared']);
   assert.equal(calls, 1);
   assert.equal(h.render(menu).mentions.length, 0);
@@ -118,6 +129,9 @@ test('menu keys preserve IME, multiline and reverse tab; explicit modifier send 
   assert.equal(composerKeyAction({ ...key, ctrlKey: true }), 'send');
   assert.equal(composerKeyAction({ ...key, metaKey: true, busy: true }), 'queue');
   assert.equal(composerKeyAction(key), 'select');
+  assert.equal(composerKeyAction({ ...key, key: 'ArrowRight', canOpenMethods: true }), 'methods');
+  assert.equal(composerKeyAction({ ...key, key: 'ArrowRight', canOpenMethods: false }), 'none');
+  assert.equal(composerKeyAction({ ...key, key: 'ArrowRight', canOpenMethods: true, isComposing: true }), 'none');
   assert.equal(composerKeyAction({ ...key, key: 'Escape', optionCount: 0 }), 'close');
   assert.equal(composerKeyAction({ ...key, optionCount: 0, pending: true }), 'wait');
 });

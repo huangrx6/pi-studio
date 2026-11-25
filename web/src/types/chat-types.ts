@@ -290,7 +290,12 @@ export type ComposerFile = {
 
 export type ComposerCapability = {
   id: string; name: string; description: string; originalDescription?: string; source: string;
-} & ({ type: 'skill' } | { type: 'mcp'; server: string } | { type: 'plugin'; iconDataUrl?: string });
+} & (
+  | { type: 'skill' }
+  | { type: 'mcp-server'; server: string; methodCount: number }
+  | { type: 'mcp'; server: string; serverId: string }
+  | { type: 'plugin'; iconDataUrl?: string }
+);
 
 export type ComposerMentionOption = ComposerFile | ComposerCapability | {
   type: 'agent'; id: string; name: string; avatarId: string; description: string;

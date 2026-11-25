@@ -32,6 +32,8 @@ export function SettingsSpotlight({
       <p>{description}</p>
       {actions && <div className="settings-spotlight-actions">{actions}</div>}
     </div>
-    <img src={artwork[art]} alt="" width="120" height="120" decoding="async" />
+    <span className="settings-spotlight-art" data-art={art} aria-hidden="true">
+      <img src={artwork[art]} alt="" width="120" height="120" decoding="async" />
+    </span>
   </div>;
 }

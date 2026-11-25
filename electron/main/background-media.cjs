@@ -13,7 +13,7 @@ const path = require('node:path');
 
 const BACKGROUND_SCHEME = 'pi-media';
 const BACKGROUND_HOST = 'background';
-const BACKGROUND_DIRECTORY = 'background-media';
+const BACKGROUND_DIRECTORY = path.join('data', 'background-media');
 const MAX_BACKGROUND_BYTES = 2 * 1024 * 1024 * 1024;
 
 const MIME_TYPES = Object.freeze({

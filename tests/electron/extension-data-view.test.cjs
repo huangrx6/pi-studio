@@ -11,20 +11,29 @@ const {
 const {
   registerExtensionDataViewIpc,
 } = require('../../electron/main/ipc/sessions.cjs');
-const { normalizeCanvasSnapshot } = require('../../electron/main/services/extension-canvas.cjs');
+const {
+  extensionViewUrl,
+  parseExtensionViewUrl,
+  normalizeViewEntry,
+} = require('../../electron/main/core/extension-view.cjs');
 
 const owner = { manifestId: 'metrics', scope: 'builtin' };
 const normalizeAction = () => undefined;
 const normalizeContentList = (value) => value;
 
-test('canvas playback can only reveal elements of an in-progress scene for a bounded duration', () => {
-  const scene = { elements: [{ id: 'item', type: 'rectangle', x: 0, y: 0, width: 10, height: 10 }] };
-  const playback = { startAt: 1234, durationMs: 800, firstElement: 0 };
-  const snapshot = { scene, revision: 7, drawing: true, playback: { ...playback, markup: '<div />' } };
-  assert.deepEqual(normalizeCanvasSnapshot(snapshot).playback, playback);
-  assert.throws(() => normalizeCanvasSnapshot({ ...snapshot, drawing: false }), /状态无效/);
-  assert.throws(() => normalizeCanvasSnapshot({ ...snapshot, playback: { ...playback, firstElement: 1 } }), /元素范围无效/);
-  assert.throws(() => normalizeCanvasSnapshot({ ...snapshot, playback: { ...playback, durationMs: 30_001 } }), /时长/);
+test('plugin view URLs stay confined to the extension ui directory', () => {
+  const url = extensionViewUrl('user:demo.plugin', 'ui/index.html');
+  assert.equal(url, 'pi-ext://view/user/demo.plugin/index.html');
+  assert.deepEqual(parseExtensionViewUrl(url), {
+    extensionId: 'user:demo.plugin',
+    scope: 'user',
+    manifestId: 'demo.plugin',
+    relativePath: 'index.html',
+  });
+  assert.throws(() => normalizeViewEntry('../index.html'), /非法路径段/);
+  assert.throws(() => normalizeViewEntry('extension.mjs'), /ui\//);
+  assert.throws(() => parseExtensionViewUrl('pi-ext://view/user/demo.plugin/.hidden.json'), /非法段/);
+  assert.throws(() => parseExtensionViewUrl('pi-ext://view/user/demo.plugin/../secret.json'), /不完整/);
 });
 
 function target(id = 1) {
@@ -39,33 +48,34 @@ function target(id = 1) {
   };
 }
 
-test('canvas writes are bound to a live renderer subscription and its Durable conversation', async () => {
+test('generic plugin view invokes are bound to a live renderer subscription and its context', async () => {
   const service = new ExtensionDataViewService({ normalizeContentList });
   const renderer = target();
-  const state = { revision: 0, scene: { elements: [] } };
-  let written;
+  const state = { revision: 0, items: [] };
+  let invoked;
   const opened = await service.open({
     owner: { manifestId: 'drawing', scope: 'user' },
     sourceId: 'user:drawing/scene',
     target: renderer,
     sessionId: 'public-session',
     context: { durableSessionId: '7' },
-    canvas: true,
+    view: true,
+    viewScope: 'session',
   }, {
-    read: () => ({ canvas: state }),
-    writeCanvas: (context, input) => {
-      written = [context.sessionId, context.durableSessionId, input.revision];
-      return { ...input, revision: input.revision + 1 };
+    read: () => ({ viewData: state }),
+    invoke: (context, method, params) => {
+      invoked = [context.sessionId, context.durableSessionId, method, params.revision];
+      return { ...params, revision: params.revision + 1 };
     },
   });
-  assert.equal(opened.snapshot.canvasWritable, true);
-  assert.equal(opened.snapshot.canvas.revision, 0);
-  await assert.rejects(service.writeCanvas(opened.subscriptionId, target(2), state), /无权/);
-  await assert.rejects(service.writeCanvas(opened.subscriptionId, renderer, { ...state, revision: -1 }), /版本无效/);
-  assert.equal((await service.writeCanvas(opened.subscriptionId, renderer, state)).revision, 1);
-  assert.deepEqual(written, ['public-session', '7', 0]);
+  assert.equal(opened.snapshot.viewInvocable, true);
+  assert.equal(opened.snapshot.viewData.revision, 0);
+  await assert.rejects(service.invokeView(opened.subscriptionId, target(2), 'save', state), /无权/);
+  await assert.rejects(service.invokeView(opened.subscriptionId, renderer, 'bad method!', state), /方法名无效/);
+  assert.equal((await service.invokeView(opened.subscriptionId, renderer, 'save', state)).revision, 1);
+  assert.deepEqual(invoked, ['public-session', '7', 'save', 0]);
   await service.close(opened.subscriptionId, renderer);
-  await assert.rejects(service.writeCanvas(opened.subscriptionId, renderer, state), /无权/);
+  await assert.rejects(service.invokeView(opened.subscriptionId, renderer, 'save', state), /无权/);
 });
 
 function ipcRendererTarget(id = 1) {
@@ -352,24 +362,27 @@ test('registered services close subscriptions for one extension or all extension
   }
 });
 
-test('deleting a conversation cancels queued canvas writes for that conversation alone', async () => {
+test('deleting a conversation cancels queued view invokes for that conversation alone', async () => {
   const service = new ExtensionDataViewService({ normalizeContentList });
   const unregister = registerExtensionDataViewService(service);
   const renderer = target();
-  const canvas = { revision: 0, scene: { elements: [] } };
+  const payload = { revision: 0, scene: { elements: [] } };
   let writes = 0;
-  const provider = { read: () => ({ canvas }), writeCanvas: () => { writes += 1; return canvas; } };
+  const provider = {
+    read: () => ({ viewData: payload }),
+    invoke: () => { writes += 1; return payload; },
+  };
   const open = (sessionId, durableSessionId) => service.open({
-    owner, target: renderer, sourceId: 'user:drawing/scene', canvas: true, sessionId, context: { durableSessionId },
+    owner, target: renderer, sourceId: 'user:drawing/scene', view: true, viewScope: 'session', sessionId, context: { durableSessionId },
   }, provider);
   try {
     const removed = await open('old-public-id', '17');
     const retained = await open('other-public-id', '18');
-    const writing = service.writeCanvas(removed.subscriptionId, renderer, canvas);
+    const writing = service.invokeView(removed.subscriptionId, renderer, 'save', payload);
     await closeConversationDataViewServices([17]);
     await assert.rejects(writing, /已关闭/);
     assert.equal(writes, 0);
-    await service.writeCanvas(retained.subscriptionId, renderer, canvas);
+    await service.invokeView(retained.subscriptionId, renderer, 'save', payload);
     assert.equal(writes, 1);
   } finally {
     await service.closeAll();

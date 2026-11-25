@@ -220,6 +220,32 @@
 
 .settings-content input[type="checkbox"] { width: 16px; height: 16px; border-radius: var(--radius-tag); }
 
+.settings-content :is(
+  .settings-save,
+  .primary-button,
+  .settings-add-button,
+  .settings-outline,
+  .secondary-button,
+  .settings-mini-button
+) {
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--motion-press);
+}
+
+.settings-content :is(
+  .settings-save,
+  .primary-button,
+  .settings-add-button,
+  .settings-outline,
+  .secondary-button,
+  .settings-mini-button
+):active:not(:disabled) {
+  transform: scale(.98);
+}
+
 .settings-overlay .switch {
   position: relative;
   width: 40px;
@@ -227,7 +253,7 @@
   padding: 3px;
   border: 0;
   border-radius: var(--radius-round);
-  transition: background-color var(--transition-fast);
+  transition: background-color var(--motion-switch);
 }
 
 .settings-overlay .switch > span {
@@ -235,10 +261,27 @@
   height: 18px;
   border: 0;
   box-shadow: var(--settings-thumb-shadow);
-  transition: transform var(--transition-fast);
+  transition: transform var(--motion-switch), width var(--transition-fast);
 }
 
+.settings-overlay .switch:active:not(:disabled) > span { width: 21px; }
 .settings-overlay .switch.is-on > span { transform: translateX(16px); }
+.settings-overlay .switch.is-on:active:not(:disabled) > span { transform: translateX(13px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-content :is(
+    .settings-save,
+    .primary-button,
+    .settings-add-button,
+    .settings-outline,
+    .secondary-button,
+    .settings-mini-button
+  ):active:not(:disabled) { transform: none; }
+  .switch,
+  .switch > span,
+  .settings-overlay .switch,
+  .settings-overlay .switch > span { transition: none; }
+}
 
 /* 设置卡片共用内容边线及窄窗间距。 */
 .settings-preference-page {

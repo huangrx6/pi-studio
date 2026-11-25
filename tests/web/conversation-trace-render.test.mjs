@@ -143,3 +143,26 @@ test('old and streaming transcripts pair out-of-order results, keep visible imag
   assert.equal(model.answerText, 'final answer');
   assert.deepEqual(model.sources.map(s => s.href), ['https://example.org/a']);
 });
+
+test('inline step screenshots render directly under the matching chronological tool row', () => {
+  const step1 = tool('step-1', 'bash', { command: 'npm run build' });
+  const step2 = tool('step-2', 'browser_screenshot', { ref: 'page' });
+  const step3 = tool('step-3', 'bash', { command: 'echo done' });
+  const toolImages = new Map([
+    ['step-2', [{ src: 'data:image/png;base64,SHOT2', alt: 'preview' }]],
+  ]);
+  const results = new Map([
+    ['step-1', result('ok')],
+    ['step-2', result('captured')],
+    ['step-3', result('done')],
+  ]);
+  const closed = render([step1, step2, step3], results, { toolImages });
+  assert.match(closed, /1 图/);
+  assert.doesNotMatch(closed, /activity-step-images/);
+
+  const open = render([step1, step2, step3], results, { ...detailed, toolImages });
+  const pos1 = open.indexOf('npm run build');
+  const posShot = open.indexOf('activity-step-images');
+  const pos3 = open.indexOf('echo done');
+  assert.ok(pos1 >= 0 && posShot > pos1 && pos3 > posShot);
+});

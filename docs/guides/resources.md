@@ -33,11 +33,11 @@ Studio 的一般原则是显式 scope 与显式优先级。不同资源的冲突
 | 资源 | 有效 scope | 存储 | 优先级 / 冲突规则 | 生效边界 |
 | --- | --- | --- | --- | --- |
 | 指令 | 应用 + 项目目录链 | `<userData>/AGENTS.md`；项目 `AGENTS.md`、`.pi-studio/AGENTS.md` | 全局最先；项目从最近边界到 `cwd`，同层根 `AGENTS.md` 后在 `.pi-studio`；后加载内容覆盖冲突 | 下一次模型请求 |
-| Harness profile | 全局默认 + 精确工作区覆盖 | SQLite `studio.harness` | 工作区直接选择一个完整 profile；缺失时用全局 profile；`inherit` 删除工作区覆盖 | 保存后重载，下一次模型请求 |
+| Harness profile | 全局默认 + 精确工作区 + 临时对话 | SQLite `studio.harness` | 工作区或临时对话分别选择一个完整 profile；工作区缺失时用全局 profile；`inherit` 删除工作区覆盖 | 保存后重载，下一次模型请求 |
 | Durable 运行策略 | 应用 | SQLite `studio.runtime.policy` | 单一应用级策略，无工作区或会话覆盖 | 下一次执行边界 |
 | 模型、凭据与默认值 | 应用；当前会话另有运行配置 | SQLite `model_providers`、`model_catalog`、`credentials`、`settings` | 默认值只用于新会话；已有会话保留自己的模型与 thinking | 模型运行时重建后，下一次请求 |
-| 工具权限 | user + 精确工作区 + 精确会话 | SQLite `studio.permissions.policy` | 各层显式规则共同参与，固定 `deny > ask > allow`；模式默认值按会话、工作区、用户取最具体一层 | 下一次工具调用 |
-| 智能体工具白名单 | 应用 | SQLite `studio.agent.tools` | 精确名称或 glob 选择内置和扩展工具 | 下一次模型请求 |
+| 工具权限 | 方案库（主默认/工作区/临时对话）+ user / 工作区 / 会话动态覆盖 | SQLite `studio.permissions.profiles.v1`、`studio.permissions.policy` | 各层显式规则共同参与，固定 `deny > ask > allow`；基础模式优先取激活方案或动态覆盖 | 下一次工具调用 |
+| 智能体工具方案 | 方案库（主默认/工作区/临时对话/子智能体） | SQLite `studio.agent.toolProfiles.v1`、`studio.agent.tools` | 控制内置工具、用户扩展策略 (`all-enabled`/`safe-only`/`none`) 与 MCP 范围 (`follow-server`/`picked`/`none`) | 下一次模型请求 |
 | Skill | user + 精确工作区项目目录 | `<userData>/skills`、`<home>/.agents/skills`、工作区 `.pi-studio/skills`、`.agents/skills`；项目信任与 `skill_installations` 归属在 SQLite | 项目私有、项目通用、用户私有、用户通用；同名先发现者生效；Hub 安装可记录插件归属 | 下一次提示渲染；显式 `/skill:` 在提交前展开 |
 | 插件包 Plugin | 应用 | SQLite `studio_plugins`；受管目录 `~/.pi-studio/plugins/<id>/`；市场源在 settings `studio.pluginSources`；官方目录 `assets/official-plugins` | 一次安装可声明 MCP/Skill/CLI/Extension；市场浏览官方/自定义 registry；卸载按归属清理 `managed` 资源（见 [plugins.md](./plugins.md)） | 安装/启停后刷新设置快照；MCP 重连、技能下一次提示渲染 |
 | MCP server | 应用 | SQLite `mcp_servers` | 每台 server 独立配置；逐工具 exposure 覆盖 server 默认值；仍受 Agent 白名单过滤；可带插件归属列 `owner_plugin_id`/`origin`/`managed`/`user_override`（[plugins.md](./plugins.md) §4） | 配置保存后重连；下一次模型请求使用新目录 |
@@ -45,7 +45,7 @@ Studio 的一般原则是显式 scope 与显式优先级。不同资源的冲突
 | 子智能体默认值 | 用户、精确工作区、角色 | SQLite `studio.subagents` 与角色库 | 角色逐项覆盖工作区与用户默认值 | 新任务创建，已有后台角色接收新输入 |
 | 会话模型与 thinking | 会话 | Durable conversation 状态；Studio 只保存会话投影 | 会话选择覆盖新会话默认值；运行中修改排队到下一请求 | 下一次请求 |
 | 界面偏好 | renderer 本地 | `localStorage`；原生主题和菜单栏另有 SQLite 镜像 | 不参与 Agent 决策；本机 renderer 状态优先 | 保存后立即 |
-| 临时聊天 | 运行时内存 | Durable `MemoryStorage` | 不读取项目资源、不创建 Studio 会话投影 | 当前内存会话有效期 |
+| 临时聊天 | 运行时内存（能力受 Studio 方案装配控制） | Durable `MemoryStorage` + 工具/权限/Harness 绑定 | 不写会话历史、不加载项目工作区资源；按「智能体配置 → 临时对话」绑定的工具、权限与 Harness 方案装配能力 | 当前内存会话有效期 |
 
 ## 3. 指令：`AGENTS.md`
 
@@ -143,12 +143,12 @@ Harness profile 定义 Prompt section 开关、section 覆盖、自定义补充�
 
 ### 5.3 临时聊天
 
-临时聊天使用独立 `MemoryStorage` 和空 registry：
+临时聊天使用独立的 `MemoryStorage`，对话内容与附件仅存在于进程内存中：
 
-- 不写入 Studio SQLite、JSONL、工作区文件、凭据附件或会话历史。
-- 不使用智能体工具，也不加载项目指令、Skill、扩展或 MCP。
-- 可以读取应用级模型运行时中的已配置模型与凭据。
-- 关闭最后一个临时聊天或退出应用后，transcript、图片和临时运行状态随之消失。
+- 不写入 Studio SQLite、JSONL、工作区项目文件或历史列表，不绑定工作区目录也不加载 `.pi-studio/` 项目级扩展或项目指令。
+- 可在「设置 → 智能体配置 → 临时对话」分别绑定工具方案、权限方案和 Harness 方案，按需启用内置工具、用户扩展与指定 MCP 服务器，并通过临时权限扩展在工具执行前进行审批确认。
+- 默认工具方案 `temporary-default` 保持轻量（保留 `safe-only` 用户扩展与显式勾选前的空工具集），用户可根据需要扩展或新建独立方案。
+- 可以读取应用级模型运行时中的已配置模型与凭据；关闭最后一个临时聊天或退出应用后，transcript、图片和临时运行状态随之消失。
 
 ### 5.4 Renderer 界面偏好
 
@@ -205,9 +205,9 @@ session[精确 conversation ID]
 
 权限检查和文件边界是产品级防护，不是操作系统沙箱。Bash 的越界识别是静态检查，无法覆盖所有 shell 语义；来自不受信任来源的代码和命令仍应按不可信内容处理。
 
-## 7. 智能体工具白名单
+## 7. 智能体工具方案与白名单
 
-「设置 → 智能体工具」管理内置和扩展工具。选择保存在应用级 SQLite `studio.agent.tools`，对所有工作区生效。「插件 → MCP 服务器 → 服务器详情 → 工具」管理该服务器的各个方法。
+「设置 → 智能体工具」管理可复用的工具方案，并在「智能体配置」中绑定到主对话（全局/工作区）、临时对话或子智能体角色。配置保存在应用级 SQLite `studio.agent.toolProfiles.v1`（并与主默认 `studio.agent.tools` 双向同步）。「插件 → MCP 服务器 → 服务器详情 → 工具」管理每台服务器的具体方法。
 
 选择过程是：
 
@@ -300,7 +300,7 @@ MCP 文本结果超过 20 KiB 时会保留首尾，并把完整输出写到临�
 | `user` | `<Studio userData>/extensions/<id>/<version>` | 信任 | 所有工作区 |
 | `project` | `<workspace>/.pi-studio/extensions/<id>/<version>` | 不信任 | 当前精确工作区 |
 
-受管安装的活动版本指针、回滚状态和逐文件摘要放在 `<userData>/extension-state`；跨版本运行数据放在 `<userData>/extension-data`；quarantine 位于 `<userData>/extension-cache/quarantine`。直接放在扩展目录中的非受管扩展使用自身目录下的 `.data`。
+受管安装的活动版本指针、回滚状态和逐文件摘要放在 `<userData>/data/extension-state`；跨版本运行数据放在 `<userData>/data/extension-data`；quarantine 位于 `<userData>/cache/quarantine/extensions`。直接放在扩展目录中的非受管扩展使用自身目录下的 `.data`。
 
 用户扩展和项目扩展可以使用相同 manifest ID，因为它们拥有不同的稳定 ID：
 
@@ -345,9 +345,9 @@ core → system → optional → user → project
 
 在「设置 → 子智能体」中新建或编辑角色时，可以从女生、男生、动物三组内置头像中选择，每组 16 张。角色可以单独配置职责、工作指令、模型、MCP 服务、技能和 Harness。
 
-对话输入框里，`@` 查找工作区文件和目录，`#` 引用子智能体，`$` 查找技能和 MCP 方法。引用菜单顶部可以切换类别。同一插件提供的技能和 MCP 方法分别列出，输入插件名可以找到这两类资源。一条消息可以混用多种引用。
+对话输入框里，`@` 查找工作区文件和目录，`#` 引用子智能体，`$` 查找技能、MCP 和插件。一条消息可以混用多种引用。进入「$ → MCP」后，点击服务名称或按回车可引用整个服务。点击右侧的方法数量或按右方向键可查看该服务的方法；也可以在 MCP 列表直接输入方法名搜索。
 
-发送后，角色由已启用的 `subagent` 工具调用，所选技能的正文加入本轮上下文，MCP 引用指明具体服务和方法。工具调用遵循当前权限策略。旧草稿中的角色引用和原有的 `/skill:名称` 命令仍然可用。
+发送后，角色由已启用的 `subagent` 工具调用，所选技能的正文加入本轮上下文。引用 MCP 服务时，模型会根据任务从该服务当前可用的方法中选择；引用具体方法时，模型会收到该方法的名称。工具调用遵循当前权限策略。旧草稿中的角色引用和原有的 `/skill:名称` 命令仍然可用。
 
 角色库在 Studio 用户范围内共享，存于 SQLite 的 `studio.subagentProfiles.v1`。草稿以固定角色 ID 建立引用。新调用读取最新配置，历史子会话记录启动时的角色名称、头像和配置版本。MCP 服务选择在父会话已获准的方法中取交集，具体方法开关由 MCP 设置管理。技能选择按调用工作区的实际资源和信任状态解析。模型与 Harness 均可继承，显式指定的配置失效时会提示重新选择。
 
@@ -386,11 +386,12 @@ Pi Studio userData/
 │   ├── mcp_servers           # 应用级 MCP 配置
 │   ├── studio_extensions     # 扩展登记与信任状态
 │   └── project_resource_trust # 项目 Skill 等资源的路径 + 内容指纹
+├── plugins/                  # Studio 用户级插件包
 ├── skills/                   # Studio 用户级 Skill
 ├── extensions/               # Studio 用户级扩展代码
-├── extension-state/          # 受管安装、活动版本与回滚状态
-├── extension-data/           # 受管扩展跨版本运行数据
-└── extension-cache/          # 导入 quarantine 等缓存
+├── downloads/                # 浏览器下载（按需创建）
+├── data/                     # 应用托管数据（attachments、background-media、worktrees、plugin-data、extension-data、extension-state）
+└── cache/                    # 可安全清空的缓存与临时隔离区（model-catalogs、quarantine）
 
 <home>/.agents/skills/        # 跨客户端通用用户 Skill
 

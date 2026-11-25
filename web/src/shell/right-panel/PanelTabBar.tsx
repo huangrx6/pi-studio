@@ -325,6 +325,7 @@ export function PanelTabBar<T extends PanelTabItem>({
             if (!pickingExtension) closeToolMenu(true);
             return;
           }
+          if (event.target instanceof HTMLInputElement && (event.key === 'Home' || event.key === 'End')) return;
           const selector = pickingExtension ? '.extension-panel-picker button:not(:disabled)' : '[role="menuitem"]:not(:disabled)';
           const items = [...menuRef.current!.querySelectorAll<HTMLButtonElement>(selector)];
           const index = menuFocusIndex(event.key, items.indexOf(document.activeElement as HTMLButtonElement), items.length, true);

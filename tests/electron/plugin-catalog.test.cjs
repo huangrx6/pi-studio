@@ -9,7 +9,7 @@ installElectronSafeStorage({ after });
 const repoRoot = path.resolve(__dirname, '../..');
 const officialRoot = path.join(repoRoot, 'assets/official-plugins');
 
-test('official registry installs both workbench plugins and loads their declared UI and AI tools', async (t) => {
+test('official registry installs workbench plugins and loads their declared UI and AI tools', async (t) => {
   process.env.PI_STUDIO_OFFICIAL_PLUGINS = officialRoot;
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-plugin-market-'));
   process.env.PI_STUDIO_USER_DATA = directory;
@@ -58,10 +58,12 @@ test('official registry installs both workbench plugins and loads their declared
   const db = getStudioDatabase();
   const row = db.getExtension('user:studio.excalidraw');
   assert.ok(row.source.endsWith('/extension/pi-studio.extension.json'));
-  assert.equal(row.manifest.contributes.panels[0].canvas.sourceId, 'user:studio.excalidraw/scene');
+  assert.equal(row.manifest.contributes.panels[0].view.sourceId, 'user:studio.excalidraw/scene');
+  assert.equal(row.manifest.contributes.panels[0].view.entry, 'ui/index.html');
+  assert.equal(row.manifest.contributes.panels[0].view.scope, 'session');
   const active = await loadRuntimeExtension(row, directory);
   assert.deepEqual(active.extension.tools.map(tool => tool.name), ['excalidraw_draw', 'excalidraw_read']);
-  assert.equal(typeof active.dataSources.get('scene').writeCanvas, 'function');
+  assert.equal(typeof active.dataSources.get('scene').invoke, 'function');
   assert.ok(readAgentToolSelection(db).enabled.includes('excalidraw_draw'));
 
   const afterInstall = await pluginMarketSnapshot({ query: 'excalidraw' });
@@ -78,15 +80,50 @@ test('official registry installs both workbench plugins and loads their declared
   const taskPreview = await preparePluginInstall(taskSource.source, { expectedSha256: taskSource.expectedSha256 });
   assert.deepEqual(installPreparedPlugin(taskPreview.token).installed.extension, ['user:studio.task-board']);
   const taskRow = db.getExtension('user:studio.task-board');
-  assert.equal(taskRow.manifest.contributes.panels[0].taskBoard.sourceId, 'user:studio.task-board/board-data');
+  assert.equal(taskRow.manifest.contributes.panels[0].view.sourceId, 'user:studio.task-board/board-data');
+  assert.equal(taskRow.manifest.contributes.panels[0].view.scope, 'global');
   const taskRuntime = await loadRuntimeExtension(taskRow, directory);
   try {
     const provider = taskRuntime.dataSources.get('board-data');
-    assert.equal(typeof provider.writeTaskBoard, 'function');
-    assert.deepEqual(taskRuntime.extension.tools.map(tool => tool.name), ['task_board_list', 'task_board_get']);
-    assert.ok(fs.existsSync(path.join(directory, 'plugin-data', taskBoard.id, taskBoard.id, 'tasks.sqlite')));
+    assert.equal(typeof provider.invoke, 'function');
+    assert.deepEqual(
+      taskRuntime.extension.tools.map(tool => tool.name),
+      [
+        'task_board_list',
+        'task_board_get',
+        'task_board_summary',
+        'task_board_create',
+        'task_board_update',
+        'task_board_add_note',
+        'task_board_archive',
+      ],
+    );
+    assert.deepEqual(
+      taskRuntime.extension.tools.filter(tool => tool.replay === 'safe').map(tool => tool.name),
+      ['task_board_list', 'task_board_get', 'task_board_summary'],
+    );
+    assert.ok(fs.existsSync(path.join(directory, 'data', 'plugin-data', taskBoard.id, taskBoard.id, 'tasks.sqlite')));
   } finally {
     await taskRuntime.cleanup();
+  }
+  const notes = snapshot.plugins.find(plugin => plugin.id === 'studio.notes-library');
+  assert.ok(notes);
+  assert.equal(notes.name, '知识库');
+  const notesSource = await resolveMarketInstallSource(notes.id);
+  const notesPreview = await preparePluginInstall(notesSource.source, { expectedSha256: notesSource.expectedSha256 });
+  assert.deepEqual(installPreparedPlugin(notesPreview.token).installed.extension, ['user:studio.notes-library']);
+  const notesRow = db.getExtension('user:studio.notes-library');
+  assert.equal(notesRow.manifest.name, '知识库');
+  assert.equal(notesRow.manifest.contributes.panels[0].title, '知识库');
+  assert.equal(notesRow.manifest.contributes.panels[0].view.scope, 'global');
+  assert.equal(notesRow.manifest.contributes.panels[0].view.fullscreen, true);
+  const notesRuntime = await loadRuntimeExtension(notesRow, directory);
+  try {
+    assert.equal(notesRuntime.dataSources.get('library-data').read().viewData.library, null);
+    assert.deepEqual(notesRuntime.extension.tools.map(tool => tool.name),
+      ['notes_library_list', 'notes_library_search', 'notes_library_read', 'notes_library_write']);
+  } finally {
+    await notesRuntime.cleanup();
   }
 });
 

@@ -1,0 +1,94 @@
+.attachment-strip {
+  --attachment-card-height: 48px;
+  --attachment-image-width: 75px;
+  --attachment-file-width: 153px;
+  --attachment-gap: 6px;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: var(--attachment-gap);
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-inline: contain;
+}
+
+/* An 8px drag target surrounds the 3px visible thumb. Let Chromium use its
+ * axis-specific scrollbar so hovering never changes the rail's height. */
+.attachment-strip::-webkit-scrollbar:horizontal { height: 8px; }
+.attachment-strip::-webkit-scrollbar-track:horizontal { background: transparent; }
+.attachment-strip::-webkit-scrollbar-thumb:horizontal {
+  border: 0 solid transparent;
+  border-block-width: 3px 2px;
+  border-radius: var(--radius-round);
+  background: var(--scrollbar) padding-box;
+}
+@media (hover: hover) and (pointer: fine) and (forced-colors: none) {
+  .attachment-strip:not(:hover):not(:focus-within)::-webkit-scrollbar-thumb:horizontal {
+    background-color: transparent;
+  }
+}
+.attachment-strip::-webkit-scrollbar-thumb:horizontal:hover,
+.attachment-strip::-webkit-scrollbar-thumb:horizontal:active { background-color: var(--scrollbar-hover); }
+@media (forced-colors: active) {
+  .attachment-strip::-webkit-scrollbar-thumb:horizontal { background-color: ButtonText; }
+}
+
+.attachment-strip:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 1px;
+  border-radius: var(--radius-control);
+}
+
+.attachment-strip .attachment-icon {
+  width: var(--control-sm);
+  height: var(--control-sm);
+  --attachment-ink: var(--icon);
+  --attachment-light-ink: var(--attachment-ink);
+  color: color-mix(in srgb, var(--attachment-ink) 70%, var(--text));
+}
+
+:root[data-theme="light"] .attachment-strip .attachment-icon {
+  color: color-mix(in srgb, var(--attachment-light-ink) 72%, var(--text));
+}
+
+.attachment-strip .attachment-icon > :is(svg, .studio-file-icon) {
+  width: 100%;
+  height: 100%;
+}
+
+.attachment-strip .attachment-icon > svg {
+  stroke-width: 1.2px;
+}
+
+/* Match the toolbar's visible stroke even at the larger attachment size. */
+.attachment-strip .attachment-icon > svg > * {
+  vector-effect: non-scaling-stroke;
+}
+
+.attachment-file-caption {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  font-family: var(--font);
+}
+
+.attachment-file-caption > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-file-caption strong {
+  color: var(--text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.attachment-file-caption small {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}

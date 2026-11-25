@@ -37,6 +37,21 @@
   margin-inline: auto;
   display: grid;
   gap: var(--space-5);
+  animation: pi-settings-page-in var(--settings-page-enter) var(--settings-motion-out) both;
+}
+
+.plugin-workspace-panel {
+  animation: pi-settings-page-in var(--settings-page-enter) var(--settings-motion-out) both;
+}
+
+@keyframes pi-settings-page-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-page-frame,
+  .plugin-workspace-panel { animation: none; }
 }
 .settings-page-frame > .settings-page-header {
   margin-bottom: 0;
@@ -129,11 +144,13 @@
 .settings-error-list code { overflow-wrap: anywhere; color: var(--text); font: var(--text-xs)/var(--leading-normal) var(--mono); }
 .resource-status { font-size: var(--text-xs); color: var(--faint); white-space: nowrap; }
 .resource-status.is-on { color: var(--success); }
-.switch { display: flex; width: 38px; height: 22px; flex: none; align-items: center; justify-content: flex-start; overflow: hidden; padding: 3px; border-radius: var(--radius-round); background: var(--switch-off); }
-.switch > span { display: block; width: 16px; height: 16px; flex: none; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--switch-thumb); box-shadow: var(--shadow-thumb); transition: transform var(--transition); }
+.switch { display: flex; width: 38px; height: 22px; flex: none; align-items: center; justify-content: flex-start; overflow: hidden; padding: 3px; border-radius: var(--radius-round); background: var(--switch-off); transition: background-color var(--motion-switch); }
+.switch > span { display: block; width: 16px; height: 16px; flex: none; border: 1px solid var(--border-strong); border-radius: 50%; background: var(--switch-thumb); box-shadow: var(--shadow-thumb); transition: transform var(--motion-switch), width var(--transition-fast); }
+.switch:active:not(:disabled) > span { width: 19px; }
 .switch.is-on { background: var(--button-bg); }
 .switch.is-on > span { background: var(--switch-on-thumb); }
 .switch.is-on > span { transform: translateX(16px); }
+.switch.is-on:active:not(:disabled) > span { transform: translateX(13px); }
 .package-row > svg { color: var(--icon); }
 
 /* Smaller desktop windows keep comfortable controls and scroll the content. */

@@ -1,8 +1,5 @@
 import type { SettingsSnapshot } from './global.d';
 import type { MutationProjection } from './mutation-types';
-import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
-import type { BinaryFiles } from '@excalidraw/excalidraw/types';
-import type { TaskBoardQuery, TaskBoardSnapshot } from './task-board';
 
 export type ExtensionMutationResult = {
   committed: true;
@@ -269,6 +266,19 @@ export interface ExtensionCommandContribution {
   action?: ExtensionUiAction;
 }
 
+export type ExtensionViewScope = 'session' | 'global';
+
+export interface ExtensionViewContribution {
+  entry: string;
+  sourceId: ExtensionContributionId;
+  scope: ExtensionViewScope;
+  fullscreen?: boolean;
+}
+
+export interface ExtensionViewUiDescriptor extends ExtensionViewContribution {
+  url: string;
+}
+
 export interface ExtensionPanelContribution {
   id: string;
   title: string;
@@ -281,8 +291,7 @@ export interface ExtensionPanelContribution {
   priority?: number;
   details?: string;
   visibility?: 'always' | 'while-active';
-  canvas?: { sourceId: ExtensionContributionId };
-  taskBoard?: { sourceId: ExtensionContributionId };
+  view?: ExtensionViewContribution;
   content: ExtensionContent[];
 }
 
@@ -559,8 +568,7 @@ export interface ExtensionUiItem {
   scope: ExtensionScope;
   ownerPluginId?: string;
   iconDataUrl?: string;
-  canvas?: { sourceId: ExtensionContributionId };
-  taskBoard?: { sourceId: ExtensionContributionId };
+  view?: ExtensionViewUiDescriptor;
   contributionId: string;
   title: string;
   description: string;
@@ -592,25 +600,9 @@ export interface ExtensionDataViewSnapshot {
   revision: number;
   updatedAt: number;
   content: ExtensionContent[];
-  canvas?: ExtensionCanvasSnapshot;
-  canvasWritable?: boolean;
-  taskBoard?: TaskBoardSnapshot;
-  taskBoardWritable?: boolean;
+  viewData?: unknown;
+  viewInvocable?: boolean;
   error?: string;
-}
-
-export interface ExtensionCanvasScene {
-  elements: readonly ExcalidrawElement[];
-  files?: BinaryFiles;
-  appState?: { viewBackgroundColor: string };
-}
-
-export interface ExtensionCanvasSnapshot {
-  scene: ExtensionCanvasScene;
-  revision: number;
-  drawing: boolean;
-  title: string;
-  playback?: { startAt: number; durationMs: number; firstElement: number };
 }
 
 export interface ExtensionDataViewOpenRequest {
@@ -619,7 +611,7 @@ export interface ExtensionDataViewOpenRequest {
   sessionId?: string;
   /** Current renderer selection. The host re-resolves the durable model when available. */
   modelRef?: string;
-  taskBoardQuery?: TaskBoardQuery;
+  viewParams?: Record<string, unknown>;
 }
 
 export interface ExtensionDataViewOpenResult {

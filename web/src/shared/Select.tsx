@@ -18,7 +18,7 @@ import { useSurfaceActive } from './surface-visibility';
 import { isComposingKey, menuFocusIndex } from './keyboard-navigation';
 
 /** 一个选项；description 作为次要说明展示在标签下方，也参与视觉分组。 */
-export type SelectOption = { value: string; label: string; description?: string; disabled?: boolean };
+export type SelectOption = { value: string; label: string; description?: string; icon?: ReactNode; disabled?: boolean };
 
 /** Select 的受控 props。 */
 type SelectProps = {
@@ -70,6 +70,7 @@ export function Select({ value, options, onChange, label, title, placeholder = '
   const menuRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   const selected = options.find((option) => option.value === value);
+  const selectedIcon = selected?.icon ?? leadingIcon;
 
   // 顶层菜单使用视口坐标。长表单的可用空间止于正文，留下标题栏和操作栏。
   useLayoutEffect(() => {
@@ -238,7 +239,7 @@ export function Select({ value, options, onChange, label, title, placeholder = '
           if (next && !menuRef.current?.contains(next)) setOpen(false);
         }}
       >
-        {leadingIcon && <span className="pi-select-leading" aria-hidden="true">{leadingIcon}</span>}
+        {selectedIcon && <span className="pi-select-leading" aria-hidden="true">{selectedIcon}</span>}
         <span className={selected ? 'pi-select-value' : 'pi-select-placeholder'}>{selected?.label ?? placeholder}</span>
         <ChevronDown className="pi-select-chevron" />
       </button>
@@ -269,7 +270,8 @@ export function Select({ value, options, onChange, label, title, placeholder = '
               disabled={option.disabled}
               onClick={() => choose(option)}
             >
-              <span>
+              {option.icon && <span className="pi-select-leading" aria-hidden="true">{option.icon}</span>}
+              <span className="pi-select-option-text">
                 <span className="pi-select-option-label">{option.label}</span>
                 {option.description && <small>{option.description}</small>}
               </span>

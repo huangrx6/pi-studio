@@ -6,7 +6,7 @@ import {
   useState,
 } from 'react';
 import type { ExtensionNotice } from '../features/extensions/ExtensionSlot';
-import type { AppNotification, NotificationTone } from './NotificationCenter';
+import { useSettingsToast } from '../shared/SettingsToast';
 import { useMessageDelivery } from '../features/conversation/useMessageDelivery';
 import { useConversationSessions } from '../features/conversation/useConversationSessions';
 import { useConversationSubscription } from '../features/conversation/useConversationSubscription';
@@ -24,7 +24,6 @@ import { useSidebarActions } from './useSidebarActions';
 import { useAppCommandPalette } from './useAppCommandPalette';
 import { useSidebarWorkspaceActions } from './useSidebarWorkspaceActions';
 import { useSubagentWorkspace } from '../features/subagents/useSubagentWorkspace';
-import { runtimeRefreshFailure } from '../shared/runtime-refresh';
 import type { AppFoundation } from './useAppFoundation';
 
 /**
@@ -33,6 +32,7 @@ import type { AppFoundation } from './useAppFoundation';
  * root and individual conversation surfaces stay independently testable.
  */
 export function useConversationController(foundation: AppFoundation) {
+  const showToast = useSettingsToast();
   const {
     actionConfirmation,
     settingsLeaveConfirmation,
@@ -43,8 +43,6 @@ export function useConversationController(foundation: AppFoundation) {
     setSettingsError,
     retryInfo,
     setRetryInfo,
-    setNotifications,
-    pushNotification,
     compaction,
     setCompaction,
     queuedPromptsBySession,
@@ -268,13 +266,8 @@ export function useConversationController(foundation: AppFoundation) {
   });
 
   const notifyExtension = useCallback((notice: ExtensionNotice) => {
-    const tone: NotificationTone = notice.tone === 'success'
-      || notice.tone === 'warning'
-      || notice.tone === 'error'
-      ? notice.tone
-      : 'info';
-    pushNotification(notice.message, tone);
-  }, [pushNotification]);
+    showToast(notice.message, notice.tone === 'error' || notice.tone === 'success' ? notice.tone : 'info');
+  }, [showToast]);
   const workbench = foundation.workbench;
   const focusConversation = useCallback(() => {
     workbench.setPanelFullscreen(false);
@@ -302,7 +295,7 @@ export function useConversationController(foundation: AppFoundation) {
   const openExtensionPanel = useCallback(async (panelId: string) => {
     const item = conversationExtensions.panels.find(panel => panel.id === panelId);
     if (!item) {
-      pushNotification('这个扩展面板当前不可用。', 'warning');
+      showToast('这个扩展面板当前不可用。', 'error');
       return;
     }
     if (settingsOpen) {
@@ -311,8 +304,8 @@ export function useConversationController(foundation: AppFoundation) {
       setExtensionDetail(null);
     }
     workbench.openExtensionTab(item);
-  }, [conversationExtensions.panels, pushNotification, session?.id, sessionRef, setExtensionDetail,
-    settingsOpen, settingsWorkspace.controller, workbench.openExtensionTab, workspace, workspaceRef]);
+  }, [conversationExtensions.panels, session?.id, sessionRef, setExtensionDetail,
+    settingsOpen, settingsWorkspace.controller, showToast, workbench.openExtensionTab, workspace, workspaceRef]);
 
   useEffect(() => window.piApi.onExtensionPanelRequested?.(({ sessionId, panelId }) => {
     if (sessionId !== sessionRef.current?.id || sessionId !== session?.id || settingsOpen) return;
@@ -371,7 +364,6 @@ export function useConversationController(foundation: AppFoundation) {
     openSubagentsTab: workbench.openSubagentsTab,
     turnActive,
     actionConfirmation,
-    pushNotification,
     loadState,
   });
   const {
@@ -500,7 +492,6 @@ export function useConversationController(foundation: AppFoundation) {
     ),
     refreshSubagentChildren,
     resumeTranscriptFollow,
-    pushNotification,
     showComposerFeedback,
     commandHandlersRef: composerCommandHandlersRef,
   });
@@ -511,7 +502,6 @@ export function useConversationController(foundation: AppFoundation) {
     applyOutline,
     refreshOutline,
     openSession,
-    openNotificationSession,
     loadOlderMessages,
     loadNewerMessages,
     loadMessageWindow,
@@ -622,7 +612,6 @@ export function useConversationController(foundation: AppFoundation) {
     selectThinking,
     loadState,
     showComposerFeedback,
-    pushNotification,
     openExtensionPanel,
   });
   composerCommandHandlersRef.current = {
@@ -707,14 +696,6 @@ export function useConversationController(foundation: AppFoundation) {
   }, [session?.id]);
 
   useEffect(() => window.piApi.onConversationListChanged(() => { void loadState(); }), [loadState]);
-  useEffect(() => window.piApi.onRuntimeRefresh((snapshot) => {
-    // Applied, ready and idle-deferred refreshes are successful lifecycle
-    // states. The settings UI already reflects the saved value; only a real
-    // runtime failure needs a separate surface.
-    const failure = runtimeRefreshFailure(snapshot);
-    if (!failure) return;
-    pushNotification(failure, 'error', '配置热加载失败', snapshot.sessionId);
-  }), [pushNotification]);
 
   const { retryConversationSubscription } = useConversationSubscription({
     sessionId: session?.id,
@@ -728,7 +709,6 @@ export function useConversationController(foundation: AppFoundation) {
     loadState,
     refreshSubagentChildren,
     refreshOutline,
-    pushNotification,
     setBusy,
     setStoppingSessionIds,
     setRequestTraces,
@@ -771,7 +751,6 @@ export function useConversationController(foundation: AppFoundation) {
     persistDeletedComposerSessions,
     conversationNavigationRef,
     actionConfirmation,
-    pushNotification,
   });
 
   const isNewConversation = !session?.id;
@@ -838,28 +817,6 @@ export function useConversationController(foundation: AppFoundation) {
     sidebarAction,
     openSettingsPage: page => openSettings(page),
   });
-
-  async function runNotificationAction(item: AppNotification): Promise<void> {
-    const action = item.action;
-    if (!action) return;
-    if (action.kind !== 'unarchive-session') throw new Error('这个通知操作暂不可用。');
-    const target = workspaces
-      .flatMap(workspaceEntry => workspaceEntry.sessions)
-      .find(sessionEntry => sessionEntry.id === action.sessionId);
-    if (!target) throw new Error('这个会话已不在列表中，无法撤销归档。');
-    if (!target.archived) throw new Error('会话已经恢复，请刷新列表后再确认当前状态。');
-    await sidebarAction('session', action.sessionId, 'archive', undefined, {
-      preserveCurrentView: true,
-      notify: false,
-    });
-    setNotifications(current => current.filter(notification => notification.id !== item.id));
-    pushNotification(
-      `「${target.title || '会话'}」已恢复到原工作区。`,
-      'success',
-      '已撤销归档',
-      action.sessionId,
-    );
-  }
 
   return {
     settingsWorkspace,
@@ -967,7 +924,6 @@ export function useConversationController(foundation: AppFoundation) {
     selectDraftWorkspace,
     prefetchSession,
     openSession,
-    openNotificationSession,
     updateComposerMenu,
     executeBuiltinCommand,
     sendPromptFromExtension,
@@ -981,7 +937,6 @@ export function useConversationController(foundation: AppFoundation) {
     restoreArchivedConversation,
     permanentlyDeleteArchivedConversation,
     deleteArchivedGroup,
-    runNotificationAction,
     sidebarActions,
     actionPaletteOpen,
     setActionPaletteOpen,

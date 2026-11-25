@@ -1,5 +1,5 @@
-import { memo, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { PanelRightOpen } from 'lucide-react';
+import { memo, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Check, Copy, PanelRightOpen } from 'lucide-react';
 import { Markdown } from '../../shared/Markdown';
 import type { ChatMessage } from '../../types/chat-types';
 import { textBlocks } from './message-content';
@@ -54,36 +54,54 @@ function ThinkingBody({ entry }: { entry: Extract<ActivityEntry, { kind: 'thinki
   </div>;
 }
 
-function ExpandableCodeComponent({ text, error = false }: { text: string; error?: boolean }) {
+function ExpandableCodeComponent({ title, text, error = false }: { title: string; text: string; error?: boolean }) {
   const [limit, setLimit] = useState(ACTIVITY_OUTPUT_SOFT_LIMIT);
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = window.setTimeout(() => setCopied(false), 1600);
+    return () => window.clearTimeout(timer);
+  }, [copied]);
   const clamped = clampActivityText(text, limit);
   const fullyShown = !clamped.truncated;
   const remaining = clamped.omitted;
   const nextChunk = Math.min(ACTIVITY_OUTPUT_EXPAND_STEP, remaining);
-  return <>
+  return <div className={'activity-code-block' + (error ? ' is-error' : '')}>
+    <div className="activity-code-head">
+      <span className="activity-tool-label">{title}</span>
+      <button type="button" className={'activity-code-copy' + (copied ? ' is-copied' : '')}
+        aria-label={copied ? '已复制' : `复制${title}`}
+        onClick={() => {
+          void navigator.clipboard?.writeText(text).then(() => setCopied(true)).catch(() => {});
+        }}>
+        {copied ? <><Check aria-hidden="true" /><span>已复制</span></> : <><Copy aria-hidden="true" /><span>复制</span></>}
+      </button>
+    </div>
     <pre className={'activity-tool-code' + (error ? ' is-error' : '') + (text.length > ACTIVITY_OUTPUT_SOFT_LIMIT ? ' is-long' : '')}>{clamped.text}</pre>
-    {!fullyShown && (
+    {(!fullyShown || text.length > ACTIVITY_OUTPUT_SOFT_LIMIT) && (
       <div className="activity-output-actions">
-        <button
-          type="button"
-          className="activity-earlier"
-          onClick={() => setLimit((current) => Math.min(text.length, current + ACTIVITY_OUTPUT_EXPAND_STEP))}
-        >再显示约 {Math.max(1, Math.ceil(nextChunk / 1000))}k 字符</button>
-        {remaining > ACTIVITY_OUTPUT_EXPAND_STEP && (
+        {!fullyShown && (
+          <button
+            type="button"
+            className="activity-earlier"
+            onClick={() => setLimit((current) => Math.min(text.length, current + ACTIVITY_OUTPUT_EXPAND_STEP))}
+          >再显示约 {Math.max(1, Math.ceil(nextChunk / 1000))}k 字符</button>
+        )}
+        {!fullyShown && remaining > ACTIVITY_OUTPUT_EXPAND_STEP && (
           <button
             type="button"
             className="activity-earlier"
             onClick={() => setLimit(text.length)}
           >全部展开（约 {Math.ceil(remaining / 1000)}k）</button>
         )}
+        {fullyShown && text.length > ACTIVITY_OUTPUT_SOFT_LIMIT && (
+          <button type="button" className="activity-earlier" onClick={() => setLimit(ACTIVITY_OUTPUT_SOFT_LIMIT)}>
+            收起输出
+          </button>
+        )}
       </div>
     )}
-    {fullyShown && text.length > ACTIVITY_OUTPUT_SOFT_LIMIT && (
-      <button type="button" className="activity-earlier" onClick={() => setLimit(ACTIVITY_OUTPUT_SOFT_LIMIT)}>
-        收起输出
-      </button>
-    )}
-  </>;
+  </div>;
 }
 
 const ExpandableCode = memo(ExpandableCodeComponent);
@@ -102,19 +120,15 @@ function ToolDetails({ entry, result, onOpenFile }: {
       : Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'command'));
     return Object.keys(source).length > 0 ? JSON.stringify(source, null, 2) : '';
   }, [args, command]);
-  const output = result && textBlocks(result.content);
+  const output = result && (textBlocks(result.content) || (result.isError ? result.errorMessage : ''));
   const file = ['read', 'write', 'edit'].includes(call.name) ? args.path ?? args.file_path : null;
-  const resultView = output && <>
-    <div className="activity-tool-label">{result?.isError ? '错误信息' : '结果'}</div>
-    <ExpandableCode text={output} error={Boolean(result?.isError)} />
-  </>;
+  const resultView = output && <ExpandableCode title={result?.isError ? '错误信息' : '结果'} text={output} error={Boolean(result?.isError)} />;
   return <div className="activity-tool-body activity-disclosure-body">
     {result?.isError && resultView}
     {typeof file === 'string' && onOpenFile && <button type="button" className="activity-open-file" onClick={() => onOpenFile(file)}>
       <PanelRightOpen />打开文件</button>}
-    {command !== undefined && <><div className="activity-tool-label">命令</div><ExpandableCode text={command} /></>}
-    {parameterText && <><div className="activity-tool-label">参数</div>
-      <ExpandableCode text={parameterText} /></>}
+    {command !== undefined && <ExpandableCode title="命令" text={command} />}
+    {parameterText && <ExpandableCode title="参数" text={parameterText} />}
     {!result?.isError && resultView}
     {!command && !parameterText && !output && <span className="activity-tool-label">{result ? '工具未返回文本。' : entry.live ? '等待工具返回结果…' : '没有收到工具结果。'}</span>}
   </div>;

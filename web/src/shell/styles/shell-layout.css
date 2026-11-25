@@ -9,6 +9,12 @@
   grid-area: 1 / 1 / -1 / -1;
   display: grid;
   grid-template: minmax(0, 1fr) / subgrid;
+  animation: pi-settings-overlay-in var(--motion-enter) both;
+}
+
+@keyframes pi-settings-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .shell-sidebar {
@@ -21,13 +27,31 @@
   padding: 0 var(--space-3) var(--space-3);
   overflow: hidden;
   contain: layout paint;
-  transition: width var(--shell-transition), padding-inline var(--shell-transition);
+  opacity: 1;
+  visibility: visible;
+  transition:
+    width var(--shell-transition),
+    padding-inline var(--shell-transition),
+    opacity 180ms ease,
+    visibility 0s linear 0s;
+}
+
+/* Keep sidebar rows at their natural width while the outer column clips down to 0. */
+.shell-sidebar > * {
+  min-width: calc(var(--sidebar-w) - 2 * var(--space-3));
 }
 
 .is-sidebar-collapsed .shell-sidebar {
   width: 0;
   padding-inline: 0;
+  opacity: 0;
   visibility: hidden;
+  pointer-events: none;
+  transition:
+    width var(--shell-transition),
+    padding-inline var(--shell-transition),
+    opacity 140ms ease,
+    visibility 0s linear 300ms;
 }
 
 /* An exposed canvas edge gets the same gutter as the opposite edge. The wallpaper
@@ -40,6 +64,7 @@
   grid-area: 1 / 2;
   margin-block: var(--header-height) var(--content-gutter);
   margin-inline: var(--canvas-start-gutter, 0px) var(--content-gutter);
+  transition: margin-inline-start var(--shell-transition);
 }
 
 .content-region {
@@ -101,22 +126,30 @@ html[data-window-fullscreen='true'] .app.is-sidebar-collapsed { --shell-header-l
 
 .sidebar-resize-handle::after {
   position: absolute;
-  top: 12%;
-  bottom: 12%;
+  top: 10%;
+  bottom: 10%;
   left: 4px;
   width: 1px;
   border-radius: var(--radius-round);
   background: var(--transparent);
   content: '';
-  transition: background var(--transition);
+  transition: background var(--transition-fast), width var(--transition-fast), left var(--transition-fast);
 }
 
 .sidebar-resize-handle:hover::after,
-.sidebar-resize-handle.is-resizing::after { background: var(--border-hover); }
+.sidebar-resize-handle.is-resizing::after { left: 3px; width: 2px; background: var(--accent); }
 
 .is-sidebar-resizing .shell-sidebar { transition: none; }
 body.is-sidebar-resizing,
 body.is-sidebar-resizing * {
   cursor: ew-resize !important;
   user-select: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-overlay { animation: none; }
+  .shell-sidebar,
+  .is-sidebar-collapsed .shell-sidebar,
+  .content-region,
+  .content-region > .shell-header { transition: none; }
 }

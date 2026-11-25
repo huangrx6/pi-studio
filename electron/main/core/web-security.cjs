@@ -20,7 +20,7 @@ function rendererContentSecurityPolicy({ dev = false } = {}) {
     "font-src 'self' data:",
     `connect-src ${connectSources}`,
     "worker-src 'self' blob:",
-    "frame-src 'none'",
+    "frame-src pi-ext:",
     "object-src 'none'",
     "base-uri 'none'",
     "form-action 'none'",

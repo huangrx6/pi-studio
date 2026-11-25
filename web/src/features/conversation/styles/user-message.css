@@ -1,3 +1,75 @@
+.user-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-2);
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.user-message > .user-bubble {
+  width: max-content;
+  min-width: 0;
+  max-width: min(85%, 680px);
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+.user-attachments {
+  width: max-content;
+  max-width: min(100%, 680px);
+}
+
+.user-attachments .conversation-image-gallery {
+  flex: none;
+  width: max-content;
+  max-width: none;
+  margin: 0;
+}
+
+.user-attachments .conversation-image-strip {
+  width: auto;
+  max-width: none;
+  gap: var(--attachment-gap);
+  padding: 0;
+  overflow: visible;
+}
+
+.user-attachments .conversation-image-tile,
+.user-attachments .attachment-card {
+  flex: none;
+  height: var(--attachment-card-height);
+  border-radius: var(--radius-control);
+  box-shadow: none;
+}
+
+.user-attachments .conversation-image-tile {
+  width: var(--attachment-image-width);
+  padding: 2px;
+  touch-action: auto;
+}
+
+.user-attachments .conversation-image-tile img {
+  min-width: 0;
+  min-height: 0;
+  border-radius: calc(var(--radius-control) - 2px);
+}
+
+.user-attachments .attachment-card {
+  width: var(--attachment-file-width);
+  min-width: 0;
+  max-width: none;
+  margin: 0;
+  gap: var(--attachment-gap);
+  padding: 0 var(--space-2);
+}
+
+.user-attachments :is(.conversation-image-tile, .attachment-card):focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 0;
+}
+
 .user-text-disclosure { min-width: 0; white-space: normal; }
 .message-edit .composer-editor { min-height: 84px; max-height: 320px; width: 100%; overflow-y: auto; outline: 0; }
 .user-text-viewport { overflow: hidden; }
@@ -8,7 +80,10 @@
 .user-text-toggle {
   display: flex; align-items: center; gap: 5px; margin-top: 8px;
   padding: 3px 0; border: 0; background: transparent; color: var(--muted);
-  font: var(--text-xs)/var(--leading-normal) var(--font); cursor: pointer;
+  font-family: var(--font);
+  font-size: max(var(--text-13), calc(var(--chat-font-size, 15px) * 0.85));
+  line-height: var(--leading-normal);
+  cursor: pointer;
 }
 .user-text-toggle:hover { color: var(--text); }
 .user-text-toggle:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 3px; border-radius: var(--radius-control); }

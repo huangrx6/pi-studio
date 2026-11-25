@@ -84,7 +84,7 @@ changes apply to subsequent requests. See [Network proxy](network-proxy.md).
 1. Studio reads source metadata and shows name, complete description, version,
    invocation mode, resource count, and estimated prompt cost.
 2. A preview copies a directory or verified ZIP into
-   `<userData>/skill-quarantine/<token>`.
+   `<userData>/cache/quarantine/skills/<token>`.
 3. Studio validates the Agent Skills frontmatter and the complete file graph.
 4. The reviewed content is copied into a temporary sibling, its content digest
    is checked again, and the destination is switched atomically.

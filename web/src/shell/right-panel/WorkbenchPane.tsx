@@ -51,6 +51,7 @@ type WorkbenchPaneProps = {
   controller: ReturnType<typeof useAppWorkbenchController>;
   settingsOpen: boolean;
   workspace: string;
+  workspaces?: Array<{ cwd: string; name: string }>;
   session: SessionStateForPersistence;
   modelSelection: ModelSelection;
   workspaceName: string;
@@ -60,6 +61,7 @@ type WorkbenchPaneProps = {
   onLauncherOrderChange: (order: string[]) => void;
   showTrace: boolean;
   dragPreviewRef: MutableRefObject<HTMLDivElement | null>;
+  onSelectWorkspace?: (cwd: string) => void;
   onChooseWorkspace: () => void;
   onOpenSettings: (page: 'models') => void;
   terminalAppearance: TerminalAppearance;
@@ -72,6 +74,7 @@ export function WorkbenchPane({
   controller,
   settingsOpen,
   workspace,
+  workspaces = [],
   session,
   modelSelection,
   workspaceName,
@@ -81,6 +84,7 @@ export function WorkbenchPane({
   onLauncherOrderChange,
   showTrace,
   dragPreviewRef,
+  onSelectWorkspace,
   onChooseWorkspace,
   onOpenSettings,
   terminalAppearance,
@@ -247,11 +251,11 @@ export function WorkbenchPane({
   ] : [];
   const toolActions: RightPanelToolAction[] = [
     ...sessionTools.filter(action => action.id !== 'trace' || showTrace),
-    { id: 'files', label: '工作区文件', description: '浏览和预览项目文件', disabled: !panelWorkspace, onSelect: openFilesTab },
-    { id: 'terminal', label: '新建终端', description: '在当前工作区运行命令', disabled: !panelWorkspace, onSelect: openTerminalTab },
-    { id: 'services', label: '运行服务', description: '查看正在运行的服务', disabled: !panelWorkspace, onSelect: openServicesTab },
-    { id: 'browser', label: '浏览器', description: '打开网页并保留在工作台', onSelect: () => openBrowserTab() },
-    { id: 'temporary', label: '临时聊天', description: '开始一个独立的临时会话', onSelect: openTemporaryChat },
+    { id: 'files', label: '工作区文件', description: '浏览与预览项目文件', disabled: !panelWorkspace, needsWorkspace: !panelWorkspace, onSelect: openFilesTab },
+    { id: 'terminal', label: '新建终端', description: '在工作区执行命令', disabled: !panelWorkspace, needsWorkspace: !panelWorkspace, onSelect: openTerminalTab },
+    { id: 'services', label: '运行服务', description: '查看运行中的服务', disabled: !panelWorkspace, needsWorkspace: !panelWorkspace, onSelect: openServicesTab },
+    { id: 'browser', label: '浏览器', description: '内置网页与调试预览', onSelect: () => openBrowserTab() },
+    { id: 'temporary', label: '临时聊天', description: '不留历史的临时会话', onSelect: openTemporaryChat },
   ];
 
   async function loadDirectory(path: string) {
@@ -459,12 +463,14 @@ export function WorkbenchPane({
     if (!activePanelTab) {
       return <RightPanelStart
         workspace={workspace}
+        workspaces={workspaces}
         cwd={session?.cwd}
         actions={toolActions}
         extensionPanels={extensionPicker.groups.map(group => group.panels[0])}
         onOpenExtension={extensionPicker.onOpenPanel}
         order={launcherOrder}
         onOrderChange={onLauncherOrderChange}
+        onSelectWorkspace={onSelectWorkspace}
         onChooseWorkspace={onChooseWorkspace}
       />;
     }

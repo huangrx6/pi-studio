@@ -3,7 +3,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { extractZipArchive, DEFAULT_ARCHIVE_LIMITS } = require('../../core/extension-archive.cjs');
-const { studioDataDirectory } = require('../../core/studio-paths.cjs');
+const { quarantineDirectory } = require('../../core/studio-paths.cjs');
 const { removeEmptyQuarantine } = require('./cleanup.cjs');
 const { inspectSkillDirectory, directoryDetails } = require('./instructions.cjs');
 
@@ -29,6 +29,14 @@ function githubRepository(value) {
   return { owner, repo, location: `https://github.com/${owner}/${repo}` };
 }
 
+function linkInSkill(relative, repoSymlinks) {
+  return repoSymlinks.find(entry => !relative || entry === relative || entry.startsWith(`${relative}/`));
+}
+
+function unsupportedLink(entry) {
+  return `暂不支持在技能包中使用符号链接：${entry}`;
+}
+
 // Networking stays in the source service so redirects, timeouts and streaming
 // limits are identical for JSON registries and GitHub repositories.
 function createGithubSourceAdapter(readUrl) {
@@ -38,14 +46,24 @@ function createGithubSourceAdapter(readUrl) {
       `https://codeload.github.com/${repository.owner}/${repository.repo}/zip/${commit}`,
       'GitHub 技能仓库', LIMITS.maxArchiveBytes,
     );
-    const parent = path.join(studioDataDirectory(), 'skill-quarantine');
+    const parent = quarantineDirectory('skills');
     fs.mkdirSync(parent, { recursive: true, mode: 0o700 });
     const staging = fs.mkdtempSync(path.join(parent, 'github-'));
     try {
-      extractZipArchive(bytes, staging, { limits: LIMITS, stripWrapper: false });
+      const skippedSymlinks = [];
+      extractZipArchive(bytes, staging, {
+        limits: LIMITS,
+        stripWrapper: false,
+        skippedSymlinks,
+      });
       const roots = fs.readdirSync(staging, { withFileTypes: true });
+      if (!roots.length && skippedSymlinks.length) throw new Error('仓库中的文件全部为符号链接，没有可安装的技能');
       if (roots.length !== 1 || !roots[0].isDirectory()) throw new Error('GitHub 仓库压缩包结构无效');
-      return await callback(path.join(staging, roots[0].name));
+      const wrapper = `${roots[0].name}/`;
+      const repoSymlinks = skippedSymlinks
+        .filter((entry) => entry.startsWith(wrapper))
+        .map((entry) => entry.slice(wrapper.length));
+      return await callback(path.join(staging, roots[0].name), repoSymlinks);
     } finally {
       fs.rmSync(staging, { recursive: true, force: true });
       removeEmptyQuarantine(parent);
@@ -61,12 +79,23 @@ function createGithubSourceAdapter(readUrl) {
       'GitHub 仓库信息', 3 * 1024 * 1024,
     );
     const commit = JSON.parse(response.toString('utf8')).sha;
-    return withRepository(repository, commit, (root) => {
+    return withRepository(repository, commit, (root, repoSymlinks) => {
       const inspected = inspectSkillDirectory(root);
-      const entries = inspected.candidates.map((skill) => {
+      const diagnostics = inspected.diagnostics.map((item) => ({
+        ...item, path: path.relative(root, item.path).split(path.sep).join('/'),
+      }));
+      // Linked manifests were omitted during extraction, so discovery cannot report them.
+      const blockedLinks = new Set(repoSymlinks.filter(entry => path.posix.basename(entry) === 'SKILL.md'));
+      const entries = [];
+      for (const skill of inspected.candidates) {
         const relative = path.relative(root, skill.baseDir).split(path.sep).join('/');
+        const nestedSymlink = linkInSkill(relative, repoSymlinks);
+        if (nestedSymlink) {
+          blockedLinks.add(nestedSymlink);
+          continue;
+        }
         const contentHash = directoryDetails(skill.baseDir).contentHash;
-        return {
+        entries.push({
           id: `github:${relative || '.'}`,
           name: skill.name,
           description: skill.description,
@@ -80,24 +109,27 @@ function createGithubSourceAdapter(readUrl) {
           resourceCount: skill.resourceCount,
           totalBytes: skill.totalBytes,
           promptTokens: skill.promptTokens,
-        };
-      });
-      if (!entries.length) throw new Error('仓库中没有可安装的 SKILL.md 技能，请确认仓库包含技能文件，而不只是链接列表');
-      return {
-        entries,
-        diagnostics: inspected.diagnostics.map((item) => ({
-          ...item, path: path.relative(root, item.path).split(path.sep).join('/'),
-        })),
-      };
+        });
+      }
+      for (const entry of blockedLinks) diagnostics.push({ path: entry, message: unsupportedLink(entry) });
+      if (!entries.length) {
+        throw new Error(diagnostics.length
+          ? `仓库中没有可安装的技能。${diagnostics[0].message}`
+          : '仓库中没有可安装的 SKILL.md 技能，请确认仓库包含技能文件，而不只是链接列表');
+      }
+      return { entries, diagnostics };
     });
   }
 
   async function stage(source, item, destination, validateFiles) {
     const repository = githubRepository(source.location);
     // Fetch the commit discovered in the catalog, never a moving branch at install time.
-    return withRepository(repository, item.commit, (root) => {
+    return withRepository(repository, item.commit, (root, repoSymlinks) => {
       const directory = path.resolve(root, item.relative);
       if (directory !== root && !directory.startsWith(`${root}${path.sep}`)) throw new Error('技能目录越出仓库');
+      const relative = path.relative(root, directory).split(path.sep).join('/');
+      const nestedSymlink = linkInSkill(relative, repoSymlinks);
+      if (nestedSymlink) throw new Error(unsupportedLink(nestedSymlink));
       validateFiles(directory);
       fs.cpSync(directory, destination, { recursive: true, errorOnExist: true, dereference: false });
       if (directoryDetails(destination).contentHash !== item.contentHash) throw new Error('技能内容与目录预览不一致，请刷新后重试');

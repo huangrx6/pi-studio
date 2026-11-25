@@ -31,7 +31,9 @@ const { registerIpc } = require('./ipc/index.cjs');
 const { shutdownTerminalSessions } = require('./ipc/terminal.cjs');
 const { createWindow, showMainWindow, installMenu, watchSystemTheme } = require('./window.cjs');
 const { BACKGROUND_SCHEME } = require('./background-media.cjs');
+const { EXTENSION_VIEW_SCHEME } = require('./core/extension-view.cjs');
 const { registerBackgroundProtocol } = require('./services/background.cjs');
+const { registerExtensionViewProtocol } = require('./services/extension-view-protocol.cjs');
 const { initializeBrowserService } = require('./services/browser/index.cjs');
 const { initializeNetwork } = require('./services/network.cjs');
 const { isAllowedLocalHtmlUrl } = require('./services/local-html.cjs');
@@ -50,7 +52,12 @@ const {
 // Electron 的 userData（Chromium 缓存、Cookies、单实例锁）留在系统默认位置；
 // Studio 自己的数据放在 ~/.pi-studio，由 core/studio-paths.cjs 统一提供。
 // PI_STUDIO_USER_DATA 覆盖时两者合一，供测试与 QA 使用一次性目录。
-const { cleanLegacyChromiumData, migrateStudioData } = require('./core/user-data.cjs');
+const {
+  cleanLegacyChromiumData,
+  migrateStudioData,
+  migrateStudioLayout,
+  pruneEmptyManagedDirectories,
+} = require('./core/user-data.cjs');
 const { STUDIO_DATA_DIRECTORY } = require('./core/studio-paths.cjs');
 const studioData = path.join(os.homedir(), STUDIO_DATA_DIRECTORY);
 if (process.env.PI_STUDIO_USER_DATA) {
@@ -64,6 +71,10 @@ if (process.env.PI_STUDIO_USER_DATA) {
     if (result.migrated) console.log(`Studio 数据已迁移到 ${studioData}`);
     const removed = cleanLegacyChromiumData({ target: studioData });
     if (removed.length > 0) console.log(`已清理误搬的 Chromium 文件：${removed.join('、')}`);
+    const layout = migrateStudioLayout({ target: studioData });
+    if (layout.moved.length > 0) console.log(`已整理 Studio 目录结构：${layout.moved.length} 项`);
+    const pruned = pruneEmptyManagedDirectories({ target: studioData });
+    if (pruned.length > 0) console.log(`已修剪 ${pruned.length} 个空托管目录`);
   } catch (error) {
     console.error('Studio 数据目录准备失败：', error);
   }
@@ -87,10 +98,16 @@ if (primaryInstance) {
 
   // Must be registered before app.ready so <img>/<video> can treat these URLs
   // as secure, streamable resources in development and packaged builds.
-  protocol.registerSchemesAsPrivileged([{
-    scheme: BACKGROUND_SCHEME,
-    privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
-  }]);
+  protocol.registerSchemesAsPrivileged([
+    {
+      scheme: BACKGROUND_SCHEME,
+      privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+    },
+    {
+      scheme: EXTENSION_VIEW_SCHEME,
+      privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
+    },
+  ]);
 
   installApplicationShutdown({
     app,
@@ -163,6 +180,7 @@ if (primaryInstance) {
       }
       // Paint the launch screen in the actual window while its runtime starts.
       registerBackgroundProtocol();
+      registerExtensionViewProtocol();
       initializeBrowserService();
       createWindow();
       await initializeNetwork();

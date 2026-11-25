@@ -6,7 +6,6 @@ import { ConversationTranscriptPane } from './ConversationTranscriptPane';
 import type { useTranscriptNavigation } from '../features/conversation/useTranscriptNavigation';
 import type { OutlineItem } from '../features/conversation/outline-model';
 import type { Preferences } from '../shared/preferences';
-import type { AppNotification } from './NotificationCenter';
 import type { TurnDiff, TurnDiffFile } from '../types/chat-types';
 import { ConversationHeader } from './ConversationHeader';
 
@@ -34,9 +33,6 @@ type ConversationShell = {
   compaction: { active: boolean; reason?: string };
   retryInfo: { attempt: number; maxAttempts: number; errorMessage?: string } | null;
   liveDiff: TurnDiff | null;
-  notifications: AppNotification[];
-  markAllRead: () => void;
-  clearNotifications: () => void;
   conversationSubscriptionError: {
     sessionId: string;
     message: string;
@@ -48,8 +44,7 @@ type ConversationShell = {
 };
 
 type HeaderState = Omit<ComponentProps<typeof ConversationHeader>,
-  'sidebarCollapsed' | 'onExpandSidebar' | 'isNewConversation' | 'title' | 'notifications'
-  | 'onMarkAllRead' | 'onClearNotifications' | 'sessionId' | 'showTrace'>;
+  'sidebarCollapsed' | 'onExpandSidebar' | 'isNewConversation' | 'title' | 'sessionId' | 'showTrace'>;
 
 type OutlineState = {
   items: OutlineItem[];
@@ -63,6 +58,7 @@ type ConversationActions = {
   openFile: (path: string) => void;
   undoTurnDiff: (at: number) => Promise<void>;
   openChanges: (file: TurnDiffFile | undefined, turn: TurnDiff) => void;
+  openGit?: () => void;
   editMessage: (entryId: number, text: string) => Promise<void>;
 };
 
@@ -103,9 +99,6 @@ function ConversationWorkspaceComponent({
     compaction,
     retryInfo,
     liveDiff,
-    notifications,
-    markAllRead,
-    clearNotifications,
     conversationSubscriptionError,
     retryConversationSubscription,
     settingsOpen,
@@ -159,9 +152,6 @@ function ConversationWorkspaceComponent({
         onExpandSidebar={() => setSidebarCollapsed(false)}
         isNewConversation={isNewConversation}
         title={session?.title || 'Pi Studio'}
-        notifications={notifications}
-        onMarkAllRead={markAllRead}
-        onClearNotifications={clearNotifications}
         sessionId={session?.id}
         showTrace={preferences.showCodeView}
       />

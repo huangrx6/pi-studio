@@ -105,7 +105,7 @@ async function seedExamples() {
     const { subscriptionId } = await api.openExtensionDataView({ sourceId: 'user:studio.task-board/board-data' });
     try {
       for (const fields of list) {
-        await api.writeExtensionTaskBoard({ subscriptionId, mutation: { action: 'create', id: crypto.randomUUID(), fields } });
+        await api.invokeExtensionView({ subscriptionId, method: 'createTask', params: { id: crypto.randomUUID(), fields } });
       }
     } finally { await api.closeExtensionDataView(subscriptionId); }
   }, tasks);
@@ -250,7 +250,7 @@ try {
   assert.ok(toolResult.tasks[0].actualEndAt);
 
   await page.evaluate(id => window.piApi.conversationAction({ kind: 'session', id, action: 'remove' }), ids[0]);
-  const data = path.join(profile, 'plugin-data', pluginId, pluginId, 'tasks.sqlite');
+  const data = path.join(profile, 'data', 'plugin-data', pluginId, pluginId, 'tasks.sqlite');
   assert.ok((await stat(data)).size > 0);
   await app.close();
   await launch();

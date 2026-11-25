@@ -15,10 +15,16 @@ import type { CommittedProjection, MutationProjection } from './mutation-types';
 import type { ExtensionInstallResult, ExtensionMutationResult } from './extension-types';
 import type { ChatAttachment, ChatMessage, ComposerAttachment, ComposerCapability, ComposerCommand, ComposerFile, RequestTrace, TurnDiff, UploadedAttachment } from './chat-types';
 import type { ConcreteThinkingLevel, ModelCatalog, ModelSelection, ThinkingLevel } from './model-types';
-import type { AgentToolCatalog, AgentToolSelection } from './agent-tool-types';
+import type {
+  AgentToolCatalog,
+  AgentToolProfilePatch,
+  AgentToolSelection,
+  TemporaryCapabilitiesSnapshot,
+  ToolProfilesSnapshot,
+} from './agent-tool-types';
 import type { ManagedWorktree, SubagentBudgetSnapshot, SubagentChild, SubagentConfig, SubagentProfile, SubagentProfileResources, SubagentSettingsSnapshot, SubagentTranscript } from './subagent-types';
 import type { NetworkSettings, NetworkRoute, NetworkTestResult } from './network-types';
-import type { DeviceStorageSnapshot } from './device-storage';
+import type { DeviceStorageCleanupResult, DeviceStorageSnapshot } from './device-storage';
 import type {
   HarnessProfileDraft,
   HarnessSettingsSnapshot,
@@ -42,7 +48,6 @@ import type {
 } from './durable-types';
 import type { BackgroundMedia } from '../shared/preferences';
 import type { FilePreviewResult } from './file-preview-types';
-import type { TaskBoardMutation, TaskBoardTask } from './task-board';
 import type { UpdateSnapshot } from './update-types';
 import type { RuntimeRefreshSnapshot, StudioRuntimeVersions } from './runtime-types';
 import type { GitAction, GitHead, GitReadParams, GitReadResult, GitRepository, GitWorkspaceStatus, WorktreeInputs, WorktreeResults } from './git-types';
@@ -55,8 +60,6 @@ import type {
 import type { UsageAnalyticsSnapshot, UsageModelMix, UsageProjectScope } from './usage-types';
 import type {
   ExtensionCommandResult,
-  ExtensionCanvasScene,
-  ExtensionCanvasSnapshot,
   ExtensionDataViewEvent,
   ExtensionDataViewOpenRequest,
   ExtensionDataViewOpenResult,
@@ -73,6 +76,8 @@ import type {
   PermissionEvaluation,
   PermissionPolicy,
   PermissionPolicyState,
+  PermissionProfilePatch,
+  PermissionProfilesSnapshot,
   PermissionScope,
 } from './permission-types';
 
@@ -420,6 +425,12 @@ export interface SettingsSnapshot {
   enabledModels: string[];
   /** Pi Studio 的智能体工具白名单。 */
   agentTools: AgentToolSelection;
+  /** 多方案工具配置（主对话/工作区/临时对话）。 */
+  toolProfiles: ToolProfilesSnapshot;
+  /** 多方案权限策略配置（主对话/工作区/临时对话）。 */
+  permissionProfiles: PermissionProfilesSnapshot;
+  /** 当前临时对话可用能力快照。 */
+  temporaryCapabilities?: TemporaryCapabilitiesSnapshot;
   /** 当前工作区生效的 Harness 配置与全部可切换 profile。 */
   harness: HarnessSettingsSnapshot;
   /** Studio 的 SQLite 数据库与私有资源目录。 */
@@ -551,6 +562,7 @@ declare global {
       windowState(): Promise<NativeWindowState>;
       deviceStorage(): Promise<DeviceStorageSnapshot>;
       deviceStorageLocation(id: string, action: 'open' | 'copy'): Promise<void>;
+      deviceStorageCleanup(): Promise<DeviceStorageCleanupResult>;
       /** Follow native fullscreen changes; returns an unsubscribe function. */
       onWindowState(listener: (state: NativeWindowState) => void): () => void;
       /** Read the current updater snapshot. */
@@ -600,6 +612,30 @@ declare global {
         scope: PermissionScope;
         cwd?: string;
         sessionId?: string;
+        policy: PermissionPolicy;
+        call: { name: string; arguments?: Record<string, unknown> };
+      }): Promise<PermissionEvaluation>;
+      /** 读取权限策略方案列表及主对话/工作区/临时对话绑定。 */
+      permissionProfiles(cwd?: string): Promise<PermissionProfilesSnapshot>;
+      /** 创建或保存一个权限策略方案。 */
+      savePermissionProfile(payload: {
+        cwd?: string;
+        mode?: 'create' | 'edit';
+        profile: PermissionProfilePatch;
+      }): Promise<PermissionProfilesSnapshot>;
+      /** 将指定权限方案绑定到主对话全局、当前工作区、继承或临时对话。 */
+      selectPermissionProfile(payload: {
+        cwd?: string;
+        id: string;
+        scope: 'global' | 'workspace' | 'inherit' | 'temporary';
+      }): Promise<PermissionProfilesSnapshot>;
+      /** 将内置权限方案重置为默认值。 */
+      resetPermissionProfile(payload: { cwd?: string; id: string }): Promise<PermissionProfilesSnapshot>;
+      /** 删除自定义权限方案，引用它的作用域自动回退。 */
+      deletePermissionProfile(payload: { cwd?: string; id: string }): Promise<PermissionProfilesSnapshot>;
+      /** 用指定权限策略对象直接预览一次工具调用结果（用于方案编辑器）。 */
+      permissionEvaluateProfile(payload: {
+        cwd?: string;
         policy: PermissionPolicy;
         call: { name: string; arguments?: Record<string, unknown> };
       }): Promise<PermissionEvaluation>;
@@ -712,6 +748,11 @@ declare global {
       /** 读取有大小上限、可直接交给统一预览组件的数据。 */
       filePreview(cwd: string, path: string): Promise<FilePreviewResult>;
       onFilesChanged(listener: (keys: string[]) => void): () => void;
+      onWorkbenchRefresh?(listener: (event: {
+        scope: 'all' | 'extensions' | 'files' | 'git' | 'sessions';
+        extensionId?: string;
+        sourceId?: string;
+      }) => void): () => void;
       writeFile(payload: { cwd: string; path: string; text: string; expectedText: string }): Promise<{ ok: boolean; path: string; size: number }>;
       /** 只读打开当前会话已记录的轮次变更文件。 */
       temporaryModel(payload?: { modelRef?: string; thinkingLevel?: import('./model-types').ThinkingLevel }): Promise<import('./model-types').ModelSelection>;
@@ -988,6 +1029,42 @@ declare global {
       agentToolCatalog(payload?: { cwd?: string; refresh?: boolean }): Promise<AgentToolCatalog>;
       /** 保存智能体工具白名单与来源快照。 */
       setAgentTools(payload: { tools: AgentToolSelection; cwd?: string }): Promise<SettingsSnapshot>;
+      /** 读取工具方案列表及主对话/工作区/临时对话绑定。 */
+      toolProfiles(cwd?: string): Promise<ToolProfilesSnapshot>;
+      /** 创建或保存一个工具方案，并返回更新后的临时对话可用能力。 */
+      saveToolProfile(payload: {
+        cwd?: string;
+        mode?: 'create' | 'edit';
+        profile: AgentToolProfilePatch;
+      }): Promise<{
+        toolProfiles: ToolProfilesSnapshot;
+        temporaryCapabilities: TemporaryCapabilitiesSnapshot;
+        runtimeRefresh?: RuntimeRefreshSnapshot;
+      }>;
+      /** 将工具方案绑定到主对话全局、当前工作区、继承或临时对话。 */
+      selectToolProfile(payload: {
+        cwd?: string;
+        id: string;
+        scope: 'global' | 'workspace' | 'inherit' | 'temporary';
+      }): Promise<{
+        toolProfiles: ToolProfilesSnapshot;
+        temporaryCapabilities: TemporaryCapabilitiesSnapshot;
+        runtimeRefresh?: RuntimeRefreshSnapshot;
+      }>;
+      /** 重置内置工具方案并同步临时对话能力快照。 */
+      resetToolProfile(payload: { cwd?: string; id: string }): Promise<{
+        toolProfiles: ToolProfilesSnapshot;
+        temporaryCapabilities: TemporaryCapabilitiesSnapshot;
+        runtimeRefresh?: RuntimeRefreshSnapshot;
+      }>;
+      /** 删除自定义工具方案。 */
+      deleteToolProfile(payload: { cwd?: string; id: string }): Promise<{
+        toolProfiles: ToolProfilesSnapshot;
+        temporaryCapabilities: TemporaryCapabilitiesSnapshot;
+        runtimeRefresh?: RuntimeRefreshSnapshot;
+      }>;
+      /** 读取当前临时对话实际可调用的内置工具、扩展工具与 MCP 服务。 */
+      temporaryCapabilities(): Promise<TemporaryCapabilitiesSnapshot>;
       /** 读取 Harness 配置 profile、section 定义与当前工作区选择。 */
       harnessSettings(cwd?: string): Promise<HarnessSettingsSnapshot>;
       /** 保存当前 profile；变更在下一请求生效。 */
@@ -996,11 +1073,11 @@ declare global {
         mode?: 'create' | 'edit';
         profile: HarnessProfileDraft;
       }): Promise<HarnessSettingsSnapshot>;
-      /** 为全局默认或当前工作区选择 profile。 */
+      /** 为全局默认、当前工作区或临时对话选择 profile。 */
       selectHarnessProfile(payload: {
         cwd?: string;
         id: string;
-        scope: 'global' | 'workspace' | 'inherit';
+        scope: 'global' | 'workspace' | 'inherit' | 'temporary';
       }): Promise<HarnessSettingsSnapshot>;
       /** 恢复内置或自定义 profile 的 Studio 基线内容。 */
       resetHarnessProfile(payload: {
@@ -1223,12 +1300,12 @@ declare global {
       closeExtensionDataView(subscriptionId: string): Promise<{ closed: boolean }>;
       /** 扩展实时数据更新；调用方按 subscriptionId 或 sourceId 过滤。 */
       onExtensionDataView(listener: (event: ExtensionDataViewEvent) => void): () => void;
-      writeExtensionCanvas(payload: {
+      /** 通用插件视图 RPC 调用；输入和输出都必须可序列化为 JSON。 */
+      invokeExtensionView(payload: {
         subscriptionId: string;
-        revision: number;
-        scene: ExtensionCanvasScene;
-      }): Promise<ExtensionCanvasSnapshot>;
-      writeExtensionTaskBoard(payload: { subscriptionId: string; mutation: TaskBoardMutation }): Promise<TaskBoardTask>;
+        method: string;
+        params?: unknown;
+      }): Promise<unknown>;
       onExtensionPanelRequested(listener: (event: { sessionId: string; panelId: string }) => void): () => void;
       /** 执行扩展命令；命令内声明的 UI 动作仍由白名单校验。 */
       runExtensionCommand(payload: {

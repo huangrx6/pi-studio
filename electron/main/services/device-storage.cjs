@@ -3,20 +3,42 @@ const path = require('node:path');
 const { createHash } = require('node:crypto');
 const { getAppCacheDir } = require('electron-updater/out/AppAdapter');
 const { parse: parseYaml } = require('yaml');
-const { PLUGIN_DATA_DIRECTORY, PLUGIN_INSTALL_DIRECTORY, STUDIO_DATA_DIRECTORY } = require('../core/studio-paths.cjs');
-const { CHROMIUM_ENTRIES } = require('../core/user-data.cjs');
+const {
+  DOWNLOADS_DIRECTORY,
+  PLUGIN_DATA_DIRECTORY,
+  PLUGIN_INSTALL_DIRECTORY,
+  STUDIO_CACHE_DIR,
+  STUDIO_DATA_DIRECTORY,
+  STUDIO_MANAGED_DATA_DIR,
+} = require('../core/studio-paths.cjs');
+const { CHROMIUM_ENTRIES, cleanLegacyChromiumData, pruneEmptyManagedDirectories } = require('../core/user-data.cjs');
+const { listDatabaseBackups, pruneDatabaseBackups } = require('../core/database-backups.cjs');
 
 const studioCategories = new Map();
+const studioExactCategories = new Map([
+  [STUDIO_CACHE_DIR, 'resources'],
+  ['Cache', 'client'],
+]);
 for (const [category, names] of Object.entries({
   attachments: ['attachments'],
   worktrees: ['worktrees'],
-  media: ['background-media', 'browser-downloads'],
+  media: ['background-media', 'browser-downloads', DOWNLOADS_DIRECTORY],
   resources: ['skills', 'skill-quarantine', 'extensions', 'extension-data', 'extension-cache', 'extension-state',
     'extension-publishers.json', PLUGIN_INSTALL_DIRECTORY, PLUGIN_DATA_DIRECTORY,
-    'plugin-quarantine', 'model-catalogs', 'AGENTS.md'],
+    'plugin-quarantine', 'model-catalogs', STUDIO_CACHE_DIR, 'AGENTS.md'],
   client: [...CHROMIUM_ENTRIES, 'Crashpad', 'Dictionaries', 'Network', 'WebStorage', 'logs', 'Variations'],
 })) {
   for (const name of names) studioCategories.set(name.toLowerCase(), category);
+}
+
+const managedDataCategories = new Map();
+for (const [category, names] of Object.entries({
+  attachments: ['attachments'],
+  worktrees: ['worktrees'],
+  media: ['background-media'],
+  resources: [PLUGIN_DATA_DIRECTORY, 'extension-data', 'extension-state'],
+})) {
+  for (const name of names) managedDataCategories.set(name.toLowerCase(), category);
 }
 
 const categories = ['database', 'attachments', 'worktrees', 'resources', 'media', 'client', 'other'];
@@ -163,6 +185,7 @@ async function measureStorage(sources) {
 
   async function walk(row) {
     const initial = { project: 'resources', worktrees: 'worktrees', client: 'client', session: 'client', updates: 'client' }[row.kind] || 'other';
+    const managedDataRoot = row.kind === 'studio' ? path.join(row.physical, STUDIO_MANAGED_DATA_DIR) : '';
     const pending = [{ file: row.physical, category: initial }];
     // Limit in-flight filesystem calls even for a checkout with thousands of files.
     while (pending.length) {
@@ -176,8 +199,13 @@ async function measureStorage(sources) {
           for (const name of await fs.readdir(file)) {
             const child = path.join(file, name);
             if (roots.has(pathKey(child))) continue; // Each nested location owns its own bytes.
-            pending.push({ file: child, category: row.kind === 'studio' && file === row.physical
-              ? studioCategories.get(name.toLowerCase()) || 'other' : category });
+            let nextCategory = category;
+            if (row.kind === 'studio' && file === row.physical) {
+              nextCategory = studioExactCategories.get(name) ?? studioCategories.get(name.toLowerCase()) ?? 'other';
+            } else if (row.kind === 'studio' && file === managedDataRoot) {
+              nextCategory = managedDataCategories.get(name.toLowerCase()) || 'other';
+            }
+            pending.push({ file: child, category: nextCategory });
           }
         } catch (error) {
           if (file === row.physical) { row.status = 'unavailable'; row.canOpen = false; }
@@ -225,17 +253,153 @@ async function measureStorage(sources) {
   };
 }
 
-function createDeviceStorageService({ getSources, shell, clipboard }) {
+const CLEANABLE_CACHE_DIRS = [
+  [STUDIO_CACHE_DIR],
+  ['model-catalogs'],
+  ['extension-cache', 'quarantine'],
+  ['plugin-quarantine'],
+  ['skill-quarantine'],
+];
+
+async function directoryBytes(target) {
+  let stat;
+  try { stat = await fs.lstat(target); } catch { return 0; }
+  if (!stat.isDirectory()) return stat.isFile() ? stat.size : 0;
+  let total = 0;
+  const pending = [target];
+  while (pending.length) {
+    const current = pending.pop();
+    let entries;
+    try { entries = await fs.readdir(current, { withFileTypes: true }); } catch { continue; }
+    for (const entry of entries) {
+      const child = path.join(current, entry.name);
+      try {
+        const childStat = await fs.lstat(child);
+        if (childStat.isFile()) total += childStat.size;
+        else if (childStat.isDirectory()) pending.push(child);
+      } catch {
+        // Ignore transient entries during measurement.
+      }
+    }
+  }
+  return total;
+}
+
+async function clearDirectoryContents(target) {
+  let stat;
+  try { stat = await fs.lstat(target); } catch { return 0; }
+  if (!stat.isDirectory()) return 0;
+  let freed = 0;
+  let entries;
+  try { entries = await fs.readdir(target, { withFileTypes: true }); } catch { return 0; }
+  for (const entry of entries) {
+    const child = path.join(target, entry.name);
+    const bytes = await directoryBytes(child);
+    try {
+      await fs.rm(child, { recursive: true, force: true });
+      freed += bytes;
+    } catch {
+      // Skip entries currently in use.
+    }
+  }
+  return freed;
+}
+
+async function measureMaintenance(sources, getDatabaseStats) {
+  let oldBackupCount = 0;
+  let oldBackupBytes = 0;
+  if (typeof sources.database === 'string' && path.isAbsolute(sources.database)) {
+    try {
+      const prunable = listDatabaseBackups(sources.database).slice(1);
+      oldBackupCount = prunable.length;
+      oldBackupBytes = prunable.reduce((sum, item) => sum + item.bytes, 0);
+    } catch {
+      // Best-effort backup scan.
+    }
+  }
+  let reclaimableDatabaseBytes = 0;
+  if (typeof getDatabaseStats === 'function') {
+    try {
+      const stats = await getDatabaseStats();
+      reclaimableDatabaseBytes = Math.max(0, Number(stats?.reclaimableBytes) || 0);
+    } catch {
+      // Best-effort SQLite freelist reading.
+    }
+  }
+  let cacheBytes = 0;
+  if (typeof sources.studio === 'string' && path.isAbsolute(sources.studio)) {
+    for (const segments of CLEANABLE_CACHE_DIRS) {
+      cacheBytes += await directoryBytes(path.join(sources.studio, ...segments));
+    }
+  }
+  return {
+    oldBackupCount,
+    oldBackupBytes,
+    reclaimableDatabaseBytes,
+    cacheBytes,
+    totalCleanableBytes: oldBackupBytes + reclaimableDatabaseBytes + cacheBytes,
+  };
+}
+
+function createDeviceStorageService({ getSources, shell, clipboard, getDatabaseStats, compactDatabase }) {
   let inFlight;
+  let cleanupInFlight;
   let targets = new Map();
+  async function takeSnapshot() {
+    const sources = await getSources();
+    const result = await measureStorage(sources);
+    const maintenance = await measureMaintenance(sources, getDatabaseStats);
+    targets = result.targets;
+    return { ...result.snapshot, maintenance };
+  }
   return {
     snapshot() {
-      inFlight ??= (async () => {
-        const result = await measureStorage(await getSources());
-        targets = result.targets;
-        return result.snapshot;
-      })().finally(() => { inFlight = undefined; });
+      inFlight ??= takeSnapshot().finally(() => { inFlight = undefined; });
       return inFlight;
+    },
+    cleanup() {
+      cleanupInFlight ??= (async () => {
+        const sources = await getSources();
+        let freedBytes = 0;
+        let removedBackups = 0;
+        let removedEmptyDirs = 0;
+        let prunedTraces = 0;
+
+        if (typeof sources.database === 'string' && path.isAbsolute(sources.database)) {
+          try {
+            const pruned = pruneDatabaseBackups(sources.database, { keep: 1 });
+            removedBackups = pruned.removed.length;
+            freedBytes += pruned.freedBytes;
+          } catch {
+            // Keep cleanup resilient if backup folder is unavailable.
+          }
+        }
+
+        if (typeof sources.studio === 'string' && path.isAbsolute(sources.studio)) {
+          for (const segments of CLEANABLE_CACHE_DIRS) {
+            freedBytes += await clearDirectoryContents(path.join(sources.studio, ...segments));
+          }
+          try { cleanLegacyChromiumData({ target: sources.studio }); } catch { /* best effort */ }
+          try { removedEmptyDirs = pruneEmptyManagedDirectories({ target: sources.studio }).length; } catch { /* best effort */ }
+        }
+
+        if (typeof compactDatabase === 'function') {
+          try {
+            const compacted = await compactDatabase();
+            freedBytes += Math.max(0, Number(compacted?.freedBytes) || 0);
+            prunedTraces = Math.max(0, Number(compacted?.prunedTraces) || 0);
+          } catch {
+            // If another query holds a lock, still return refreshed storage snapshot.
+          }
+        }
+
+        const snapshot = await takeSnapshot();
+        return {
+          snapshot,
+          summary: { freedBytes, removedBackups, removedEmptyDirs, prunedTraces },
+        };
+      })().finally(() => { cleanupInFlight = undefined; });
+      return cleanupInFlight;
     },
     async useLocation(id, action) {
       const row = targets.get(id);

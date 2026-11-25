@@ -7,7 +7,29 @@
 .todo-history summary strong { flex: 1; min-width: 0; font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo-history summary svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; }
 .todo-history summary > svg:first-child, .todo-history small { color: var(--text-2); }
+.todo-history summary > svg:first-child { transition: transform var(--motion-switch); }
 .todo-history details[open] > summary > svg:first-child { transform: rotate(90deg); }
+@supports (interpolate-size: allow-keywords) {
+  @media (prefers-reduced-motion: no-preference) {
+    .todo-history details { interpolate-size: allow-keywords; }
+    .todo-history details::details-content {
+      block-size: 0;
+      opacity: 0;
+      overflow: clip;
+      transition:
+        block-size var(--motion-expand),
+        opacity var(--transition),
+        content-visibility var(--motion-expand) allow-discrete;
+    }
+    .todo-history details[open]::details-content {
+      block-size: auto;
+      opacity: 1;
+    }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .todo-history summary > svg:first-child { transition: none; }
+}
 .todo-history small { font-size: var(--text-xs); white-space: nowrap; }
 .todo-history ul { list-style: none; margin: 0 0 6px 12px; padding: 0 0 0 9px; border-inline-start: 1px solid var(--divider); }
 .todo-history-task { display: flex; align-items: start; gap: var(--space-2); padding: var(--space-1) 0; font-size: var(--text-13); line-height: var(--leading-normal); overflow-wrap: anywhere; }

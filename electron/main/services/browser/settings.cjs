@@ -6,7 +6,7 @@
  */
 const path = require('node:path');
 const { getStudioDatabase } = require('../../core/studio-db.cjs');
-const { studioDataDirectory } = require('../../core/studio-paths.cjs');
+const { downloadsDirectory } = require('../../core/studio-paths.cjs');
 const { assertSiteActionAllowed, resolveSiteAction } = require('./site-policy.cjs');
 
 const EVALUATE_SETTING_KEY = 'studio.browser.evaluateEnabled';
@@ -187,7 +187,7 @@ function getBrowserAdvancedSettings(db = getStudioDatabase()) {
     evaluateEnabled: preferences.evaluateEnabled,
     cdpEnabled: preferences.cdpEnabled,
     externalChromeEnabled: preferences.externalChromeEnabled,
-    defaultDownloadDirectory: path.join(studioDataDirectory(), 'browser-downloads'),
+    defaultDownloadDirectory: downloadsDirectory(),
   };
 }
 

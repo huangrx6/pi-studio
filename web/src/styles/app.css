@@ -7,6 +7,7 @@
  */
 
 @import './app/01-shell-foundation.css';
+@import '../shared/styles/pi-mark.css';
 @import './loading.css';
 @import './app/02-conversation.css';
 @import './app/03-file-browser.css';

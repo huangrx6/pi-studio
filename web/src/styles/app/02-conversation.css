@@ -8,6 +8,7 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 会话大纲固定在正文左侧的留白内，随对话栏宽度伸缩。 */
 
 .main {
+  --content: clamp(720px, 62cqw, 820px);
   contain: layout paint; flex: 1; min-width: 0; min-height: 0; position: relative; display: flex; flex-direction: column; background: var(--surface); container-type: inline-size; container-name: main-pane; }
 .chat-header, .file-panel-head { height: var(--header-height); flex: none; display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); padding: 36px var(--space-6) var(--space-3); -webkit-app-region: drag; }
 .chat-heading { min-width: 0; display: flex; align-items: center; gap: 8px; }
@@ -222,7 +223,9 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
   scroll-behavior: auto;
   scrollbar-gutter: stable;
   contain: layout paint;
-  padding: var(--space-8) var(--session-gutter) var(--space-6);
+  padding: var(--space-8) var(--session-gutter) var(--space-8);
+  mask-image: linear-gradient(to bottom, var(--mask-opaque) 0, var(--mask-opaque) calc(100% - 26px), transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, var(--mask-opaque) 0, var(--mask-opaque) calc(100% - 26px), transparent 100%);
 }
 .chat-column { width: min(var(--content), 100%); min-height: 100%; margin: 0 auto; display: flex; flex-direction: column; }
 .hero { flex: 1; display: flex; align-items: center; justify-content: center; flex-direction: column; padding: var(--space-6) 0; text-align: center; }
@@ -258,7 +261,6 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .message-edit:focus-within { border-color: var(--focus-color); box-shadow: none; }
 .message-edit-body { padding: var(--space-3) var(--space-4) 0; }
 .message-edit textarea { display: block; width: 100%; min-height: 84px; max-height: 320px; resize: none; padding: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: inherit; font-size: var(--text-md); line-height: var(--leading-relaxed); }
-.message-edit-preserved { margin-top: 6px; color: var(--faint); font-size: var(--text-xs); }
 .message-edit-error { margin-top: 8px; color: var(--error); font-size: var(--text-sm); line-height: var(--leading-normal); }
 .message-edit-actions { display: flex; justify-content: flex-end; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
 .message-edit-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: 62px; height: var(--control-sm); padding: 0 var(--space-3); border-radius: var(--radius-control); font-size: var(--text-sm); font-weight: var(--weight-medium); }
@@ -273,10 +275,13 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .caret.hidden { display: none; }
 @keyframes blink { 50% { opacity: 0; } }
 .thinking { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: var(--text-sm); }
-.thinking span { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); animation: pulse 1s infinite ease-in-out; }
-.thinking span:nth-child(2) { animation-delay: .15s; }
-.thinking span:nth-child(3) { animation-delay: .3s; margin-right: 6px; }
-@keyframes pulse { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
+.thinking span { width: 4px; height: 4px; border-radius: 50%; background: var(--accent); animation: pulse 1.15s infinite ease-in-out; }
+.thinking span:nth-child(2) { animation-delay: .16s; }
+.thinking span:nth-child(3) { animation-delay: .32s; margin-right: 6px; }
+@keyframes pulse {
+  0%, 100% { opacity: .28; transform: scale(.82); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
 .settings-error { padding: var(--space-3) var(--space-4); border: 1px solid var(--error-border); border-radius: var(--radius-control); background: var(--error-soft); color: var(--error); font-size: var(--text-base); overflow-wrap: anywhere; }
 
 /* Composer stays in layout so messages are never hidden underneath it. */
@@ -317,21 +322,22 @@ composer-dock 仍留在普通文档流中而不是绝对定位，因此消息不
 .composer-feedback-dismiss svg { width: var(--icon-sm); height: var(--icon-sm); }
 .composer-input { position: relative; min-width: 0; }
 .composer-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: var(--space-2); padding: var(--space-2) var(--space-3) var(--space-3); }
-.composer-left, .composer-right { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
+.composer-left { display: flex; align-items: center; gap: var(--space-1); min-width: 0; }
+.composer-right { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .composer-left.is-new-conversation { flex: 1; }
 
-/* 输入框左侧的权限模式：贴齐附件按钮，保持低存在感；只在扩展可用时渲染。 */
-.composer-mode { display: flex; align-items: center; min-width: 0; height: var(--control-sm); padding: 0 2px; border-radius: var(--radius-control); color: var(--muted); transition: background var(--transition), color var(--transition); }
+/* 输入框左侧的权限模式：与附件、工作区、上下文用量保持统一间距与内边距。 */
+.composer-mode { display: flex; align-items: center; min-width: 0; height: var(--control-sm); padding: 0; border-radius: var(--radius-control); color: var(--muted); transition: background var(--transition), color var(--transition); }
 .composer-mode:hover, .composer-mode:has(.pi-select-trigger.is-open), .composer-mode:has(.pi-select-trigger:focus-visible) { background: var(--surface-soft); color: var(--text); }
 .composer-mode .pi-select { width: auto; }
-.composer-mode .pi-select-trigger { width: auto; height: var(--control-sm); padding: 0 3px 0 5px; border: 0; background: none; color: inherit; font-size: var(--text-sm); gap: 3px; }
+.composer-mode .pi-select-trigger { width: auto; height: var(--control-sm); padding: 0 7px; border: 0; background: none; color: inherit; font-size: var(--text-sm); gap: 4px; }
 .composer-mode .pi-select-trigger:hover:not(:disabled) { background: none; color: inherit; }
 .composer-mode .pi-select-trigger.is-open, .composer-mode .pi-select-trigger:focus-visible { border-color: var(--transparent); box-shadow: none; outline: none; }
 .composer-mode .pi-select-chevron { width: 12px; height: 12px; }
 .composer-right { margin-left: auto; }
 /* 上下文用量：和权限模式同一行的低干扰读数，点开是只读说明与手动压缩。 */
 .context-usage { position: relative; display: flex; align-items: center; min-width: 0; }
-.context-usage-trigger { display: flex; align-items: center; gap: 5px; height: var(--control-sm); padding: 0 7px 0 5px; border: 0; border-radius: var(--radius-control); background: none; color: var(--muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
+.context-usage-trigger { display: flex; align-items: center; gap: 5px; height: var(--control-sm); padding: 0 7px; border: 0; border-radius: var(--radius-control); background: none; color: var(--muted); font-size: var(--text-sm); font-variant-numeric: tabular-nums; }
 .context-usage-trigger:hover, .context-usage-trigger.is-open { background: var(--surface-soft); color: var(--text); }
 .context-usage-trigger:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 1px; }
 .context-usage-ring { width: 14px; height: 14px; flex: none; transform: rotate(-90deg); }

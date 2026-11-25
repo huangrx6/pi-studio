@@ -47,7 +47,7 @@ z-index 200，避免被设置卡片或对话框的 overflow 裁剪，定位由�
 .pi-select-option { width: 100%; min-height: 34px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: 6px var(--space-2); border-radius: var(--radius-sm); color: var(--text); text-align: left; font-size: var(--text-base); }
 .pi-select-option:hover:not(:disabled), .pi-select-option:focus-visible { background: var(--surface-soft); outline: none; }
 .pi-select-option.is-selected { color: var(--accent-foreground); }
-.pi-select-option > span { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.pi-select-option > .pi-select-option-text { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .pi-select-option-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pi-select-option small { color: var(--faint); font-size: var(--text-xs); }
 .pi-select-option > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
@@ -81,8 +81,8 @@ auto 贴边。header 是窗口拖拽区，内部按钮依赖全局 no-drag 保�
 drag-preview 固定在视口外并用 pointer-events:none，避免跟随光标时拦截事件；
 just-dropped 只有一次短动画，不改变最终布局。 */
 
-.workspace-row[draggable="true"], .session-row[draggable="true"] { cursor: grab; }
-.workspace-row[draggable="true"]:active, .session-row[draggable="true"]:active { cursor: grabbing; }
+.workspace-row[draggable="true"], .session-row[draggable="true"] { cursor: pointer; }
+.workspace-row.is-dragging, .session-row.is-dragging { cursor: grabbing; }
 .workspace-row, .session-row { position: relative; transition: background var(--transition), opacity var(--transition), color var(--transition); }
 .workspace-row.drop-before, .session-row.drop-before { background: var(--surface); }
 .workspace-row.drop-before::before, .session-row.drop-before::before { position: absolute; z-index: 3; content: ''; left: 6px; right: 6px; top: -3px; height: 2px; border-radius: var(--radius-tag); background: var(--accent); box-shadow: var(--live-ring); transform-origin: left; animation: drop-line .16s ease-out; }
@@ -103,12 +103,12 @@ just-dropped 只有一次短动画，不改变最终布局。 */
 选择逻辑。 */
 
 
-.composer-context-group { display: flex; align-items: center; gap: 1px; min-width: 0; min-height: var(--control-sm); }
-.workspace-choice { display: flex; align-items: center; flex: 0 1 auto; gap: 1px; width: auto; max-width: min(250px, 30vw); min-width: 0; height: var(--control-sm); padding: 0 2px; border: 0; border-radius: var(--radius-control); background: var(--transparent); transition: background var(--transition); }
-.workspace-choice.has-selection { background: var(--transparent); }
+.composer-context-group { display: flex; align-items: center; gap: var(--space-1); min-width: 0; min-height: var(--control-sm); }
+.workspace-choice { display: flex; align-items: center; flex: 0 1 auto; gap: 2px; width: auto; max-width: min(250px, 30vw); min-width: 0; height: var(--control-sm); padding: 0; border: 0; border-radius: var(--radius-control); background: var(--transparent); transition: background var(--transition); }
+.workspace-choice.has-selection { padding-right: 3px; background: var(--transparent); }
 .workspace-choice:hover, .workspace-choice:has(.pi-select-trigger.is-open), .workspace-choice:has(.pi-select-trigger:focus-visible) { background: var(--surface-soft); }
 .workspace-choice .pi-select { min-width: 0; }
-.workspace-choice .pi-select-trigger { width: auto; max-width: 190px; height: var(--control-sm); padding: 0 3px 0 6px; border: 0; background: var(--transparent); gap: 4px; color: var(--muted); font-size: var(--text-sm); }
+.workspace-choice .pi-select-trigger { width: auto; max-width: 190px; height: var(--control-sm); padding: 0 7px; border: 0; background: var(--transparent); gap: 4px; color: var(--muted); font-size: var(--text-sm); }
 .workspace-choice .pi-select-trigger:hover:not(:disabled) { background: var(--transparent); color: var(--text); }
 .workspace-choice .pi-select-trigger.is-open, .workspace-choice .pi-select-trigger:focus-visible { box-shadow: none; outline: none; }
 .workspace-choice:focus-within { border-color: var(--transparent); }

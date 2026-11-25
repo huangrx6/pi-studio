@@ -2,8 +2,9 @@
 
 [`registry.json`](registry.json) 是插件市场「官方精选」的目录。Pi Studio 发布桌面包时会把本目录打包到应用资源中。
 
-- [Excalidraw](packages/excalidraw/README.md) 按会话保存可编辑画布。
-- [任务看板](packages/task-board/README.md) 在所有会话间共享全局任务。
+- [Excalidraw](packages/excalidraw/README.md) 完全自包含的实时画布插件，按会话保存可编辑画布。
+- [任务看板](packages/task-board/README.md) 完全自包含的全局任务看板，支持分类、多项目关联、进展记录、归档与在临时会话中按需总结日报周报。
+- [知识库](packages/notes-library/README.md) 为已有 PARA 目录提供独立的阅读与编辑工作台，以及供 AI 检索和写入的工具。
 
 每个插件在 `packages/` 下有独立目录，包含清单、README、许可证、图标及它声明的资源。将一个插件目录或该目录内容打成的 `.pi-plugin.zip` 交给 Pi Studio，即可走本地安装流程。
 

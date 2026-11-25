@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const crypto = require('node:crypto');
-const { PLUGIN_INSTALL_DIRECTORY, studioDataDirectory } = require('../core/studio-paths.cjs');
+const { PLUGIN_INSTALL_DIRECTORY, quarantineDirectory, studioDataDirectory } = require('../core/studio-paths.cjs');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 const {
   MANIFEST_NAME,
@@ -28,7 +28,7 @@ function pluginsRoot() {
 }
 
 function quarantineRoot() {
-  return path.join(studioDataDirectory(), 'plugin-quarantine');
+  return quarantineDirectory('plugins');
 }
 
 function installRootFor(id, version) {
@@ -149,11 +149,28 @@ function syncPluginTools(db, row, added, removed) {
   saveInstalledToolSelection({ enabled, sources }, db, { inTransaction: true });
 }
 
+function removeEmptyDirectory(directory) {
+  try {
+    const stat = fs.lstatSync(directory, { throwIfNoEntry: false });
+    if (stat?.isDirectory() && fs.readdirSync(directory).length === 0) fs.rmdirSync(directory);
+  } catch {
+    // Ignore busy or non-empty directories.
+  }
+}
+
+function cleanupQuarantineAncestors() {
+  const root = quarantineRoot();
+  removeEmptyDirectory(root);
+  removeEmptyDirectory(path.dirname(root));
+  removeEmptyDirectory(path.dirname(path.dirname(root)));
+}
+
 function cleanupPrepared(token) {
   const pending = prepared.get(token);
   prepared.delete(token);
   if (pending?.quarantine) {
     fs.rmSync(pending.quarantine, { recursive: true, force: true });
+    cleanupQuarantineAncestors();
   }
 }
 
@@ -253,6 +270,7 @@ async function preparePluginInstall(source, options = {}) {
     return preview;
   } catch (error) {
     fs.rmSync(quarantine, { recursive: true, force: true });
+    cleanupQuarantineAncestors();
     throw error;
   }
 }

@@ -9,12 +9,15 @@ import type { useSubagentWorkspace } from '../../features/subagents/useSubagentW
 import { buildTraceSummary } from '../../features/conversation/trace-model';
 import { TodoHistory } from '../../features/conversation/TodoHistory';
 import { ExtensionSlot } from '../../features/extensions/ExtensionSlot';
-import { ExtensionCanvasPanel } from '../../features/extensions/ExtensionCanvasPanel';
+import {
+  ExtensionViewPanel,
+  type ExtensionViewWorkspace,
+  type OpenTemporaryChatOptions,
+} from '../../features/extensions/ExtensionViewPanel';
 import type { ExtensionPanelPickerProps } from '../../features/extensions/ExtensionPanelPicker';
 import { ConversationTracePage } from '../ConversationTracePage';
 
 const GitWorkspacePage = lazy(() => import('../../features/git/GitWorkspacePage'));
-const TaskBoardPanel = lazy(() => import('../../features/extensions/TaskBoardPanel'));
 const ConversationTasksPage = lazy(() => import('../../features/conversation/ConversationTasksPage'));
 const SubagentOverview = lazy(async () => {
   const { SubagentOverview } = await import('../../features/subagents/SubagentViews');
@@ -29,11 +32,13 @@ export type SessionWorkbenchPanelProps = {
   tab: PanelTab;
   session: SessionStateForPersistence;
   preferences: Preferences;
+  workspaces: ExtensionViewWorkspace[];
   modelSelection: ModelSelection;
   progress: ReactNode;
   trace: Parameters<typeof buildTraceSummary>[0];
   subagents: ReturnType<typeof useSubagentWorkspace>;
   extensions: ExtensionPanelPickerProps;
+  onOpenTemporaryChat: (options?: OpenTemporaryChatOptions) => void;
   onOpenProgress: (page?: PanelTab['progressPage']) => void;
   onOpenGit: (page?: GitTab) => void;
   onOpenGitFile: (root: string, path: string) => void;
@@ -47,28 +52,40 @@ function TracePanel({ trace }: Pick<SessionWorkbenchPanelProps, 'trace'>) {
 }
 
 export function SessionWorkbenchPanel({
-  tab, session, preferences, modelSelection, progress, trace, subagents, extensions,
-  onOpenProgress, onOpenGit, onOpenGitFile, onOpenFile, onFocusConversation,
+  tab, session, preferences, workspaces, modelSelection, progress, trace, subagents, extensions,
+  onOpenTemporaryChat, onOpenProgress, onOpenGit, onOpenGitFile, onOpenFile, onFocusConversation,
 }: SessionWorkbenchPanelProps) {
   if (tab.kind === 'extension' && tab.extensionPanel) {
     const { surface, cwd, sessionId, modelRef, onOpenSettings, onSendPrompt, onNotify } = extensions;
     const panels = extensions.groups.find(group => group.panels[0].extensionId === tab.extensionPanel?.extensionId)?.panels ?? [];
     const selected = panels.find(panel => panel.id === tab.extensionPanel?.panelId);
-    if (selected?.taskBoard) {
-      return <Suspense fallback={<LoadingState variant="panel">正在打开任务看板…</LoadingState>}>
-        <TaskBoardPanel key={selected.taskBoard.sourceId} sourceId={selected.taskBoard.sourceId} generation={surface.syncedAt} />
-      </Suspense>;
+    if (selected?.view) {
+      return <div className="extension-workbench-panel is-view">
+        {panels.length > 1 && <nav className="extension-workbench-tabs" aria-label="扩展面板">
+          {panels.map(panel => <button key={panel.id} type="button" aria-current={panel.id === tab.extensionPanel?.panelId ? 'page' : undefined}
+            onClick={() => extensions.onOpenPanel(panel.id)}>{panel.title}</button>)}
+        </nav>}
+        <ExtensionViewPanel
+          view={selected.view}
+          title={selected.title}
+          cwd={cwd}
+          sessionId={sessionId}
+          workspaces={workspaces}
+          generation={surface.syncedAt}
+          onSendPrompt={onSendPrompt}
+          onOpenTemporaryChat={onOpenTemporaryChat}
+          onNotify={onNotify}
+        />
+      </div>;
     }
-    return <div className={`extension-workbench-panel${selected?.canvas ? ' is-canvas' : ''}`}>
+    return <div className="extension-workbench-panel">
       {panels.length > 1 && <nav className="extension-workbench-tabs" aria-label="扩展面板">
         {panels.map(panel => <button key={panel.id} type="button" aria-current={panel.id === tab.extensionPanel?.panelId ? 'page' : undefined}
           onClick={() => extensions.onOpenPanel(panel.id)}>{panel.title}</button>)}
       </nav>}
-      {selected?.canvas ? <ExtensionCanvasPanel sourceId={selected.canvas.sourceId} title={selected.title}
-        cwd={cwd} sessionId={sessionId} generation={surface.syncedAt} />
-        : <ExtensionSlot slot="panel.side" presentation="page" snapshot={surface} selectedItemId={tab.extensionPanel.panelId}
-          cwd={cwd} sessionId={sessionId} modelRef={modelRef} onOpenSettings={onOpenSettings}
-          onSendPrompt={onSendPrompt} onNotify={onNotify} onOpenPanel={extensions.onOpenPanel} />}
+      <ExtensionSlot slot="panel.side" presentation="page" snapshot={surface} selectedItemId={tab.extensionPanel.panelId}
+        cwd={cwd} sessionId={sessionId} modelRef={modelRef} onOpenSettings={onOpenSettings}
+        onSendPrompt={onSendPrompt} onNotify={onNotify} onOpenPanel={extensions.onOpenPanel} />
     </div>;
   }
   if (!session) return null;

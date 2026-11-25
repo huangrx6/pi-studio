@@ -1,0 +1,501 @@
+/* Calm left-aligned editorial workstream matching Pi Studio's minimal aesthetic:
+ * - Soft semantic icon tints break up monochrome fatigue without loud badges
+ * - Generous line spacing and a gentle focus reading surface when inspecting a block
+ * - Whisper-thin vertical branch line aligned directly beneath the parent icon
+ */
+
+.narrative-stream {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  margin: var(--space-3) 0 var(--space-4);
+  color: var(--text-2);
+  font-size: max(var(--text-13), calc(var(--chat-font-size, 15px) * 0.9));
+  line-height: var(--leading-body);
+}
+
+/* Avoid duplicate live pulse dot on the Pi orb while the workstream is actively streaming. */
+.assistant-turn.is-live:has(.narrative-stream.is-live, .narrative-pending) .assistant-orb::after {
+  display: none;
+}
+
+.narrative-group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.narrative-group-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 30px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.narrative-group-trigger:hover,
+.narrative-group.is-open > .narrative-group-trigger,
+.narrative-group.is-running > .narrative-group-trigger {
+  color: var(--text-1);
+}
+
+.narrative-group-trigger:focus-visible,
+.narrative-step-trigger:focus-visible,
+.narrative-file-link:focus-visible,
+.narrative-earlier-btn:focus-visible,
+.narrative-shot-tile:focus-visible,
+.narrative-shot-more:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+  border-radius: var(--radius-tag);
+}
+
+/* Restrained semantic icon tints to give clear visual landmarks without garish color */
+.narrative-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--text-3);
+  transition: color var(--transition-fast);
+}
+
+.narrative-icon.is-thinking {
+  color: color-mix(in srgb, var(--accent-foreground) 72%, var(--text-3));
+}
+
+.narrative-icon.is-edit {
+  color: color-mix(in srgb, var(--success) 72%, var(--text-3));
+}
+
+.narrative-icon.is-command {
+  color: color-mix(in srgb, var(--warning) 72%, var(--text-3));
+}
+
+.narrative-icon.is-web,
+.narrative-icon.is-verify {
+  color: color-mix(in srgb, var(--info) 74%, var(--text-3));
+}
+
+.narrative-icon.is-agent-done {
+  color: var(--success);
+}
+
+.narrative-icon svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  stroke-width: 1.75;
+}
+
+.narrative-group-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--weight-medium);
+}
+
+.narrative-chevron,
+.narrative-step-chevron {
+  flex: none;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+  color: var(--text-3);
+  transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+.narrative-chevron {
+  transform: rotate(-90deg);
+}
+
+.narrative-group.is-open > .narrative-group-trigger .narrative-chevron {
+  transform: rotate(0deg);
+}
+
+.narrative-group-trigger:hover .narrative-chevron,
+.narrative-step-trigger:hover .narrative-step-chevron {
+  color: var(--text-2);
+}
+
+/* Indented child branch aligned directly beneath the center of the 14px parent icon */
+.narrative-branch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: var(--space-1) 0 var(--space-2) 6px;
+  padding: 4px 0 4px var(--space-4);
+  border-left: 1px solid var(--divider);
+  min-width: 0;
+}
+
+.narrative-branch-thought,
+.narrative-step-thought {
+  margin: 2px 0 var(--space-1);
+  color: var(--text-3);
+  font-size: var(--text-13);
+  line-height: var(--leading-relaxed);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.narrative-step-thought {
+  padding-left: 24px;
+}
+
+.narrative-earlier-btn {
+  width: fit-content;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-3);
+  font-family: var(--font);
+  font-size: var(--text-xs);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.narrative-earlier-btn:hover {
+  color: var(--text-2);
+}
+
+.narrative-step-list,
+.narrative-flat-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+.narrative-step {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.narrative-step.is-expanded {
+  margin: 4px 0 8px;
+}
+
+.narrative-step-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.narrative-step-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.narrative-step-trigger:hover,
+.narrative-step.is-running .narrative-step-trigger {
+  color: var(--text-1);
+}
+
+.narrative-step.is-expanded > .narrative-step-line .narrative-step-trigger {
+  color: var(--text-1);
+  font-weight: var(--weight-medium);
+}
+
+.narrative-step-copy {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.narrative-step-prefix {
+  flex: none;
+  color: var(--text-2);
+}
+
+.narrative-step.is-expanded .narrative-step-prefix {
+  color: var(--text-1);
+}
+
+.narrative-file-link,
+.narrative-file-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: color-mix(in srgb, var(--link) 78%, var(--text-1));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--link) 35%, transparent);
+  transition: color var(--transition-fast), text-decoration-color var(--transition-fast);
+}
+
+.narrative-file-link:hover {
+  color: var(--link);
+  text-decoration-color: var(--link);
+}
+
+.narrative-step-detail {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-3);
+}
+
+.narrative-step-trigger:hover .narrative-step-detail,
+.narrative-step.is-running .narrative-step-detail {
+  color: var(--text-2);
+}
+
+.narrative-step-detail.is-mono {
+  font-family: var(--mono);
+  font-size: var(--text-13);
+}
+
+.narrative-inline-diff {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  font-family: var(--mono);
+  font-size: var(--text-13);
+  font-variant-numeric: tabular-nums;
+}
+
+.narrative-inline-diff.is-clickable {
+  padding: 1px 6px;
+  border-radius: var(--radius-tag);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.narrative-inline-diff.is-clickable:hover {
+  background: var(--conversation-hover-surface, var(--surface-hover));
+}
+
+.narrative-inline-diff.is-clickable:focus-visible {
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
+}
+
+.narrative-inline-diff .is-add {
+  color: color-mix(in srgb, var(--add) 82%, var(--text-2));
+}
+
+.narrative-inline-diff .is-del {
+  color: color-mix(in srgb, var(--del) 82%, var(--text-2));
+}
+
+.narrative-inline-diff.is-clickable:hover .is-add {
+  color: var(--add);
+}
+
+.narrative-inline-diff.is-clickable:hover .is-del {
+  color: var(--del);
+}
+
+.narrative-running-dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: narrative-pulse 1.5s ease-in-out infinite;
+}
+
+/* Focused expanded step body: gentle visual anchor with comfortable reading rhythm */
+.narrative-step-body {
+  margin: var(--space-2) 0 var(--space-2) 24px;
+  min-width: 0;
+}
+
+.narrative-step-body.is-thought-surface {
+  padding: 14px 18px;
+  border: 1px solid var(--divider);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 46%, var(--divider));
+  border-radius: var(--radius-control);
+  background: var(--conversation-reading-surface, var(--surface-soft));
+}
+
+.narrative-thought-md {
+  max-width: 68ch;
+}
+
+.narrative-thought-md .markdown {
+  color: var(--text-2);
+  font-size: max(var(--text-13), calc(var(--chat-font-size, 15px) * 0.9));
+  line-height: var(--leading-relaxed);
+}
+
+.narrative-thought-md .markdown p {
+  margin: 0 0 12px;
+}
+
+.narrative-thought-md .markdown p:last-child {
+  margin-bottom: 0;
+}
+
+.narrative-thought-md .markdown li {
+  margin: 6px 0;
+}
+
+.narrative-thought-md .markdown code {
+  padding: 1px 6px;
+  border-radius: var(--radius-tag);
+  background: color-mix(in srgb, var(--text-1) 6%, transparent);
+  color: color-mix(in srgb, var(--accent-foreground) 72%, var(--text-1));
+  font-size: 0.88em;
+}
+
+.narrative-thought-md .markdown strong {
+  color: var(--text-1);
+  font-weight: var(--weight-semibold);
+}
+
+.narrative-muted-note {
+  margin: 0;
+  color: var(--text-3);
+  font-size: var(--text-xs);
+}
+
+/* Inline screenshot strip under verification steps */
+.narrative-shots {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0 var(--space-2) 24px;
+}
+
+.narrative-shot-tile {
+  position: relative;
+  width: 118px;
+  height: 74px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--conversation-reading-surface, var(--surface-soft));
+  cursor: zoom-in;
+  transition: transform var(--transition-fast), border-color var(--transition-fast);
+}
+
+.narrative-shot-tile:hover {
+  transform: translateY(-1px);
+  border-color: var(--border-hover);
+}
+
+.narrative-shot-tile img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+[data-theme="dark"] .narrative-shot-tile img {
+  filter: brightness(0.92);
+}
+
+.narrative-shot-zoom {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-tag);
+  background: var(--overlay-surface);
+  color: var(--text-1);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.narrative-shot-zoom svg {
+  width: var(--icon-2xs);
+  height: var(--icon-2xs);
+}
+
+.narrative-shot-tile:hover .narrative-shot-zoom,
+.narrative-shot-tile:focus-visible .narrative-shot-zoom {
+  opacity: 1;
+}
+
+.narrative-shot-more {
+  display: grid;
+  place-items: center;
+  min-width: 44px;
+  height: 74px;
+  padding: 0 var(--space-2);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--conversation-inset-surface, var(--surface-soft));
+  color: var(--text-2);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.narrative-shot-more:hover {
+  color: var(--text-1);
+}
+
+/* Pending status before first stream block arrives */
+.narrative-pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  margin: var(--space-1) 0 var(--space-2);
+  color: var(--text-2);
+  font-size: max(var(--text-13), calc(var(--chat-font-size, 15px) * 0.9));
+}
+
+.narrative-pending.is-retrying {
+  color: var(--warning);
+}
+
+.narrative-pending.is-retrying .narrative-running-dot {
+  background: var(--warning);
+}
+
+@keyframes narrative-pulse {
+  0%, 100% { opacity: 0.42; transform: scale(0.86); }
+  50% { opacity: 1; transform: scale(1.12); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .narrative-running-dot {
+    animation: none;
+  }
+}

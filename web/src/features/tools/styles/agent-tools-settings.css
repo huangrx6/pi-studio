@@ -67,6 +67,11 @@
 .agent-tool-group-trigger svg { width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); transition: transform var(--settings-dialog-enter) var(--settings-motion-out); }
 .agent-tool-group-trigger[aria-expanded=true] svg { transform: rotate(90deg); }
 .agent-tool-list, .agent-tool-rule-list { margin: 0; padding: 0; list-style: none; }
+.agent-tool-list { animation: pi-disclosure-in var(--motion-expand) both; }
+@media (prefers-reduced-motion: reduce) {
+  .agent-tool-group-trigger svg { transition: none; }
+  .agent-tool-list { animation: none; }
+}
 .agent-tool-row {
   display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--settings-row-gap); min-height: var(--settings-row-height);
   padding-block: var(--settings-row-padding); border-top: 1px solid var(--divider);
@@ -155,3 +160,126 @@
 .agent-tool-original { margin-block-end: var(--space-4); }
 .agent-tool-original > p { margin: 0; font: var(--settings-preference-body-font); color: var(--muted); overflow-wrap: anywhere; white-space: pre-wrap; }
 .agent-tool-detail-body .detail-list > div { grid-template-columns: 88px minmax(0, 1fr); }
+.agent-tools-extras { margin-top: var(--space-5); }
+
+.tool-card-meta { display: grid; gap: var(--space-2); }
+.tool-card-desc { color: var(--muted); font: var(--settings-description-font); overflow-wrap: anywhere; }
+
+.settings-dialog.tool-profile-dialog[data-size=wide] { width: 44rem; }
+.tool-profile-dialog .dialog-footer-hint { flex: 1 1 auto; }
+.tool-profile-editor { min-width: 0; }
+.tool-profile-editor p { margin: 0; }
+.tool-profile-editor .settings-form-section > h3 {
+  margin: 0 0 var(--space-3);
+  color: var(--text);
+  font: var(--weight-semibold) var(--text-sm)/var(--leading-normal) var(--font);
+}
+
+.tool-profile-scope-grid { display: grid; gap: var(--space-3); }
+.tool-profile-scope-block { display: grid; gap: var(--space-2); }
+.tool-profile-scope-block + .tool-profile-scope-block {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--divider);
+}
+.tool-profile-scope-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+}
+.tool-profile-scope-head > div:first-child { min-width: 0; flex: 1 1 220px; }
+.tool-profile-title-link { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.tool-profile-title-link .settings-text-button { padding: 0; font: var(--settings-description-font); display: inline-flex; align-items: center; gap: 2px; }
+.tool-profile-title-link .settings-text-button svg { width: var(--icon-xs); height: var(--icon-xs); }
+.tool-profile-block-title { color: var(--text); font: var(--settings-label-font); }
+.tool-profile-scope-hint { margin-top: var(--space-1); color: var(--muted); font: var(--settings-description-font); }
+.tool-profile-segments { flex: 0 0 auto; }
+
+.tool-profile-mcp-picker {
+  padding: var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
+}
+.tool-profile-mcp-empty { color: var(--muted); font: var(--settings-description-font); }
+.tool-profile-mcp-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.tool-profile-mcp-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--space-7);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--settings-card-bg);
+  cursor: pointer;
+}
+.tool-profile-mcp-chip.is-checked { border-color: var(--settings-accent-border); background: var(--settings-accent-soft); }
+.tool-profile-mcp-chip code { font: var(--settings-mono-font); }
+.tool-profile-mcp-chip small { color: var(--muted); font: var(--settings-description-font); }
+
+.tool-profile-catalog-head { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: var(--space-3); margin-bottom: var(--space-1); }
+.tool-profile-catalog-head p { margin-top: var(--space-1); color: var(--muted); font: var(--settings-description-font); }
+.tool-profile-catalog-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.tool-profile-catalog-actions svg { width: var(--icon-sm); height: var(--icon-sm); }
+
+.tool-profile-editor .agent-tool-group h4 { margin: 0; }
+.tool-profile-editor .agent-tool-group-trigger { min-height: var(--settings-row-height); }
+.tool-profile-editor .agent-tool-group-trigger small {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-5);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-round);
+  background: var(--settings-page-bg);
+  color: var(--muted);
+  font: var(--weight-medium) var(--text-xs)/1 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.tool-profile-rules-disclosure {
+  border-top: 1px solid var(--divider);
+}
+.settings-dialog .tool-profile-editor .tool-profile-rules-disclosure > .pi-accordion-trigger {
+  gap: var(--space-2);
+  min-height: var(--settings-row-height);
+  padding: var(--settings-row-padding) 0;
+  border-radius: var(--radius-control);
+  color: var(--text);
+  font: var(--settings-label-font);
+}
+.settings-dialog .tool-profile-editor .tool-profile-rules-disclosure[open] > .pi-accordion-trigger {
+  margin-bottom: 0;
+}
+.settings-dialog .tool-profile-editor .tool-profile-rules-disclosure > .pi-accordion-trigger:hover {
+  background: transparent;
+}
+.settings-dialog .tool-profile-editor .tool-profile-rules-disclosure > .pi-accordion-trigger .pi-accordion-label {
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.settings-dialog .tool-profile-editor .tool-profile-rules-disclosure .pi-accordion-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--space-5);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-round);
+  background: var(--settings-page-bg);
+  color: var(--muted);
+  font: var(--weight-medium) var(--text-xs)/1 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.tool-profile-rules-disclosure .agent-tool-rules-body {
+  padding: var(--space-2) 0 var(--space-1);
+}
+.tool-profile-rules-disclosure .agent-tool-rules-body h4 {
+  margin: 0 0 var(--space-2);
+  font: var(--settings-label-font);
+  color: var(--text);
+}
+
+@container settings-form (max-width: 560px) {
+  .tool-profile-scope-head { flex-direction: column; align-items: stretch; }
+}

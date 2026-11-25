@@ -16,7 +16,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { app } = require('electron');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
-const { studioDataDirectory } = require('../core/studio-paths.cjs');
+const { quarantineDirectory } = require('../core/studio-paths.cjs');
 const { normalizeSecureHttpUrl } = require('../core/external-url.cjs');
 const { systemFetch } = require('../core/http-fetch.cjs');
 const { pluginError } = require('../core/plugin-package.cjs');
@@ -648,7 +648,7 @@ async function resolveMarketInstallSource(pluginId, options = {}) {
         throw catalogError('INTEGRITY_MISMATCH', `插件包校验失败：期望 ${version.sha256}，实际 ${hash}`);
       }
     }
-    const tempDir = path.join(studioDataDirectory(), 'plugin-quarantine', `dl-${crypto.randomUUID()}`);
+    const tempDir = path.join(quarantineDirectory('plugins'), `dl-${crypto.randomUUID()}`);
     fs.mkdirSync(tempDir, { recursive: true, mode: 0o700 });
     const archivePath = path.join(tempDir, `${plugin.id}-${version.version}.zip`);
     fs.writeFileSync(archivePath, bytes, { mode: 0o600 });

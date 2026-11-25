@@ -1,6 +1,7 @@
 import { ChevronRight, Download, ExternalLink, Trash2, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { DetailDialog } from '../../shared/DetailDialog';
+import { LoadingIndicator } from '../../shared/LoadingState';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import { useSettingsToast } from '../../shared/SettingsToast';
 import { errorText } from '../../shared/error-text';
@@ -97,8 +98,9 @@ function PackageResources({ provides, onOpen }: { provides: PluginProvides; onOp
   </div>;
 }
 
-export function PluginDetail({ item, installed, busy, catalogUnavailable, onClose, onOpenResource, onInstall, onUninstall }: PluginCatalogEntry & {
+export function PluginDetail({ item, installed, busy, preparing, catalogUnavailable, onClose, onOpenResource, onInstall, onUninstall }: PluginCatalogEntry & {
   busy: boolean;
+  preparing: boolean;
   catalogUnavailable: boolean;
   onClose: () => void;
   onOpenResource: OpenPluginResource;
@@ -142,8 +144,9 @@ export function PluginDetail({ item, installed, busy, catalogUnavailable, onClos
       </button>}
       <span />
       {listing && <button type="button" className={installed ? 'settings-outline' : 'settings-save'} disabled={busy || catalogUnavailable}
+        aria-busy={preparing || undefined}
         onClick={event => onInstall(listing, event.currentTarget)}>
-        <Download aria-hidden="true" />{!installed ? '安装' : installed.version === listing.latestVersion ? '重新安装' : '更换版本'}
+        {preparing ? <LoadingIndicator /> : <Download aria-hidden="true" />}{!installed ? '安装' : installed.version === listing.latestVersion ? '重新安装' : '更换版本'}
       </button>}
       {installed && <button type="button" className="settings-outline" disabled={busy} onClick={close}>完成</button>}
     </footer>

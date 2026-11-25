@@ -1,16 +1,14 @@
 # 任务看板
 
-在「设置 → 插件 → 官方精选」安装任务看板。从工作台启动台的「插件」分组打开，也可以在输入框运行 `/taskboard`。所有工作区和会话共享同一份任务。当前应用需要支持全局任务看板协议。
+在「设置 → 插件 → 官方精选」安装任务看板。从工作台启动台的「插件」分组打开，也可以在输入框运行 `/taskboard`。所有工作区和会话共享同一份全局任务，卸载插件后不留任何宿主业务耦合。
 
-点击「新增任务」记录标题、详情、状态、优先级，以及计划和实际的开始与结束时间。点击卡片可编辑，拖到另一列可改状态。状态包括待办、进行中、受阻和已完成。时间字段可留空，按设备当前时区显示。看板可按任务创建日期筛选。
+## 核心能力
 
-## AI 查询
-
-- `task_board_list` 支持按状态、本地日期范围和日期字段查询。比如用 `{"status":"in_progress","dateField":"plannedEndAt","from":"today","to":"today"}` 查今天计划结束的进行中任务。日期也可写成 `YYYY-MM-DD`，首尾日期均包含在内。
-- `task_board_get` 用任务 ID 查询完整详情和时间。可在输入框用 `$` 选择「任务看板」并用自然语言提问。
+- **任务分类与多项目关联**：支持需求、Bug、优化、常规任务四种类型（新建时仅填标题即可保存，默认常规任务），支持为单个任务关联一个或多个项目（如对接型任务，可快速选择已有工作区或输入自定义项目名）。
+- **自动时间与进展记录**：拖入「进行中」自动记录实际开始时间，拖入「已完成」自动记录实际完成时间；详情弹窗内保留状态流转与随手记进展的时间线。
+- **归档与恢复**：已完成卡片留在看板方便当天核对，支持单张归档或列标题「批量归档已完成」；「归档」页支持按标题、类型、项目和完成日期查找，并支持「恢复到看板」或「重新打开」。
+- **常规会话协作与临时会话汇报**：常规会话可直接调用任务创建/更新/记录进展/归档工具（`task_board_create`、`task_board_update`、`task_board_add_note`、`task_board_archive`）与查询工具协助维护看板并实时刷新视图；临时会话仅开放只读工具（`task_board_list`、`task_board_get`、`task_board_summary`）配合 `task-board-reporting` 技能梳理日报、周报或自定义周期总结，不污染其他会话上下文。
 
 ## 数据位置
 
-`~/.pi-studio/plugin-data/studio.task-board/studio.task-board/tasks.sqlite` 保存全局任务。升级和重装沿用这份数据库。任务独立于会话与工作区的归档和删除。
-
-看板由 Studio 渲染，使用 MIT 许可的 [React Kanban](https://github.com/christopher-caldwell/react-kanban) 和 [Hello Pangea DnD](https://github.com/hello-pangea/dnd)。
+`~/.pi-studio/data/plugin-data/studio.task-board/tasks.sqlite` 保存全局任务与活动记录。升级和重装沿用这份数据库。

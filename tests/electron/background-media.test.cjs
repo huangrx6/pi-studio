@@ -27,7 +27,7 @@ test('background URLs stay inside the app-owned media directory', () => {
   const root = '/tmp/pi-studio-user-data';
   assert.equal(
     resolveBackgroundMediaPath(root, 'pi-media://background/wallpaper.webp'),
-    '/tmp/pi-studio-user-data/background-media/wallpaper.webp',
+    '/tmp/pi-studio-user-data/data/background-media/wallpaper.webp',
   );
   assert.throws(
     () => resolveBackgroundMediaPath(root, 'pi-media://background/%2E%2E%2Fsecret.mp4'),

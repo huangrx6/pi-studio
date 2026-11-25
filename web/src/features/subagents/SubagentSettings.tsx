@@ -136,6 +136,7 @@ type SubagentSettingsProps = {
   workspaces: WorkspaceOption[];
   models?: Pick<ModelOption, 'id' | 'name'>[];
   enabledAgentTools?: string[];
+  embedded?: boolean;
   onOpenAgentTools?: () => void;
   onWorktreesRevealed?: () => void;
 };
@@ -149,9 +150,10 @@ export function SubagentSettings(props: SubagentSettingsProps) {
       setDefaultsOpen(true);
     }
   }, [props.onWorktreesRevealed]);
-  return <div className="settings-preference-page role-settings-page">
+  return <div className={props.embedded ? 'role-settings-page is-embedded' : 'settings-preference-page role-settings-page'}>
     <SubagentProfileLibrary cwd={props.cwd}
       models={props.models}
+      embedded={props.embedded}
       canDelegate={props.enabledAgentTools?.some(pattern => matchesTool(pattern, 'subagent'))}
       onOpenAgentTools={props.onOpenAgentTools} defaultsAction={
         <button ref={defaultsButton} type="button" className="settings-outline" aria-haspopup="dialog" onClick={() => setDefaultsOpen(true)}>

@@ -50,7 +50,7 @@ const SKILL_BLOCK = /<skill\s+name="([^"]+)"(?:\s+location="([^"]*)")?\s*>([\s\S
 const AT_REFERENCE_SOURCE = String.raw`@(?:"(?:\\.|[^"\\])*"|[^\s@'’‘，。、；：！？,;:!?()\[\]{}（）【】「」『』]+)`;
 const AGENT_SOURCE = String.raw`[@#]\[agent:([a-f0-9-]{36})\|([a-z0-9-]+)\|([^\]\r\n|]+)\]`;
 const AGENT_TOKEN = new RegExp('^' + AGENT_SOURCE + '$', 'u');
-const CAPABILITY_SOURCE = String.raw`\$\[(skill|mcp|plugin):([^|\]\s]+)\|([^|\]\s]+)\]`;
+const CAPABILITY_SOURCE = String.raw`\$\[(skill|mcp-server|mcp|plugin):([^|\]\s]+)\|([^|\]\s]+)\]`;
 const CAPABILITY_TOKEN = new RegExp('^' + CAPABILITY_SOURCE + '$', 'u');
 const MENTION_SOURCE = `(?:${AGENT_SOURCE}|${CAPABILITY_SOURCE}|${AT_REFERENCE_SOURCE})`;
 // 未展开的行内引用：`/skill:name` 或 `@path`；允许出现在文本中间（前面需是行首或非单词字符）。

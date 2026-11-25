@@ -2,7 +2,7 @@ import type { AgentToolCatalog, AgentToolCommand, AgentToolInfo, AgentToolSource
 import builtinDescriptions from '../../../../assets/settings/builtin-tool-descriptions.zh-CN.json' with { type: 'json' };
 
 const BUILTIN_GROUPS = [
-  { label: '文件与终端', defaultOpen: true, sources: ['builtin:durable-coding-tools', 'durable:coding', 'builtin:studio-filesystem-tools'] },
+  { label: '文件与终端', defaultOpen: true, sources: ['builtin:durable-coding-tools', 'durable:coding', 'builtin:studio-filesystem-tools', 'builtin:studio-workbench-tools'] },
   { label: '浏览器', sources: ['builtin:studio-browser-tools'] },
   { label: '电脑操控', sources: ['builtin:studio-desktop-control'] },
   { label: '任务与协作', sources: ['builtin:studio-todo', 'builtin:studio-long-task', 'builtin:studio-subagents', 'builtin:studio-subagent-channel'] },

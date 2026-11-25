@@ -25,6 +25,7 @@ type Actions = {
   openFile: (path: string) => void;
   undoTurnDiff: (at: number) => Promise<void>;
   openChanges: (file: TurnDiffFile | undefined, turn: TurnDiff) => void;
+  openGit?: () => void;
   editMessage: (entryId: number, text: string) => Promise<void>;
 };
 
@@ -174,12 +175,14 @@ function TranscriptMessageListComponent({
                   />}
                 </Fragment>;
               }
+              const previousTurn = index > 0 ? transcriptTurns[index - 1] : undefined;
               return <AssistantTurnView
                 key={`assistant-${turn.messages[0]?.sourceIndex ?? turn.messages[0]?.timestamp ?? index}`}
                 id={turn.messages[0]?.sourceIndex !== undefined ? `chat-assistant-turn-${turn.messages[0].sourceIndex}` : undefined}
                 messages={turn.messages}
                 toolResults={toolResultMap}
                 requestTraces={requestPlacement.byAssistantTurn.get(index)}
+                startedAt={previousTurn?.kind === 'user' ? previousTurn.message.timestamp : undefined}
                 cwd={sessionCwd}
                 busy={turnActive && index === transcriptTurns.length - 1}
                 retry={index === lastAssistantTurnIndex && retryInfo ? retryInfo : undefined}
@@ -189,15 +192,19 @@ function TranscriptMessageListComponent({
                 gitDiff={index === lastAssistantTurnIndex && liveDiff ? liveDiff : turnDiffByIndex.get(index)}
                 onUndo={turnActive || busy ? undefined : actions.undoTurnDiff}
                 onOpenDiff={actions.openChanges}
+                onOpenGit={actions.openGit}
                 onOpenFile={actions.openFile}
               />;
             })}
-            {pendingAssistantVisible && (
+            {pendingAssistantVisible && (() => {
+              const tailTurn = transcriptTurns.at(-1);
+              return (
               <AssistantTurnView
                 key={`assistant-pending-${requestPlacement.pending[0]?.id || messageCount}`}
                 messages={[]}
                 toolResults={toolResultMap}
                 requestTraces={requestPlacement.pending}
+                startedAt={tailTurn?.kind === 'user' ? tailTurn.message.timestamp : undefined}
                 cwd={sessionCwd}
                 busy={turnActive}
                 turnError={pendingTurnError}
@@ -206,7 +213,8 @@ function TranscriptMessageListComponent({
                 stepCollapse={preferences.stepCollapse}
                 showCodeView={false}
               />
-            )}
+              );
+            })()}
             <div ref={bottomSentinelRef} className="transcript-window-sentinel" aria-hidden="true" />
           </div>
         )}

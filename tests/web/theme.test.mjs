@@ -23,7 +23,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
-import { PALETTE_PRESETS } from '../../web/src/shared/preferences.ts';
+import { runInNewContext } from 'node:vm';
+import { normalizePreferences, PALETTE_PRESETS } from '../../web/src/shared/preferences.ts';
 const require = createRequire(import.meta.resolve('vite'));
 const postcss = require('postcss');
 const palette = postcss.parse(fs.readFileSync('web/src/styles/palette.css', 'utf8'));
@@ -43,8 +44,8 @@ const sourceFiles = fs.readdirSync('web/src', { recursive: true })
 function tokens(mode, paletteName = '') {
   const result = {};
   palette.walkRules((rule) => {
-    const isBase = rule.selector === ':root';
-    const isDarkOverride = mode === 'dark' && rule.selector === ':root[data-theme="dark"]';
+    const isBase = rule.selectors.includes(':root');
+    const isDarkOverride = mode === 'dark' && rule.selectors.includes(':root[data-theme="dark"]');
     const isPaletteOverride = rule.selector === `:root[data-palette="${paletteName}"]`;
     const isDarkPaletteOverride = mode === 'dark' && rule.selector === `:root[data-theme="dark"][data-palette="${paletteName}"]`;
     if (!isBase && !isDarkOverride && !isPaletteOverride && !isDarkPaletteOverride) return;
@@ -145,7 +146,9 @@ test('all referenced design tokens resolve', () => {
   for (const file of sourceFiles.filter((item) => item.endsWith('.css'))) {
     postcss.parse(fs.readFileSync(file, 'utf8')).walkDecls((decl) => {
       if (decl.prop.startsWith('--')) declared.add(decl.prop);
-      for (const match of decl.value.matchAll(/var\((--[\w-]+)/g)) used.add(match[1]);
+      for (const [, name] of decl.value.matchAll(/var\((--[\w-]+)/g)) {
+        used.add(name);
+      }
     });
   }
   assert.deepEqual([...used].filter((key) => !declared.has(key)), []);
@@ -276,6 +279,27 @@ test('Electron reads the shell frame colour from the same palette', () => {
   assert.equal(themeBackground('dark', false), tokens('dark')['--surface-chrome']);
   assert.equal(themeBackground('system', true), tokens('dark')['--surface-chrome']);
   assert.equal(themeBackground('system', false), tokens('light')['--surface-chrome']);
+});
+
+test('the first paint uses the same saved appearance as the application', () => {
+  const bootstrap = fs.readFileSync('web/public/launch-appearance.js', 'utf8');
+  const preferences = paletteIds.flatMap(palette =>
+    ['light', 'dark', 'system'].map(theme => JSON.stringify({ theme, palette })));
+  for (const raw of [null, '{', '{"theme":"invalid","palette":"unknown"}', ...preferences]) {
+    let saved;
+    try { saved = JSON.parse(raw); } catch { /* Corrupt storage uses defaults. */ }
+    const expected = normalizePreferences(saved);
+    for (const systemDark of [false, true]) {
+      const dataset = {};
+      runInNewContext(bootstrap, {
+        document: { documentElement: { dataset } },
+        localStorage: { getItem: key => key === 'pi-studio:preferences' ? raw : null },
+        matchMedia: () => ({ matches: systemDark }),
+      });
+      const theme = expected.theme === 'system' ? (systemDark ? 'dark' : 'light') : expected.theme;
+      assert.deepEqual(dataset, { theme, palette: expected.palette });
+    }
+  }
 });
 
 

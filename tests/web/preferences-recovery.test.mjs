@@ -13,9 +13,6 @@ const {
   loadStoredSessionOrder,
   loadStoredWorkspaceOrder,
   normalizeStoredSessionOrder,
-  loadStoredPluginWorkspaceSection,
-  saveStoredPluginWorkspaceSection,
-  normalizePluginWorkspaceSection,
 } = await import('../../web/src/shared/stored-ui-state.ts');
 const { DEFAULT_SHORTCUTS } = await import('../../web/src/shared/shortcuts.ts');
 
@@ -118,7 +115,7 @@ test('saving preferences writes the same canonical object loaded next time', () 
   assert.equal(saved.theme, 'dark');
   assert.equal(saved.gitDiffLayout, 'unified');
   assert.equal(saved.gitDiffWrap, true);
-  assert.equal(saved.fontSize, 18);
+  assert.equal(saved.fontSize, 20);
   assert.equal(saved.shortcuts.togglePanel, 'Mod+Alt+J');
   assert.deepEqual(loadPreferences(storage), saved);
   assert.equal(storage.writes.length, 1);
@@ -184,19 +181,6 @@ test('missing UI state returns defaults without creating storage entries', () =>
   assert.deepEqual(loadStoredWorkspaceOrder(storage), []);
   assert.deepEqual(loadStoredSessionOrder(storage), {});
   assert.equal(loadStoredActiveSession(storage), null);
-  assert.equal(loadStoredPluginWorkspaceSection(storage), 'plugins');
   assert.equal(storage.writes.length, 0);
   assert.equal(storage.values.size, 0);
-});
-
-test('plugin workspace section remembers the last hub tab and rejects unknown values', () => {
-  const storage = memoryStorage();
-  assert.equal(normalizePluginWorkspaceSection('skills'), 'skills');
-  assert.equal(normalizePluginWorkspaceSection('nope'), 'plugins');
-  saveStoredPluginWorkspaceSection('mcp', storage);
-  assert.equal(loadStoredPluginWorkspaceSection(storage), 'mcp');
-  storage.setItem('pi-studio:plugin-workspace-section', JSON.stringify('extensions'));
-  assert.equal(loadStoredPluginWorkspaceSection(storage), 'extensions');
-  storage.setItem('pi-studio:plugin-workspace-section', JSON.stringify('weird'));
-  assert.equal(loadStoredPluginWorkspaceSection(storage), 'plugins');
 });

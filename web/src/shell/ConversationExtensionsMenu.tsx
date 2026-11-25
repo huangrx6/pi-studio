@@ -10,7 +10,7 @@ export function ConversationExtensionsMenu({
   const id = useId();
   useEffect(() => {
     if (!open) return;
-    root.current?.querySelector<HTMLButtonElement>('.extension-panel-picker button')?.focus();
+    root.current?.querySelector<HTMLElement>('.extension-panel-picker input, .extension-panel-picker button')?.focus();
     const onOutside = (event: Event) => {
       if (!root.current?.contains(event.target as Node)) onOpenChange(false);
     };

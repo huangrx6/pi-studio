@@ -29,9 +29,9 @@ function holdDataViews(items) {
   window.finishDataView = (id, content) => pending.get(id)(content);
 }
 
-function holdStartup(theme) {
+function holdStartup(theme, palette) {
   const prefs = JSON.parse(localStorage.getItem('pi-studio:preferences'));
-  localStorage.setItem('pi-studio:preferences', JSON.stringify({ ...prefs, theme }));
+  localStorage.setItem('pi-studio:preferences', JSON.stringify({ ...prefs, theme, palette }));
   window.piApi.waitForStartup = () => new Promise(resolve => { window.finishStartup = resolve; });
   const getState = window.piApi.state;
   window.piApi.state = async () => {
@@ -44,29 +44,36 @@ const server = await serveProductionRenderer(fileURLToPath(root));
 let browser;
 try {
   browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
-  for (const [theme, width] of [['light', 980], ['dark', 1440]]) {
+  for (const [theme, width, palette] of [['light', 980, 'amber'], ['dark', 1440, 'berry']]) {
     const page = await browser.newPage({ viewport: { width, height: 800 }, deviceScaleFactor: 2 });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', route => route.request().url().startsWith(server.origin) ? route.continue() : route.abort());
-    await page.addInitScript({ content: `(${installPerformanceFixture})({sessionCount:1,turnCount:2});(${holdDataViews})(${JSON.stringify(items)});(${holdStartup})(${JSON.stringify(theme)});` });
+    await page.addInitScript({ content: `(${installPerformanceFixture})({sessionCount:1,turnCount:2});(${holdDataViews})(${JSON.stringify(items)});(${holdStartup})(...${JSON.stringify([theme, palette])});` });
     await page.goto(server.origin);
-    const launch = page.locator('#launch-screen');
+    const launch = page.getByRole('status', { name: '正在启动', exact: true });
     await page.waitForFunction(() => typeof window.finishStartup === 'function');
     assert.equal(await page.locator('#root').evaluate(el => [el.inert, el.childElementCount].join()), 'true,0');
-    assert.equal(await launch.locator('img').evaluate(img => img.complete && img.naturalWidth > 0), true);
+    const mark = launch.locator('.launch-mark');
+    await mark.waitFor({ state: 'visible' });
+    assert.equal(await page.locator('html').getAttribute('data-palette'), palette);
+    await mark.locator('img').evaluateAll(images => Promise.all(images.map(image => image.decode())));
+    assert.equal((await launch.innerText()).trim(), '');
+    assert.equal(await launch.getByRole('button').count(), 0);
     if (theme === 'dark') {
       await page.emulateMedia({ reducedMotion: 'reduce' });
-      assert.equal(await launch.locator('img').evaluate(img => getComputedStyle(img).animationName), 'none');
+      assert.equal(await launch.evaluate(el => el.getAnimations({ subtree: true }).filter(a => a.playState === 'running').length), 0);
+      const firstFrame = await mark.screenshot();
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.ok(firstFrame.equals(await mark.screenshot()), 'the reduced-motion mark stays still');
     }
     await launch.screenshot({ path: fileURLToPath(new URL(`launch-${theme}.png`, output)) });
     await page.evaluate(() => window.finishStartup());
-    assert.equal((await launch.innerText()).trim(), '');
-    assert.equal(await launch.getByRole('button').count(), 0);
     await page.waitForFunction(() => typeof window.finishWorkspaceList === 'function');
     assert.equal(await page.locator('#root').evaluate(el => el.inert), true);
     await page.evaluate(() => window.finishWorkspaceList());
     await launch.waitFor({ state: 'detached' });
+    assert.equal(await page.locator('#root').evaluate(el => el.inert), false);
     await page.locator('.workspace-choice:not(.has-selection)').waitFor();
     assert.equal(await page.evaluate(() => window.__performanceQa.pageCalls.length), 0);
     await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -82,12 +89,13 @@ try {
     await page.locator('.assistant-response').first().waitFor();
     assert.equal(await page.evaluate(() => window.__performanceQa.pageCalls.length), 1);
     await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
-    const trigger = page.getByRole('button', { name: '扩展' });
+    const trigger = page.getByRole('button', { name: '扩展', exact: true });
     const menu = page.getByRole('dialog', { name: '扩展' });
-    const row = menu.locator('.extension-picker-row').filter({ hasText: '实时指标' });
-    const scriptsRow = menu.locator('.extension-picker-row').filter({ hasText: '项目脚本' });
+    const row = menu.getByRole('article', { name: metrics.manifests[0].name });
+    const scriptsRow = menu.getByRole('article', { name: scripts.name });
     const status = row.getByRole('status');
-    const height = locator => locator.evaluate(el => el.getBoundingClientRect().height);
+    // Measure layout independently of the popover's scale-in animation.
+    const height = locator => locator.evaluate(el => el.offsetHeight);
     await trigger.click();
     await scriptsRow.getByText('正在读取项目脚本').waitFor();
     await status.getByText('正在连接实时数据').waitFor();
@@ -107,10 +115,11 @@ try {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal(await icon.evaluate(el => getComputedStyle(el).animationName), 'none');
     assert.equal(await status.evaluate(el => getComputedStyle(el).opacity), '1');
-    for (const [content, expected] of [[[{ kind: 'text', text: '32 tok/s' }], '32 tok/s'], [[], '空闲']]) {
+    for (const [content, expected] of [[[{ kind: 'text', text: '32 tok/s' }], '32 tok/s'], [[], '等待首次模型请求']]) {
       await page.evaluate(({ id, content }) => window.finishDataView(id, content), { id: metrics.METRICS_FOOTER_SOURCE_ID, content });
       await row.getByText(expected, { exact: true }).waitFor();
-      assert.ok(Math.abs(pendingHeight - await height(row)) <= 1, 'populated and empty rows retain their loading height');
+      const resolvedHeight = await height(row);
+      assert.ok(Math.abs(pendingHeight - resolvedHeight) <= 1, `${expected}: ${pendingHeight}px pending, ${resolvedHeight}px resolved`);
       assert.equal(await status.count(), 0);
       if (content.length) {
         await trigger.click();

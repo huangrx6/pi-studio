@@ -103,8 +103,72 @@ try {
   assert.equal(await suggestionList.getByRole('option').count(), 1);
   await screenshot('plugin-suggestions', picker());
   await composer().press('Escape');
-  await categoryList.getByRole('option', { name: 'MCP', exact: true }).click();
-  await suggestionList.getByRole('option').filter({ hasText: 'qa_method' }).waitFor();
+  const mcpCategory = categoryList.getByRole('option', { name: 'MCP', exact: true });
+  const browserServer = options().filter({ hasText: 'chrome-devtools' });
+  const methodsButton = picker().getByRole('button', { name: '查看 chrome-devtools 的方法', exact: true });
+  const clickMethod = options().filter({ has: page.getByText('click', { exact: true }) });
+  const serverToken = '$[mcp-server:' + encodeURIComponent(JSON.stringify(['', 'chrome-devtools'])) + '|chrome-devtools]';
+  const clickToken = '$[mcp:' + encodeURIComponent(JSON.stringify(['', 'chrome-devtools', 'click'])) + '|chrome-devtools%2Fclick]';
+  await mcpCategory.click();
+  await methodsButton.waitFor();
+  assert.equal(await options().count(), 2);
+  assert.equal(await clickMethod.count(), 0);
+  await screenshot('mcp-servers', picker());
+  await methodsButton.click();
+  await clickMethod.waitFor();
+  assert.equal(await options().filter({ hasText: 'query_docs' }).count(), 0, 'only methods of the chosen server are offered');
+  await screenshot('mcp-server-methods', picker());
+  await composer().press('Escape');
+  await methodsButton.waitFor();
+  await options().filter({ hasText: 'context7' }).hover();
+  await composer().press('ArrowRight');
+  await options().filter({ hasText: 'query_docs' }).waitFor();
+  await page.mouse.move(0, 0);
+  await composer().press('Escape');
+  const selectedSecondServer = picker().getByRole('option', { selected: true }).filter({ hasText: 'context7' });
+  await selectedSecondServer.waitFor();
+  await composer().press('ArrowRight');
+  await options().filter({ hasText: 'query_docs' }).waitFor();
+  await picker().getByRole('button', { name: '返回 MCP 服务列表', exact: true }).click();
+  await settle();
+  await selectedSecondServer.waitFor();
+  assert.equal(await composerValue(composer()), '$');
+  await browserServer.hover();
+  await composer().press('Enter');
+  await picker().waitFor({ state: 'detached' });
+  assert.equal((await composerValue(composer())).trimEnd(), serverToken);
+
+  await fill('$chrome 后续');
+  await selectComposerRange(composer(), '$chrome'.length);
+  await composer().dispatchEvent('click');
+  await mcpCategory.click();
+  await browserServer.hover();
+  await composer().press('ArrowRight');
+  await clickMethod.waitFor();
+  await page.keyboard.insertText('pages');
+  await clickMethod.waitFor({ state: 'detached' });
+  await options().filter({ hasText: 'list_pages' }).waitFor();
+  await composer().press('Escape');
+  await methodsButton.waitFor();
+  assert.equal(await composerValue(composer()), '$chrome 后续', 'leaving methods restores the original query and trailing draft');
+  await methodsButton.click();
+  await clickMethod.click();
+  assert.equal(await composerValue(composer()), clickToken + ' 后续');
+  await fill('$');
+  await mcpCategory.click();
+  await browserServer.click();
+  assert.equal((await composerValue(composer())).trimEnd(), serverToken);
+  await fill('$click');
+  await mcpCategory.click();
+  await clickMethod.waitFor();
+  await composer().press('Enter');
+  assert.equal((await composerValue(composer())).trimEnd(), clickToken, 'users can select a method by name without drilling down');
+  await assertNoSubmissions();
+  results.checks.push('MCP opens on servers; Enter or clicking inserts a server reference, the method action and Right arrow open scoped methods, Escape returns one level and selecting a method preserves its exact token');
+
+  await fill('$');
+  await mcpCategory.click();
+  await methodsButton.waitFor();
   await picker().getByRole('button', { name: '返回引用类别' }).click();
   await categoryList.waitFor();
   await composer().press('Escape');
@@ -170,7 +234,7 @@ try {
   const extensionPanelAction = page.getByRole('button', { name: '打开 QA 范围面板', exact: true });
   async function openExtensionPanel(title = '扩展归属测试') {
     await page.locator('.chat-header').getByRole('button', { name: '扩展', exact: true }).click();
-    await page.getByRole('dialog', { name: '扩展', exact: true }).getByRole('button', { name: 'QA Extension', exact: true }).click();
+    await page.getByRole('dialog', { name: '扩展', exact: true }).getByRole('button', { name: '查看 QA Extension 详情', exact: true }).click();
     if (title !== '扩展归属测试') {
       await page.getByRole('navigation', { name: '扩展面板' }).getByRole('button', { name: title, exact: true }).click();
     }
@@ -185,9 +249,7 @@ try {
   await qa('hold', 'runExtensionCommand', 'perf-0'); await extensionCommand.click(); await pending('runExtensionCommand'); expectedExtensionCommands++;
   await open('perf-1'); await qa('release', 'runExtensionCommand'); await settle();
   assert.equal(await composerValue(composer()), draftB); assert.equal(await extensionPanel.count(), 0);
-  await page.locator('.notification-trigger').click(); const notificationCenter = page.getByRole('dialog', { name: '通知中心', exact: true });
-  assert.equal(await notificationCenter.getByText('A 范围的延迟结果', { exact: true }).count(), 0);
-  await notificationCenter.getByRole('button', { name: '关闭通知', exact: true }).click();
+  assert.equal(await page.getByText('A 范围的延迟结果', { exact: true }).count(), 0);
   await open('perf-0'); assert.equal(await composerValue(composer()), 'A 扩展面板归属草稿');
   results.checks.push('a late extension command result cannot replace B draft, open B panel, or publish its message as B feedback');
 
@@ -195,9 +257,7 @@ try {
   await qa('hold', 'runExtensionCommand', 'perf-0'); await extensionCommand.click(); await pending('runExtensionCommand'); expectedExtensionCommands++;
   await open('perf-1'); await qa('reject', 'runExtensionCommand'); await settle();
   assert.equal(await composerValue(composer()), draftB); assert.equal(await extensionPanel.count(), 0);
-  await page.locator('.notification-trigger').click();
-  assert.equal(await notificationCenter.getByText('QA runExtensionCommand failure', { exact: true }).count(), 0);
-  await notificationCenter.getByRole('button', { name: '关闭通知', exact: true }).click();
+  assert.equal(await page.getByText('QA runExtensionCommand failure', { exact: true }).count(), 0);
   results.checks.push('a late extension command failure is suppressed instead of appearing as an error in B');
 
   await open('perf-0'); await fill('A 当前命令草稿');
@@ -207,9 +267,6 @@ try {
   assert.equal(await composerValue(composer()), 'A 范围结果');
   await screenshot('05-extension-scope-dark');
   await page.getByRole('button', { name: '关闭 QA Extension', exact: true }).click();
-  await page.locator('.notification-trigger').click();
-  assert.equal(await notificationCenter.getByText('A 范围的延迟结果', { exact: true }).count(), 1);
-  await notificationCenter.getByRole('button', { name: '关闭通知', exact: true }).click();
   results.checks.push('same-scope extension results still apply prompt, panel, message, and release the action lock without enabling submission');
 
   await page.getByText('A 实时数据', { exact: true }).waitFor();

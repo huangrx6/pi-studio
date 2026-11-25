@@ -2,7 +2,6 @@ import {
   ArchiveRestore, BarChart3, Bot, Code2, Cpu, HardDrive, Info, Keyboard, KeyRound,
   GitBranch, Globe, Package, Monitor, Settings, ShieldCheck, Wrench, AppWindow, Plug, FileCode2, Layers3,
 } from 'lucide-react';
-import appIcon from '../../../assets/icon.png';
 
 // Keep navigation to the noun labels users need to scan; each page's controls
 // and layout carry the detail rather than repeating it as a sidebar subtitle.
@@ -13,10 +12,10 @@ export const settingsPages = [
   { id: 'shortcuts', group: '外观与输入', label: '快捷键', icon: Keyboard },
   { id: 'models', group: '模型与用量', label: '模型配置', icon: Cpu },
   { id: 'usage', group: '模型与用量', label: '使用量', icon: BarChart3, keywords: ['Token', '用量', '成本', '统计', 'Metrics', '采集', '已移除'] },
-  { id: 'tools', group: '执行与权限', label: '智能体工具', icon: Wrench },
-  { id: 'permissions', group: '执行与权限', label: '权限策略', icon: ShieldCheck, keywords: ['批准', '规则', '安全'] },
-  { id: 'harness', group: '执行与权限', label: 'Harness 配置', icon: Code2 },
-  { id: 'subagents', group: '执行与权限', label: '子智能体', icon: Bot },
+  { id: 'tools', group: '执行与权限', label: '智能体工具', icon: Wrench, keywords: ['工具方案', '内置工具', 'MCP', '临时对话'] },
+  { id: 'permissions', group: '执行与权限', label: '权限策略', icon: ShieldCheck, keywords: ['批准', '规则', '安全', '权限方案', '临时对话'] },
+  { id: 'harness', group: '执行与权限', label: 'Harness 配置', icon: Code2, keywords: ['提示词', '指令', '临时对话'] },
+  { id: 'agents', group: '执行与权限', label: '智能体配置', icon: Bot, keywords: ['主对话', '临时对话', '子智能体', '子代理', '多智能体', 'agent', '装配'] },
   { id: 'plugins', group: '资源与扩展', label: '插件', icon: Package, keywords: ['Plugin', 'CLI', '插件包', '市场', '安装'] },
   { id: 'git', group: '工作区', label: 'Git 工作流', icon: GitBranch, keywords: ['Git 与 Worktree', '工作树', 'Git workflow', 'gitworkflow', '差异', '换行', '分支'] },
   { id: 'network', group: '数据与应用', label: '网络代理', icon: Globe, keywords: ['proxy', '代理', '网络', 'VPN', '连接', 'HTTP', 'SOCKS', '超时'] },
@@ -40,14 +39,18 @@ export type SettingsNavTab = typeof settingsPages[number]['id'];
  * Openable settings destinations. `mcp` / `skills` remain valid deep-link ids
  * and resolve into the unified 插件 hub via resolveSettingsDestination.
  */
-export type SettingsTab = SettingsNavTab | 'mcp' | 'skills' | 'extensions' | 'harness-compaction' | 'subagent-worktrees';
+export type SettingsTab = SettingsNavTab | 'mcp' | 'skills' | 'extensions' | 'harness-compaction' | 'subagents' | 'subagent-worktrees' | 'temporary-chat' | 'main-agent';
 
 /** Sub-tabs inside 设置 → 插件. */
 export type PluginWorkspaceSection = 'plugins' | 'mcp' | 'skills' | 'extensions';
 
+/** Sub-tabs inside 设置 → 智能体配置. */
+export type AgentConfigSection = 'main' | 'temporary' | 'subagents';
+
 export type SettingsDestination = {
   tab: SettingsNavTab;
   pluginSection?: PluginWorkspaceSection;
+  agentSection?: AgentConfigSection;
   anchor?: 'harness-compaction' | 'subagent-worktrees';
 };
 
@@ -57,9 +60,14 @@ export function resolveSettingsDestination(tab: SettingsTab): SettingsDestinatio
     return { tab: 'plugins', pluginSection: tab };
   }
   if (tab === 'harness-compaction') return { tab: 'harness', anchor: tab };
-  if (tab === 'subagent-worktrees') return { tab: 'subagents', anchor: tab };
-  // Keep the last remembered hub section when opening 插件 from the sidebar.
-  if (tab === 'plugins') return { tab: 'plugins' };
+  if (tab === 'subagent-worktrees') return { tab: 'agents', agentSection: 'subagents', anchor: tab };
+  if (tab === 'subagents') return { tab: 'agents', agentSection: 'subagents' };
+  if (tab === 'temporary-chat') return { tab: 'agents', agentSection: 'temporary' };
+  if (tab === 'main-agent') return { tab: 'agents', agentSection: 'main' };
+  if (tab === 'agents') return { tab: 'agents', agentSection: 'main' };
+  // Always land on the default 插件 tab when opening 插件 from navigation;
+  // mcp / skills / extensions deep links resolve above to their target tab.
+  if (tab === 'plugins') return { tab: 'plugins', pluginSection: 'plugins' };
   return { tab };
 }
 
@@ -102,5 +110,5 @@ export function permissionScopeKey(cwd: string, sessionId?: string): string {
 }
 
 export function BrandMark({ className = '' }: { className?: string }) {
-  return <img className={`brand-mark ${className}`} src={appIcon} alt="" draggable={false} />;
+  return <span className={`brand-mark pi-mark ${className}`.trim()} aria-hidden="true" />;
 }

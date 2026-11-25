@@ -19,7 +19,7 @@ const root = fileURLToPath(new URL('../..', import.meta.url));
 const output = path.join(root, '.qa', 'attachment-gc');
 const profile = await mkdtemp(path.join(os.tmpdir(), 'pi-studio-attachment-gc-qa-'));
 const outside = await mkdtemp(path.join(os.tmpdir(), 'pi-studio-attachment-gc-outside-'));
-const attachmentRoot = path.join(profile, 'attachments');
+const attachmentRoot = path.join(profile, 'data', 'attachments');
 const databasePath = path.join(profile, 'studio.sqlite');
 await mkdir(output, { recursive: true });
 

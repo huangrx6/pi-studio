@@ -3,11 +3,17 @@
 const { ipcMain } = require('electron');
 const {
   MODES,
+  deletePermissionProfile,
+  getPermissionProfilesSnapshot,
   modeAvailable,
   policyState,
+  previewProfileToolCall,
   previewToolCall,
   readMode,
+  resetPermissionProfile,
   resetPolicy,
+  savePermissionProfile,
+  selectPermissionProfile,
   writeMode,
   writePolicy,
 } = require('../capabilities/permissions/index.cjs');
@@ -30,6 +36,14 @@ function registerModeIpc() {
   ipcMain.handle('pi:permission-policy-set', async (_event, payload = {}) => writePolicy(payload));
   ipcMain.handle('pi:permission-policy-reset', async (_event, payload = {}) => resetPolicy(payload));
   ipcMain.handle('pi:permission-evaluate', async (_event, payload = {}) => previewToolCall(payload));
+  ipcMain.handle('pi:permission-evaluate-profile', async (_event, payload = {}) => previewProfileToolCall(payload));
+  ipcMain.handle('pi:permission-profiles-get', async (_event, cwd) => (
+    getPermissionProfilesSnapshot(typeof cwd === 'string' ? cwd : '')
+  ));
+  ipcMain.handle('pi:save-permission-profile', async (_event, payload = {}) => savePermissionProfile(payload));
+  ipcMain.handle('pi:select-permission-profile', async (_event, payload = {}) => selectPermissionProfile(payload));
+  ipcMain.handle('pi:reset-permission-profile', async (_event, payload = {}) => resetPermissionProfile(payload));
+  ipcMain.handle('pi:delete-permission-profile', async (_event, payload = {}) => deletePermissionProfile(payload));
 }
 
 module.exports = { registerModeIpc };

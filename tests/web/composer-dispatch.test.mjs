@@ -57,7 +57,6 @@ function harness({ submit, page = async () => ({ messages: [] }) }) {
   let compaction = { active: false };
   const calls = {
     submitted: [],
-    notifications: [],
     outlines: [],
   };
   const context = {
@@ -88,9 +87,6 @@ function harness({ submit, page = async () => ({ messages: [] }) }) {
     setSession() {},
     setRequestTraces() {},
     applyOutline() {},
-    pushNotification(...args) {
-      calls.notifications.push(args);
-    },
     errorText(value) {
       return value instanceof Error ? value.message : String(value);
     },
@@ -148,7 +144,6 @@ function sendHarness({
   const calls = {
     dispatched: [],
     feedback: [],
-    notifications: [],
     preparedRequestIds: [],
     prompts: [],
   };
@@ -259,9 +254,6 @@ function sendHarness({
     showComposerFeedback(...args) {
       calls.feedback.push(args);
     },
-    pushNotification(...args) {
-      calls.notifications.push(args);
-    },
     errorText(error) {
       return error instanceof Error ? error.message : String(error);
     },
@@ -337,7 +329,6 @@ test('a backend post-commit warning remains admitted and never removes the optim
   assert.match(outcome.error, /状态暂时无法读取|对话记录暂时无法刷新/);
   assert.equal(h.getMessages().length, 1);
   assert.equal(h.getMessages()[0].optimisticRequestId, 'stable-request');
-  assert.equal(h.calls.notifications.at(-1)[2], '消息已提交');
 });
 
 test('a renderer transcript read failure after admission is a committed warning', async () => {
@@ -388,8 +379,6 @@ test('a post-commit warning stays visible after the user switches conversations'
   const outcome = await pending;
   assert.equal(outcome.state, 'admitted-but-postcommit-read-failed');
   assert.equal(outcome.current, false);
-  assert.equal(h.calls.notifications.at(-1)[2], '消息已提交');
-  assert.equal(h.calls.notifications.at(-1)[3], 'A');
   assert.deepEqual(h.calls.outlines, []);
 });
 
@@ -473,7 +462,7 @@ test('queued retries clear the exact session draft key and never reuse an admitt
   assert.notEqual(queuedRequestIds[1], undefined);
 });
 
-test('a direct rejection while viewing another conversation restores only its own draft and notifies', async () => {
+test('a direct rejection while viewing another conversation restores only its own draft', async () => {
   const original = draft('recover only A');
   const pending = deferred();
   const started = deferred();
@@ -495,9 +484,7 @@ test('a direct rejection while viewing another conversation restores only its ow
 
   assert.equal(h.store.get('session:A').text, 'recover only A');
   assert.equal(h.store.get('session:B').text, 'keep B draft');
-  assert.equal(h.calls.notifications.at(-1)[2], '消息未发送');
-  assert.equal(h.calls.notifications.at(-1)[3], 'A');
-  assert.match(h.calls.notifications.at(-1)[0], /session is busy/);
+  assert.equal(h.calls.feedback.length, 0);
 });
 
 test('A to B to A applies a pre-admission rejection to the current A composer', async () => {
@@ -518,7 +505,7 @@ test('A to B to A applies a pre-admission rejection to the current A composer', 
   await h.send();
   assert.equal(h.store.get('session:A').text, 'return to A');
   assert.equal(h.visiblePrompt(), 'return to A');
-  assert.equal(h.calls.notifications.length, 0);
+  assert.equal(h.calls.feedback.length, 1);
 });
 
 function deferred() {
@@ -529,7 +516,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-test('background queue rejection remains retryable and is surfaced as a notification', async () => {
+test('background queue rejection remains retryable', async () => {
   const h = harness({
     submit: async () => { throw new Error('background rejected'); },
   });
@@ -539,8 +526,6 @@ test('background queue rejection remains retryable and is surfaced as a notifica
     current: false,
     error: 'background rejected',
   });
-  assert.equal(h.calls.notifications.at(-1)[2], '排队发送失败');
-  assert.match(h.calls.notifications.at(-1)[0], /background rejected/);
 });
 
 test('background queue projection failure is admitted and reported without replaying the request', async () => {
@@ -554,5 +539,4 @@ test('background queue projection failure is admitted and reported without repla
   assert.equal(outcome.state, 'admitted-but-postcommit-read-failed');
   assert.equal(outcome.current, false);
   assert.equal(h.calls.submitted.length, 1);
-  assert.equal(h.calls.notifications.at(-1)[2], '排队消息已发送');
 });

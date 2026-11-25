@@ -33,7 +33,7 @@ import { Select } from '../../shared/Select';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import { Accordion } from '../../shared/Accordion';
 import { SkillCatalogDialog } from './SkillCatalogDialog';
-import { invocationLabel, skillSourceCatalogs, sourceTypeLabel } from './skill-catalog';
+import { invocationLabel, skillSourceCatalogs, sourceStatusLabel, sourceTypeLabel } from './skill-catalog';
 
 type WorkspaceOption = { cwd: string; name: string };
 type InstallResult = Awaited<ReturnType<typeof window.piApi.installPreparedSkill>>;
@@ -175,8 +175,8 @@ function SkillHubScope({
             <strong>{source.name}</strong>
             <small>{sourceTypeLabel(source)}</small>
           </span>
-          <span className="skill-hub-source-status" data-error={Boolean(source.lastError)}>
-            {source.lastError ? '读取失败' : source.enabled ? `${count} 个技能` : '已停用'}
+          <span className="skill-hub-source-status" data-error={source.enabled && !loading && Boolean(source.lastError)}>
+            {sourceStatusLabel(source, count, loading)}
           </span>
           <ChevronRight aria-hidden="true" />
         </button>)}
@@ -195,6 +195,7 @@ function SkillHubScope({
 
     {managerOpen && <SkillSourceManager
       snapshot={snapshot}
+      refreshing={loading}
       busyId={sourceBusyId}
       onClose={() => setManagerOpen(false)}
       onChange={() => load(false, '技能源已添加')}
@@ -220,6 +221,7 @@ function SkillHubScope({
 
 function SkillSourceManager({
   snapshot,
+  refreshing,
   busyId,
   onClose,
   onChange,
@@ -227,6 +229,7 @@ function SkillSourceManager({
   onRemove,
 }: {
   snapshot: SkillHubSnapshot | null;
+  refreshing: boolean;
   busyId: string;
   onClose: () => void;
   onChange: () => Promise<void>;
@@ -333,9 +336,9 @@ function SkillSourceManager({
             <span className="skill-source-row-icon">{source.type === 'directory' ? <Folder /> : <Globe2 />}</span>
             <span className="skill-source-row-copy">
               <strong>{source.name}</strong>
-              <small>{sourceTypeLabel(source)} · {source.itemCount} 个技能{source.lastSyncedAt ? ` · ${new Date(source.lastSyncedAt).toLocaleString()}` : ''}</small>
+              <small>{sourceTypeLabel(source)} · {sourceStatusLabel(source, source.itemCount, refreshing)}{source.lastSyncedAt ? ` · ${new Date(source.lastSyncedAt).toLocaleString()}` : ''}</small>
               <code title={source.location}>{source.location}</code>
-              {source.lastError && <small role="alert">{source.lastError}</small>}
+              {source.enabled && source.lastError && <small role="alert">{source.lastError}</small>}
             </span>
             <button
               type="button"

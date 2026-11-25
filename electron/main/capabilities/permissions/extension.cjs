@@ -31,6 +31,7 @@ function createPermissionsExtension(durable) {
             sessionId,
             call: evaluatedCall,
             ...(child?.workspace ? { cwd: child.workspace } : {}),
+            ...(child?.permissionProfileId ? { profileId: child.permissionProfileId } : {}),
           });
           // A child may run in a subdirectory while its parent policy is keyed
           // to the owning workspace. Evaluate both frames: omitting cwd resolves

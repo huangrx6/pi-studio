@@ -26,7 +26,7 @@ const { createLinkedSourceAdapter } = require('./linked-source.cjs');
 const {
   getStudioDatabase,
 } = require('../../core/studio-db.cjs');
-const { studioDataDirectory } = require('../../core/studio-paths.cjs');
+const { quarantineDirectory } = require('../../core/studio-paths.cjs');
 const {
   directoryDetails,
   inspectSingleSkillDirectory,
@@ -95,7 +95,7 @@ function errorMessage(error) {
 }
 
 function quarantineRoot() {
-  return path.join(studioDataDirectory(), 'skill-quarantine');
+  return quarantineDirectory('skills');
 }
 
 function expandHome(value) {

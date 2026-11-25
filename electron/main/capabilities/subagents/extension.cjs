@@ -264,6 +264,7 @@ async function configureChildConversation({
   childContext.createdAt = settings.createdAt;
   if (settings.profile) {
     childContext.rolePrompt = settings.rolePrompt;
+    childContext.permissionProfileId = settings.profile.permissionProfileId || '';
     childContext.modelArguments = settings.modelArguments;
     childContext.taskInstruction = instructions;
   }

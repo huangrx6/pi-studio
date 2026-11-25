@@ -308,10 +308,10 @@ source
 
 ```text
 <userData>/extension-publishers.json
-<userData>/extension-state/user/<id>.json
-<userData>/extension-state/project-<workspace-hash>/<id>.json
-<userData>/extension-data/user/<id>/
-<userData>/extension-data/project-<workspace-hash>/<id>/
+<userData>/data/extension-state/user/<id>.json
+<userData>/data/extension-state/project-<workspace-hash>/<id>.json
+<userData>/data/extension-data/user/<id>/
+<userData>/data/extension-data/project-<workspace-hash>/<id>/
 ```
 
 `extension-publishers.json` 保存用户确认过的发布者公钥指纹与撤销状态，权限为私有文件；它不包含签名私钥。

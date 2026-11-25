@@ -10,10 +10,29 @@ export type StorageLocation = {
   canOpen: boolean;
 };
 
+export type StorageMaintenanceSummary = {
+  oldBackupCount: number;
+  oldBackupBytes: number;
+  reclaimableDatabaseBytes: number;
+  cacheBytes: number;
+  totalCleanableBytes: number;
+};
+
 export type DeviceStorageSnapshot = {
   totalBytes: number;
   categories: Record<StorageCategory, number>;
   measuredAt: number;
   locationsIncomplete: boolean;
   locations: StorageLocation[];
+  maintenance?: StorageMaintenanceSummary;
+};
+
+export type DeviceStorageCleanupResult = {
+  snapshot: DeviceStorageSnapshot;
+  summary: {
+    freedBytes: number;
+    removedBackups: number;
+    removedEmptyDirs: number;
+    prunedTraces: number;
+  };
 };

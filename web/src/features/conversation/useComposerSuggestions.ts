@@ -57,13 +57,24 @@ export function useComposerSuggestions(menu: ComposerMenuState | null, cwd: stri
       .map(({ id, name, avatarId, description }) => ({ type: 'agent', id, name, avatarId, description }));
     if (!matches || loading || error) return EMPTY_FILES;
     if (kind === 'file') return result.files;
-    if (kind === 'capability') return result.capabilities.filter(item =>
-      item.type === menu?.capabilityType
-      && [item.name, item.description, item.originalDescription, item.source,
-        item.type === 'mcp' ? 'MCP ' + item.server + '/' + item.name : item.type === 'plugin' ? '插件 ' + item.id : '技能']
-        .join(' ').toLocaleLowerCase().includes(needle));
+    if (kind === 'capability') {
+      const contains = (value: string) => value.toLocaleLowerCase().includes(needle);
+      if (menu?.capabilityType === 'mcp') {
+        const server = menu.mcpServer;
+        if (server) return result.capabilities.filter(item => item.type === 'mcp' && item.serverId === server.id
+          && contains([item.name, item.originalDescription || item.description].join(' ')));
+        const servers = result.capabilities.filter(item => item.type === 'mcp-server'
+          && contains([item.name, item.description, item.source, 'MCP'].join(' ')));
+        if (!needle) return servers;
+        // Let users search for a method without first opening its server.
+        return [...servers, ...result.capabilities.filter(item => item.type === 'mcp'
+          && (contains(item.name) || (needle.includes('/') && contains(item.server + '/' + item.name))))];
+      }
+      return result.capabilities.filter(item => item.type === menu?.capabilityType
+        && contains([item.name, item.description, item.source, item.type === 'plugin' ? '插件 ' + item.id : '技能'].join(' ')));
+    }
     return EMPTY_FILES;
-  }, [kind, profiles.rows, commandQuery, matches, loading, error, result.files, result.capabilities, menu?.capabilityType]);
+  }, [kind, profiles.rows, commandQuery, matches, loading, error, result.files, result.capabilities, menu?.capabilityType, menu?.mcpServer]);
   return {
     commands,
     commandOptions,

@@ -173,7 +173,12 @@ function inspectZipEntries(archive, options = {}) {
     const unixMode = hostSystem === 3 ? (externalAttributes >>> 16) : 0;
     const fileType = unixMode & 0xf000;
     if (flags & ZIP_ENCRYPTED_FLAG) throw new Error(`不支持加密的 ZIP 文件：${rawName}`);
-    if (fileType === 0xa000) throw new Error(`压缩包不能包含符号链接：${rawName}`);
+    if (fileType === 0xa000) {
+      if (!Array.isArray(options.skippedSymlinks)) throw new Error(`压缩包不能包含符号链接：${rawName}`);
+      options.skippedSymlinks.push(safeArchivePath(rawName.replace(/\/$/, '')));
+      cursor = next;
+      continue;
+    }
     if (fileType !== 0 && fileType !== 0x4000 && fileType !== 0x8000) {
       throw new Error(`压缩包包含不支持的条目类型：${rawName}`);
     }

@@ -5,10 +5,6 @@ import {
 import { GitBranchPicker } from '../features/git/GitBranchPicker';
 import { GitRepositoryPicker } from '../features/git/GitRepositoryPicker';
 import { LoadingIndicator } from '../shared/LoadingState';
-import {
-  NotificationCenter,
-  type AppNotification,
-} from './NotificationCenter';
 import { ShellHeader } from './ShellLayout';
 import type { GitWorkspaceStatus } from '../types/git-types';
 
@@ -28,11 +24,6 @@ type ConversationHeaderProps = {
   isNewConversation: boolean;
   title: string;
   gitStatus: GitWorkspaceStatus | null;
-  notifications: AppNotification[];
-  onMarkAllRead: () => void;
-  onClearNotifications: () => void;
-  onOpenNotificationSession: (id: string) => Promise<void>;
-  onRunNotificationAction: (item: AppNotification) => Promise<void>;
   panelExpanded: boolean;
   onOpenPanel: () => void;
   onOpenGit: () => void;
@@ -52,11 +43,6 @@ function ConversationHeaderComponent({
   isNewConversation,
   title,
   gitStatus,
-  notifications,
-  onMarkAllRead,
-  onClearNotifications,
-  onOpenNotificationSession,
-  onRunNotificationAction,
   panelExpanded,
   onOpenPanel,
   onOpenGit,
@@ -117,13 +103,6 @@ function ConversationHeaderComponent({
             )}
             {update.state === 'downloading' ? <LoadingIndicator /> : update.state === 'downloaded' ? <ArrowUp /> : <Download />}
           </button>}
-          <NotificationCenter
-            items={notifications}
-            onMarkAllRead={onMarkAllRead}
-            onClear={onClearNotifications}
-            onOpenSession={onOpenNotificationSession}
-            onRunAction={onRunNotificationAction}
-          />
           <button
             type="button"
             className="icon-button panel-open-entry"

@@ -49,7 +49,7 @@ function crc32(buffer) {
 }
 
 const profile = mkdtempSync(path.join(os.tmpdir(), 'pi-studio-accept-'));
-const media = path.join(profile, 'background-media');
+const media = path.join(profile, 'data', 'background-media');
 mkdirSync(media, { recursive: true });
 writeFileSync(path.join(media, 'red.png'), solidPng([255, 0, 0]));
 writeFileSync(path.join(media, 'blue.png'), solidPng([0, 64, 255]));

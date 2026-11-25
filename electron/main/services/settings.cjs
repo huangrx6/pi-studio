@@ -6,7 +6,7 @@
  */
 
 const path = require('node:path');
-const { studioDataDirectory } = require('../core/studio-paths.cjs');
+const { attachmentsDirectory } = require('../core/studio-paths.cjs');
 const {
   databasePath,
   getStudioDatabase,
@@ -14,6 +14,7 @@ const {
 const {
   getExtensionRegistryUrl,
   getHarnessSettings,
+  getPermissionProfilesSnapshot,
 } = require('../core/app-settings.cjs');
 const { DEFAULT_CWD } = require('../core/state.cjs');
 const { modelInfo } = require('./models.cjs');
@@ -32,7 +33,9 @@ const {
 } = require('./studio-extensions.cjs');
 const {
   agentToolCatalog,
+  getToolProfilesSnapshot,
   readAgentToolSelection,
+  temporaryCapabilitiesSnapshot,
 } = require('../runtime/tool-selection.cjs');
 const { mcpSnapshot } = require('../integrations/mcp/index.cjs');
 const { listInstalledPlugins } = require('./plugin-distribution.cjs');
@@ -137,6 +140,9 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       .map((model) => `${model.providerId}/${model.modelId}`),
     agentTools: readAgentToolSelection(db),
     agentToolCatalog: agentTools,
+    toolProfiles: getToolProfilesSnapshot(cwd, db),
+    permissionProfiles: getPermissionProfilesSnapshot(cwd),
+    temporaryCapabilities: await temporaryCapabilitiesSnapshot(),
     harness: getHarnessSettings(cwd),
     storagePath,
     runtimeVersions: {
@@ -149,7 +155,7 @@ async function settingsSnapshot(cwd = DEFAULT_CWD) {
       arch: process.arch,
     },
     databasePath: storagePath,
-    attachmentsPath: path.join(studioDataDirectory(), 'attachments', 'projects'),
+    attachmentsPath: path.join(attachmentsDirectory(), 'projects'),
     backupsPath: path.join(path.dirname(storagePath), 'backups', 'sqlite'),
     skillsPath: userSkillsDirectory(),
     agentsSkillsPath: sharedUserSkillsDirectory(),

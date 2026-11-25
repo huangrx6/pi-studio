@@ -1,23 +1,59 @@
 .main.is-new-conversation { overflow-y: auto; }
-.main.is-new-conversation .composer-dock { padding-block: var(--space-8); }
+/* 光学上移重心（约 43% 视口处），比绝对居中更舒展耐看。 */
+.main.is-new-conversation .composer-dock {
+  padding-top: var(--space-8);
+  padding-bottom: clamp(44px, 10vh, 96px);
+}
 
-/* 欢迎区只做一次呼吸：一条短线，一句衬线标题。 */
 .new-conversation-welcome {
   width: min(var(--content), 100%);
   display: grid;
   justify-items: center;
-  gap: 10px;
-  padding: 0 var(--space-4) var(--space-6);
+  padding: clamp(20px, 4vh, 48px) var(--space-4) var(--space-6);
   margin: 0 auto;
   text-align: center;
 }
 
-.new-conversation-rule { width: 28px; height: 2px; border-radius: var(--radius-tag); background: var(--accent); opacity: .85; }
-
-/* display-font 是这套界面的衬线体，只留给这一句欢迎语。 */
 .new-conversation-welcome h1 {
   margin: 0;
   color: var(--text-1);
-  font: var(--weight-regular) var(--text-display)/1.32 var(--display-font);
-  letter-spacing: .01em;
+  font: var(--weight-semibold) clamp(22px, 2.4vw, var(--text-display))/1.3 var(--font);
+  letter-spacing: -.02em;
+  text-wrap: balance;
+  animation: welcome-title-in 260ms cubic-bezier(.2, 0, 0, 1) both;
+}
+
+/* 负外边距让笔触跟随最后一行文字，同时保持问候语居中。 */
+.new-conversation-welcome h1::after {
+  content: "";
+  display: inline-block;
+  inline-size: 2.8em;
+  block-size: .24em;
+  margin-inline-start: -2.8em;
+  vertical-align: -.36em;
+  border-block-start: .11em solid color-mix(in srgb, var(--theme-accent) 82%, var(--text-1));
+  border-radius: 50%;
+  transform: rotate(-3deg);
+  pointer-events: none;
+}
+
+.new-conversation-welcome .loading-state {
+  margin-top: var(--space-3);
+}
+
+@keyframes welcome-title-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .new-conversation-welcome h1 {
+    animation: none;
+  }
 }

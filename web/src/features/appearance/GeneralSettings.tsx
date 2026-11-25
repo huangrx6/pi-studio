@@ -248,7 +248,7 @@ export function GeneralSettings({
 
       <PreferenceGroup title="对话" summary={`${preferences.fontSize} px · ${stepDisplay}步骤`} defaultOpen>
         <SettingRow label="对话字号">
-          <Stepper label="字号" value={preferences.fontSize} min={12} max={18} unit=" px" onChange={(value) => onChange('fontSize', value)} />
+          <Stepper label="字号" value={preferences.fontSize} min={12} max={20} unit=" px" onChange={(value) => onChange('fontSize', value)} />
         </SettingRow>
         <SettingRow label="工作步骤" description="选择对话中显示多少过程信息。">
           <SegmentedOptions

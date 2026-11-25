@@ -2,28 +2,37 @@
   "format": 1,
   "id": "studio.task-board",
   "name": "任务看板",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": "Pi Studio",
   "publisher": "Pi Studio",
   "license": "MIT",
   "engines": { "piStudio": ">=0.0.14" },
-  "description": "在任意会话中管理同一个全局任务看板，让 AI 按状态或日期查询。",
+  "description": "完全独立的全局任务看板插件：支持任务类型、多项目关联、进展记录与归档，并向任意会话或临时会话提供统计与日报周报工具。",
   "permissions": ["agent.tools", "ui.panels", "ui.data", "ui.commands"],
   "runtime": { "durableEntry": "extension.mjs" },
   "contributes": {
     "tools": [
-      { "name": "task_board_list", "description": "按状态和本地日期查询全局任务。" },
-      { "name": "task_board_get", "description": "按任务 ID 查看详情以及计划和实际时间。" }
+      { "name": "task_board_list", "description": "按状态、类型、关联项目、归档范围和本地日期查询全局任务。" },
+      { "name": "task_board_get", "description": "按任务 ID 查看详情、关联项目、起止时间与完整进展记录。" },
+      { "name": "task_board_summary", "description": "按任意时间范围（可选项目与类型）汇总完成成果、跨天推进、阻塞项与下阶段计划，用于生成日报/周报。" },
+      { "name": "task_board_create", "description": "创建一条或多条全局任务，可设置类型、状态、优先级、关联项目、排期与初始进展。" },
+      { "name": "task_board_update", "description": "更新指定任务的标题、详情、状态、类型、优先级、关联项目、起止时间，或附带记录进展。" },
+      { "name": "task_board_add_note", "description": "为指定任务追加一条带时间戳的进展记录。" },
+      { "name": "task_board_archive", "description": "归档已完成任务、批量归档已完成列、恢复到看板或重新打开已归档任务。" }
     ],
     "panels": [
       {
         "id": "board",
         "title": "任务看板",
         "slot": "panel.side",
-        "description": "跨工作区与会话管理同一份任务。",
+        "description": "跨工作区与会话管理同一份全局任务。",
         "icon": "layers",
         "color": "info",
-        "taskBoard": { "sourceId": "board-data" }
+        "view": {
+          "entry": "ui/index.html",
+          "sourceId": "board-data",
+          "scope": "global"
+        }
       }
     ],
     "commands": [

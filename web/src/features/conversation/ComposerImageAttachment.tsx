@@ -1,5 +1,7 @@
 import { useState } from 'react';
-import { Maximize2, X } from 'lucide-react';
+import './styles/attachment-strip.css';
+import './styles/composer-attachments.css';
+import { X } from 'lucide-react';
 import {
   ConversationImagePreview,
   type ConversationImage,
@@ -11,7 +13,7 @@ import {
 } from '../../shared/ImageContextMenu';
 
 /**
- * 输入框中的待发送图片。
+ * 输入框上方的待发送图片。
  *
  * 预览与移除使用并列按钮，避免点击右上角删除时误触大图；同一输入框中的
  * 图片共享导航序列，因此任意一张打开后都可以用方向键或预览按钮切换。
@@ -42,7 +44,6 @@ export function ComposerImageAttachment({
         onContextMenu={(event) => setContextMenu(imageContextMenuState(event, image))}
       >
         <img src={image.src} alt={image.alt || ''} draggable={false} />
-        <span className="composer-image-preview-cue" aria-hidden="true"><Maximize2 /></span>
       </button>
       <button
         type="button"

@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { createZipArchive, sha256 } = require('../../electron/main/core/extension-archive.cjs');
+const { createZipArchive, inspectZipEntries, sha256 } = require('../../electron/main/core/extension-archive.cjs');
 const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
 
 installElectronSafeStorage(test);
@@ -76,6 +76,61 @@ test('GitHub sources discover nested and root skills and install the catalog com
     require('../../electron/main/core/studio-db.cjs').getStudioDatabase().removeSkillInstallation(installed.baseDir);
     await assert.rejects(addSkillSource({ type: 'github', location: source.location.toUpperCase() }), /已经添加/);
   }
+});
+
+test('GitHub sources ignore unrelated repository symlinks while rejecting symlinks inside a skill', async (t) => {
+  const original = global.fetch;
+  const added = [];
+  t.after(() => { global.fetch = original; added.forEach(removeSkillSource); });
+  const commit = 'c'.repeat(40);
+  const skill = (name) => Buffer.from(`---\nname: ${name}\ndescription: Symlink fixture\n---\nUse this skill.\n`);
+  const archive = Buffer.from(createZipArchive([
+    { path: 'repo/CLAUDE.md', content: Buffer.from('AGENTS.md') },
+    { path: 'repo/skills/clean-skill/SKILL.md', content: skill('clean-skill') },
+    { path: 'repo/skills/symlink-skill/SKILL.md', content: skill('symlink-skill') },
+    { path: 'repo/skills/symlink-skill/link.md', content: Buffer.from('../clean-skill/SKILL.md') },
+  ]));
+  const markSymlinkInCentralDirectory = (zip, targetPath) => {
+    const marker = Buffer.from(targetPath, 'utf8');
+    let offset = zip.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+    while (offset >= 0) {
+      const nameLength = zip.readUInt16LE(offset + 28);
+      const name = zip.subarray(offset + 46, offset + 46 + nameLength);
+      if (name.equals(marker)) {
+        zip.writeUInt32LE((0o120777 << 16) >>> 0, offset + 38);
+        return;
+      }
+      offset = zip.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]), offset + 46);
+    }
+    throw new Error(`Missing central directory entry: ${targetPath}`);
+  };
+  markSymlinkInCentralDirectory(archive, 'repo/CLAUDE.md');
+  markSymlinkInCentralDirectory(archive, 'repo/skills/symlink-skill/link.md');
+  assert.throws(() => inspectZipEntries(archive), /符号链接/);
+
+  const onlyLinkedManifest = createZipArchive([
+    { path: 'repo/README.md', content: Buffer.from('Skill collection') },
+    { path: 'repo/skills/shortcut/SKILL.md', content: Buffer.from('../../README.md') },
+  ]);
+  markSymlinkInCentralDirectory(onlyLinkedManifest, 'repo/skills/shortcut/SKILL.md');
+  let currentArchive = onlyLinkedManifest;
+  global.fetch = async (url) => (
+    url.endsWith('/commits/HEAD') ? Response.json({ sha: commit }) : new Response(currentArchive)
+  );
+  const source = saveSkillSource({ type: 'github', location: 'https://github.com/example/symlink-repo' });
+  added.push(source.id);
+  const failed = await refreshSkillCatalog();
+  assert.match(failed.sources.find(row => row.id === source.id).lastError, /符号链接：skills\/shortcut\/SKILL\.md/);
+  currentArchive = archive;
+  const snapshot = await refreshSkillCatalog();
+  const catalog = snapshot.catalogs.find((row) => row.source.id === source.id);
+  assert.equal(catalog.source.itemCount, 1);
+  assert.equal(catalog.source.lastError, '');
+  assert.deepEqual(catalog.items.map((item) => item.name), ['clean-skill']);
+  assert.ok(catalog.diagnostics.some((diag) => diag.path === 'skills/symlink-skill/link.md' && /符号链接/.test(diag.message)));
+  const preview = await prepareSkillInstall({ sourceId: source.id, listingId: 'github:skills/clean-skill', scope: 'user' });
+  assert.equal(preview.name, 'clean-skill');
+  require('../../electron/main/capabilities/skills/index.cjs').disposePreparedSkill(preview.token);
 });
 
 test('failed source additions do not persist and can be retried', async (t) => {

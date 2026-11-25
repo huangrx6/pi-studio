@@ -1,6 +1,6 @@
 import type { ComposerCapability } from '../../types/chat-types';
 
-type CapabilityType = ComposerCapability['type'];
+type CapabilityType = Exclude<ComposerCapability['type'], 'mcp-server'>;
 
 export type ComposerMenuState = {
   kind: 'slash' | 'file' | 'agent' | 'capability';
@@ -8,6 +8,7 @@ export type ComposerMenuState = {
   start: number;
   end: number;
   capabilityType?: CapabilityType;
+  mcpServer?: { id: string; name: string; parentQuery: string };
 };
 
 export type MentionCategory = 'file' | 'agent' | 'capability';
@@ -34,6 +35,8 @@ export function composerMenuAt(value: string, caret: number, previous?: Composer
   if (sigil === '$' && /^(?:\d|(?:HOME|PATH|PWD|SHELL|USER|LANG|[A-Z]+_[A-Z\d_]+)$)/u.test(query)) return null;
   const start = caret - query.length - 1;
   const kind = sigil === '@' ? 'file' : sigil === '#' ? 'agent' : 'capability';
-  const filter = kind === 'capability' && previous?.kind === kind && previous.start === start ? previous.capabilityType : undefined;
-  return { kind, start, end: caret, query, ...(filter && { capabilityType: filter }) };
+  if (kind === 'capability' && previous?.kind === kind && previous.start === start) {
+    return { ...previous, end: caret, query };
+  }
+  return { kind, start, end: caret, query };
 }

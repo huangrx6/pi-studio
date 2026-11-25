@@ -1,6 +1,6 @@
 {
   "name": "pi-studio",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "private": true,
   "type": "module",
   "description": "Pi Studio — a native desktop workspace built on Pi Durable.",
@@ -27,6 +27,7 @@
     "dev": "concurrently -k \"pnpm run web\" \"wait-on tcp:5180 && cross-env PI_STUDIO_DEV=1 node scripts/dev/launch.mjs\"",
     "web": "vite --host 127.0.0.1 --port 5180",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build:notes-ui": "tsc -p scripts/build/notes-plugin-ui/tsconfig.json --noEmit && node scripts/build/build-notes-plugin-ui.mjs",
     "extension": "node sdk/cli/pi-studio-extension.mjs",
     "skill": "node sdk/cli/pi-studio-skill.mjs",
     "extension:official": "node sdk/cli/pi-studio-extension.mjs seal-official extensions",
@@ -116,8 +117,11 @@
     "cross-env": "^7.0.3",
     "electron": "45.0.0",
     "electron-builder": "^25.1.8",
+    "katex": "0.19.1",
     "material-icon-theme": "5.40.0",
+    "mermaid": "11.17.2",
     "playwright-core": "1.61.1",
+    "remark-math": "6.0.0",
     "typescript": "^5.7.2",
     "vite": "^6.0.0",
     "wait-on": "^8.0.1"

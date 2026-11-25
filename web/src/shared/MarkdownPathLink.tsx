@@ -16,10 +16,18 @@ import { MarkdownActions } from './markdown-actions';
 type FileApp = { name: string; path: string; icon?: string };
 
 export function MarkdownPathLink({ path, children }: { path: string; children: ReactNode }) {
-  const { cwd, openFile, openLocalFile } = useContext(MarkdownActions);
+  const { cwd, resolvePath, openFile, openLocalFile } = useContext(MarkdownActions);
   const [menu, setMenu] = useState<{ x: number; y: number; apps: FileApp[] } | null>(null);
-  const target = resolvePathToken(path, cwd);
+  const resolvedTurnTarget = resolvePath?.(path);
+  const target = resolvedTurnTarget || resolvePathToken(path, cwd);
   const source = isAbsoluteFileToken(target) ? 'external' : 'workspace';
+  const openPreview = () => {
+    if (resolvedTurnTarget && openFile) {
+      openFile(resolvedTurnTarget);
+      return;
+    }
+    (openLocalFile || openFile)?.(target);
+  };
 
   async function openMenu(x: number, y: number) {
     setMenu({ x, y, apps: [] });
@@ -32,7 +40,7 @@ export function MarkdownPathLink({ path, children }: { path: string; children: R
   }
 
   const items: MenuAction[] = menu ? [
-    { label: '打开预览', run: () => (openLocalFile || openFile)?.(target) },
+    { label: '打开预览', run: openPreview },
     { label: revealFileLabel(), run: () => { void window.piApi.revealFile({ cwd, path: target, source }); } },
     ...menu.apps.map((app) => ({
       label: `用 ${app.name} 打开`,
@@ -53,7 +61,7 @@ export function MarkdownPathLink({ path, children }: { path: string; children: R
       title={target}
       onClick={(event) => {
         event.preventDefault();
-        (openLocalFile || openFile)?.(target);
+        openPreview();
       }}
       onContextMenu={(event) => {
         event.preventDefault();

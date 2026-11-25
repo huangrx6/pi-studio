@@ -219,9 +219,11 @@ function registerExtensionDataViewIpc(options = {}) {
       throw new ExtensionDataViewError('DATA_SOURCE_UNAVAILABLE', '实时数据源当前不可用');
     }
     const panels = row.manifest?.contributes?.panels || [];
-    const taskBoard = panels.some(panel => panel.taskBoard?.sourceId === sourceId);
+    const viewPanel = panels.find(panel => panel.view?.sourceId === sourceId);
+    const view = Boolean(viewPanel);
+    const viewScope = viewPanel?.view?.scope || 'session';
     let context;
-    if (sessionId && !taskBoard) {
+    if (sessionId && !(view && viewScope === 'global')) {
       try {
         const conversation = await readConversationSnapshot(sessionId);
         if (conversation?.model) {
@@ -243,8 +245,7 @@ function registerExtensionDataViewIpc(options = {}) {
     if (!context && requestedModelRef) {
       context = { model: { modelRef: requestedModelRef } };
     }
-    const canvas = panels.some(panel => panel.canvas?.sourceId === sourceId);
-    if (canvas && context?.durableSessionId && !conversationAvailable(context.durableSessionId)) {
+    if (view && viewScope === 'session' && context?.durableSessionId && !conversationAvailable(context.durableSessionId)) {
       throw new ExtensionDataViewError('DATA_VIEW_CANCELLED', '会话不存在或正在删除');
     }
 
@@ -255,9 +256,9 @@ function registerExtensionDataViewIpc(options = {}) {
       cwd,
       sessionId,
       context,
-      canvas,
-      taskBoard,
-      taskBoardQuery: payload.taskBoardQuery,
+      view,
+      viewScope,
+      viewParams: payload.viewParams,
       owner: {
         manifestId: row.manifest.id,
         scope: row.scope,
@@ -272,11 +273,8 @@ function registerExtensionDataViewIpc(options = {}) {
     }
     return dataViewService().close(subscriptionId, event.sender);
   });
-  ipc.handle('pi:extension-canvas-write', (event, payload = {}) => (
-    dataViewService().writeCanvas(payload?.subscriptionId, event.sender, payload)
-  ));
-  ipc.handle('pi:extension-task-board-write', (event, payload = {}) => (
-    dataViewService().writeTaskBoard(payload?.subscriptionId, event.sender, payload?.mutation)
+  ipc.handle('pi:extension-view-invoke', (event, payload = {}) => (
+    dataViewService().invokeView(payload?.subscriptionId, event.sender, payload?.method, payload?.params)
   ));
 }
 

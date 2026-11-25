@@ -10,7 +10,7 @@ try {
   const desktop = await launchTestDesktop(root, path.join(root, 'profile'), 1080, 720);
   app = desktop.app;
   const { page } = desktop;
-  const launch = page.locator('#launch-screen');
+  const launch = page.getByRole('status', { name: '正在启动', exact: true });
   const readyComposer = page.locator('#root:not([inert]) .new-conversation-welcome');
   await readyComposer.waitFor();
   await mkdir('.qa/launch', { recursive: true });
@@ -54,6 +54,7 @@ try {
   const layers = page.locator('.background-layer img, .window-wallpaper img');
   await page.waitForFunction(() => document.querySelector('.background-layer img')?.naturalWidth === 2048);
   assert.deepEqual(await layers.evaluateAll(images => images.map(img => [img.complete, getComputedStyle(img).visibility])), [[false, 'hidden'], [false, 'hidden']]);
+  assert.equal(await launch.isVisible(), true);
   assert.equal((await launch.innerText()).trim(), '');
   assert.equal(await page.locator('#root').evaluate(root => root.inert), true);
   await launch.screenshot({ path: '.qa/launch/wallpaper-dark.png' });

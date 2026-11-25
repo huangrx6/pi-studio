@@ -28,10 +28,6 @@ import type { useActionConfirmation } from '../shared/ConfirmDialog';
 import type { createSettingsDraftGuard } from '../shared/settings-draft-guard';
 import { useSettingsToast } from '../shared/SettingsToast';
 import { useAppSettingsController } from './useAppSettings';
-import {
-  loadStoredPluginWorkspaceSection,
-  saveStoredPluginWorkspaceSection,
-} from '../shared/stored-ui-state';
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
 
@@ -166,25 +162,8 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<SettingsTab>('general');
   const [settingsAnchor, setSettingsAnchor] = useState<SettingsDestination['anchor']>();
-  const [pluginSection, setPluginSectionState] = useState<PluginWorkspaceSection>(() => {
-    try {
-      return loadStoredPluginWorkspaceSection();
-    } catch {
-      return 'plugins';
-    }
-  });
-  const setPluginSection = (section: PluginWorkspaceSection | ((current: PluginWorkspaceSection) => PluginWorkspaceSection)) => {
-    setPluginSectionState((current) => {
-      const next = typeof section === 'function' ? section(current) : section;
-      if (next === current) return current;
-      try {
-        saveStoredPluginWorkspaceSection(next);
-      } catch {
-        // Section storage is best-effort; the in-memory section still updates.
-      }
-      return next;
-    });
-  };
+  const [pluginSection, setPluginSection] = useState<PluginWorkspaceSection>('plugins');
+  const [agentSection, setAgentSection] = useState<import('./app-shell-config').AgentConfigSection>('main');
   const [settingsData, setSettingsData] = useState<SettingsSnapshot | null>(null);
   const [extensionInstallerOpen, setExtensionInstallerOpen] = useState(false);
   const [extensionInstallPreview, setExtensionInstallPreview] = useState<ExtensionInstallPreview | null>(null);
@@ -336,6 +315,8 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     setSettingsAnchor,
     pluginSection,
     setPluginSection,
+    agentSection,
+    setAgentSection,
     settingsData,
     setSettingsData,
     setSettingsError,
@@ -380,6 +361,7 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     setMcpTestResult,
     setMcpTesting,
     setModelQuery,
+    setModelView,
     expandedProvider,
     setExpandedProvider,
     providerModels,
@@ -419,6 +401,7 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     tokenUnits,
     setTokenUnits,
     setMcpDetailState,
+    closeMcpDetail,
     mcpDetailRef,
     mcpDetailGenerationRef,
     skillDetailRef,
@@ -548,6 +531,8 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     setSettingsAnchor,
     pluginSection,
     setPluginSection,
+    agentSection,
+    setAgentSection,
     settingsData,
     setSettingsData,
     settingsBusy,

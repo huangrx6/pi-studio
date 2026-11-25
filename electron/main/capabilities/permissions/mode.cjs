@@ -21,9 +21,16 @@ const {
 } = require('../../core/permission-policy.cjs');
 const {
   canonicalPermissionSessionId,
+  deletePermissionProfile: deleteStoredPermissionProfile,
+  getPermissionProfileById,
   getPermissionPolicyStore,
+  getPermissionProfilesSnapshot,
+  getTemporaryPermissionPolicy,
   resetPermissionPolicy: resetStoredPermissionPolicy,
+  resetPermissionProfile: resetStoredPermissionProfile,
   savePermissionPolicyStore,
+  savePermissionProfile: saveStoredPermissionProfile,
+  selectPermissionProfile: selectStoredPermissionProfile,
   setPermissionMode,
   setPermissionPolicy: setStoredPermissionPolicy,
 } = require('../../core/app-settings.cjs');
@@ -276,7 +283,38 @@ async function evaluatePolicy(input, context, layers, extra = {}) {
 async function evaluateToolCall(input = {}) {
   const context = resolveContext(input);
   const { layers } = policyLayers(context);
+  if (input.profileId) {
+    const profile = getPermissionProfileById(input.profileId);
+    if (profile) layers.push({ scope: 'session', policy: profile.policy });
+  }
   return evaluatePolicy(input, context, layers);
+}
+
+async function evaluateTemporaryToolCall(call, options = {}) {
+  const policy = getTemporaryPermissionPolicy();
+  const context = {
+    cwd: options.cwd || require('node:os').tmpdir(),
+    sessionId: '',
+    scope: 'user',
+    homeDir: options.homeDir || require('node:os').homedir(),
+  };
+  const result = await evaluatePolicy({ call }, context, [{ scope: 'user', policy }]);
+  return {
+    ...result,
+    // Temporary chats never persist session-scoped rules to SQLite.
+    rememberScopes: ['once'],
+  };
+}
+
+async function previewProfileToolCall(input = {}) {
+  const policy = normalizePolicy(input.policy, { strict: true });
+  const context = resolveContext(input);
+  return evaluatePolicy(
+    input,
+    context,
+    [{ scope: 'user', policy }],
+    { previewScope: 'user' },
+  );
 }
 
 /**
@@ -347,14 +385,21 @@ module.exports = {
   DEFAULT_MODE,
   MODE_CATALOG,
   MODES,
+  deletePermissionProfile: deleteStoredPermissionProfile,
+  evaluateTemporaryToolCall,
   evaluateToolCall,
+  getPermissionProfilesSnapshot,
   modeAvailable,
   policyState,
+  previewProfileToolCall,
   previewToolCall,
   readMode,
   rememberApproval,
+  resetPermissionProfile: resetStoredPermissionProfile,
   resetPolicy,
   resolveContext,
+  savePermissionProfile: saveStoredPermissionProfile,
+  selectPermissionProfile: selectStoredPermissionProfile,
   writeMode,
   writePolicy,
 };

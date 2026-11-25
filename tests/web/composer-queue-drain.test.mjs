@@ -89,7 +89,6 @@ function harness({ dispatch, initialItems = [1, 2, 3], active = true } = {}) {
   let queueAdmissionPendingBySession = {};
   const delivered = [];
   const modes = [];
-  const notifications = [];
   const feedback = [];
   const context = {
     queuedPrompts: items,
@@ -120,9 +119,6 @@ function harness({ dispatch, initialItems = [1, 2, 3], active = true } = {}) {
     updateSessionQueuedPrompts(id, update) {
       queuedPromptsRef.current[id] = update(queuedPromptsRef.current[id] ?? []);
     },
-    pushNotification(...args) {
-      notifications.push(args);
-    },
     errorText(error) {
       return error instanceof Error ? error.message : String(error);
     },
@@ -144,7 +140,6 @@ function harness({ dispatch, initialItems = [1, 2, 3], active = true } = {}) {
     ...context,
     delivered,
     modes,
-    notifications,
     feedback,
     sendNow: context.invokeSendNow,
     sendAll: context.invokeSendAll,

@@ -11,7 +11,6 @@ export const STORED_UI_KEYS = {
   workspaceOrder: 'pi-studio:workspace-order',
   sessionOrder: 'pi-studio:session-order',
   activeSession: 'pi-studio:active-session',
-  pluginWorkspaceSection: 'pi-studio:plugin-workspace-section',
 } as const;
 
 export type StoredSessionOrder = Record<string, string[]>;
@@ -20,15 +19,6 @@ export type StoredActiveSession = {
   id: string;
   cwd: string;
 } | null;
-
-export type StoredPluginWorkspaceSection = 'plugins' | 'mcp' | 'skills' | 'extensions';
-
-const PLUGIN_WORKSPACE_SECTIONS = new Set<StoredPluginWorkspaceSection>([
-  'plugins',
-  'mcp',
-  'skills',
-  'extensions',
-]);
 
 function browserStorage(): KeyValueStorage | null {
   try {
@@ -180,34 +170,4 @@ export function loadStoredActiveSession(
     () => null,
     normalizeStoredActiveSession,
   );
-}
-
-export function normalizePluginWorkspaceSection(value: unknown): StoredPluginWorkspaceSection {
-  return PLUGIN_WORKSPACE_SECTIONS.has(value as StoredPluginWorkspaceSection)
-    ? value as StoredPluginWorkspaceSection
-    : 'plugins';
-}
-
-export function loadStoredPluginWorkspaceSection(
-  storage: KeyValueStorage | null = browserStorage(),
-): StoredPluginWorkspaceSection {
-  return readNormalized(
-    storage,
-    STORED_UI_KEYS.pluginWorkspaceSection,
-    () => 'plugins' as StoredPluginWorkspaceSection,
-    normalizePluginWorkspaceSection,
-  );
-}
-
-export function saveStoredPluginWorkspaceSection(
-  section: StoredPluginWorkspaceSection,
-  storage: KeyValueStorage | null = browserStorage(),
-): void {
-  if (!storage) return;
-  const normalized = normalizePluginWorkspaceSection(section);
-  try {
-    storage.setItem(STORED_UI_KEYS.pluginWorkspaceSection, JSON.stringify(normalized));
-  } catch {
-    // The in-memory section remains usable when storage is unavailable.
-  }
 }

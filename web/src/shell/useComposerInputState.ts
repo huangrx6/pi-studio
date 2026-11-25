@@ -65,9 +65,15 @@ export function useComposerInputState({
   } = useComposerSuggestions(composerMenu, workspace, sessionId);
   const preparing = preparingDraftKeys.includes(composerDraftKeyRef.current);
 
+  const previousMcpServer = useRef<string | undefined>(undefined);
   useEffect(() => {
-    setComposerMenuIndex(0);
-  }, [composerCommandOptions, composerMentionOptions, composerMenu?.kind, composerMenu?.query]);
+    const returningFrom = previousMcpServer.current;
+    previousMcpServer.current = composerMenu?.mcpServer?.id;
+    const index = returningFrom && composerMenu?.capabilityType === 'mcp' && !composerMenu.mcpServer
+      ? composerMentionOptions.findIndex(item => item.type === 'mcp-server' && item.id === returningFrom)
+      : 0;
+    setComposerMenuIndex(Math.max(index, 0));
+  }, [composerCommandOptions, composerMentionOptions, composerMenu?.kind, composerMenu?.query, composerMenu?.capabilityType, composerMenu?.mcpServer]);
 
   useEffect(() => {
     if (!composerMenu) return;

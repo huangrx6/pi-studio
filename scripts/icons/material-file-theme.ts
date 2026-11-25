@@ -27,6 +27,7 @@ export function materialFileTheme(): Plugin {
       if (id !== '\0' + moduleId) return;
       const assets = new Set([theme.file, 'github-actions-workflow']);
       const lightIcons: Record<string, string> = {};
+      const iconColors: Record<string, string> = {};
       const source: string[] = [];
       for (const group of ['fileNames', 'fileExtensions'] as const) {
         const entries = Object.entries(theme[group]).map(([key, icon]) => {
@@ -43,12 +44,17 @@ export function materialFileTheme(): Plugin {
       source.push(`export const lightIcons = ${JSON.stringify(lightIcons)};`);
       const urls = [...assets].map((icon, index) => {
         const file = basename(theme.iconDefinitions[icon].iconPath);
+        // Attachment outlines share the theme artwork's first painted color.
+        const svg = readFileSync(join(iconDirectory, file), 'utf8');
+        const color = /\bfill="(#[\da-f]{3}(?:[\da-f]{3})?)"/i.exec(svg)?.[1];
+        if (color) iconColors[icon] = color;
         // The dev server can serve the installed SVG directly, without a JS request per icon.
         if (development) return `${JSON.stringify(icon)}:${JSON.stringify('/@fs/' + normalizePath(join(iconDirectory, file)))}`;
         source.push(`import url${index} from "material-icon-theme/icons/${file}?url&no-inline";`);
         return `${JSON.stringify(icon)}:url${index}`;
       });
       source.push(`export const urls = {${urls.join(',')}};`);
+      source.push(`export const iconColors = ${JSON.stringify(iconColors)};`);
       return source.join('\n');
     },
     generateBundle() {

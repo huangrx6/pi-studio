@@ -1,12 +1,12 @@
 # Pi Studio Extension UI 规范
 
-Pi Studio 的扩展 UI 是 **JSON 数据**，不是网页。扩展声明内容、语义和受控动作，Studio 负责布局、颜色、字号、圆角、间距、动画、可访问性和响应式行为。
+Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、颜色、字号、圆角、间距、动画、可访问性和响应式行为）；当插件需要独立交互界面（如实时画布或任务看板）时，可在 `panel.side` 声明 `view` 并在受控沙箱 `<iframe>` 中加载插件自身的 `ui/` 静态资源，不与主渲染进程耦合。
 
 这套约束让扩展在不同主题、背景图片、侧栏宽度和系统辅助功能下保持一致，也避免第三方内容绕过全局设计系统。
 
 ## 1. 基本原则
 
-扩展只能提交以下数据：
+普通声明式扩展只能提交以下数据：
 
 - 文本和结构化数据。
 - 语义 block，例如指标、表格、进度、时间线和 tabs。
@@ -270,19 +270,29 @@ Pi Studio 的扩展 UI 是 **JSON 数据**，不是网页。扩展声明内容�
 
 ## 5. 实时数据
 
-### Excalidraw 画布
+### 受控沙箱视图（`panel.view`）
 
-扩展可在 `panel.side` 声明 `"canvas": { "sourceId": "scene" }`，其中 `scene` 是由同一扩展声明的数据源 ID。画布需要 `ui.panels` 与 `ui.data` 权限，使用 Studio 提供的本地 Excalidraw 编辑器。该面板的 `content` 留空。清单声明 `engines.piStudio: ">=0.0.14"`，激活时检查 `context.canvasVersion === 1`。
+需要独立交互界面的插件（例如官方的 `studio.excalidraw` 与 `studio.task-board`），可在 `panel.side` 声明 `view`，把前端界面完全打包在插件自身的 `ui/` 目录内，与 Pi Studio 宿主彻底解耦：
 
-数据源通过 `read` 和 `subscribe` 返回 `{ canvas: { scene, revision, drawing, title } }`。场景包含 Excalidraw 的 `elements`、嵌入图片 `files` 与可选的画布背景色。实现 `writeCanvas(context, { revision, scene })` 可保存用户编辑。保存使用当前场景版本检查并返回新快照。画布绘制和保存按 `context.durableSessionId` 归属到对应聊天。绘图工具可调用激活上下文的 `revealPanel(panelId, api.conversationId)` 请求打开当前聊天中的自有面板。
+```json
+{
+  "id": "board",
+  "title": "我的面板",
+  "slot": "panel.side",
+  "view": {
+    "entry": "ui/index.html",
+    "sourceId": "board-data",
+    "scope": "global"
+  }
+}
+```
 
-### 全局任务看板
-
-用户级扩展可在 `panel.side` 声明 `"taskBoard": { "sourceId": "board-data" }`。数据源由同一扩展声明，面板需要 `ui.panels` 与 `ui.data` 权限，`content` 留空。Studio 负责渲染和拖拽，扩展通过 `context.taskBoard.version` 检查协议。
-
-`read` 和 `subscribe` 返回 `{ taskBoard: { tasks, total, nextOffset } }`。数据源可使用 `context.taskBoardQuery` 读取日期范围与分页参数。`writeTaskBoard(context, mutation)` 接收创建或更新，更新带任务的 `revision` 以检查冲突，保存后返回任务。看板订阅不带工作区或会话 ID，任务由插件管理。[扩展 SDK 声明](../../sdk/extensions/types/pi-studio-extension-authoring.d.ts)
-
-当激活上下文提供 `canvasPlaybackVersion: 1` 时，可发布 `drawing: true` 的快照，附加 `playback: { startAt, durationMs, firstElement }`。快照的 `scene` 是目标图形。Studio 会保留 `firstElement` 之前的元素，并按顺序播放其余元素。开始时间为 Unix 毫秒，播放时长最多 30 秒。播放完成或取消后，数据源需要发布实际保存的场景和版本。扩展可在保存生成结果前用激活上下文的 `normalizeCanvasScene(scene)` 校验 Studio 支持的画布数据。
+- `entry`：必须指向扩展包 `ui/` 目录内的相对 HTML 路径（如 `ui/index.html`），通过只读协议 `pi-ext://view/<scope>/<manifestId>/...` 加载，并附带严格 CSP 与 `iframe sandbox="allow-scripts allow-downloads"`。
+- `sourceId`：同一扩展声明的数据源 ID，需同时具备 `ui.panels` 与 `ui.data` 权限，且该面板 `content` 留空。
+- `scope`：`"session"`（默认，随工作区与会话切换）或 `"global"`（跨工作区与会话共享，需用户级安装）。
+- `fullscreen`：可选布尔值。设为 `true` 时打开此面板会展开整个工作台，用户可以通过工作台工具栏退出全屏。
+- 数据源可返回 `{ viewData: <JSON-safe payload> }`（并在 `context.viewParams` 中接收前端通过 `view:query` 传来的筛选条件），并实现 `invoke(context, method, params)` 处理前端 `view:invoke` RPC 请求。
+- 沙箱视图与宿主通过 `pi-studio:ext-view:v1` `postMessage` 协议通信，支持读取宿主主题与设计变量（`host:context`）、订阅快照（`host:snapshot`）、触发提示（`view:notify`）、填入当前会话（`view:sendPrompt`）以及打开临时会话（`view:openTemporaryChat`）。完整类型定义见 [扩展 SDK 声明](../../sdk/extensions/types/pi-studio-extension-authoring.d.ts)。
 
 静态面板适合说明和检查清单；指标、任务状态等短期数据使用 `dataView`。
 

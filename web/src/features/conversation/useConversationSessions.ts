@@ -438,17 +438,6 @@ export function useConversationSessions({
     } catch { return false; }
   }
 
-  async function openNotificationSession(id: string): Promise<void> {
-    const target = workspaces.flatMap(item => item.sessions).find(item => item.id === id);
-    if (!target) throw new Error('这个会话不在当前列表中，可能已被删除或移除。');
-    if (target.archived) throw new Error('这个会话已归档，可在设置的归档会话中恢复。');
-    const opened = await openSession(target, false);
-    if (!opened) throw new Error('暂时无法打开这个会话，请稍后再试。');
-    if (document.activeElement?.closest('.notification-panel')) {
-      composerEditorRef.current?.focus({ preventScroll: true });
-    }
-  }
-
   return {
     startSession,
     selectDraftWorkspace,
@@ -456,7 +445,6 @@ export function useConversationSessions({
     applyOutline,
     refreshOutline,
     openSession,
-    openNotificationSession,
     loadOlderMessages,
     loadNewerMessages,
     loadMessageWindow,

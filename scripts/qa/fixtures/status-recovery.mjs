@@ -58,7 +58,6 @@ export function installStatusRecoveryFixture() {
     rejectActions: false,
     emit,
     runtimeRefresh: (snapshot) => { for (const listener of runtimeListeners) listener(snapshot); },
-    notify: (detail) => window.dispatchEvent(new CustomEvent('pi-studio:notify', { detail })),
     failSubscriptions: (id, count = 1) => { subscriptionFailures.set(id, Math.max(1, count)); },
     closeConversationStream: (id) => emit(id, 'stream.closed', { reason: 'failed' }),
     subscriptionAttempts: (id) => subscriptionAttempts[id] || 0,

@@ -5,22 +5,19 @@ import test from 'node:test';
 import ts from 'typescript';
 
 // Execute the real mutation/read boundary with independently delayed IPC calls.
-const source = [
-  fs.readFileSync(new URL('../../web/src/shell/useSidebarActions.ts', import.meta.url), 'utf8'),
-  fs.readFileSync(new URL('../../web/src/shell/useConversationController.ts', import.meta.url), 'utf8'),
-].join('\n');
+const source = fs.readFileSync(new URL('../../web/src/shell/useSidebarActions.ts', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('sidebar-action-recovery.ts', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-const wanted = new Set(['sidebarAction', 'refreshConversationList', 'runNotificationAction']);
+const wanted = new Set(['sidebarAction', 'refreshConversationList']);
 const functions = [];
 function visit(node) {
   if (ts.isFunctionDeclaration(node) && wanted.has(node.name?.text)) functions.push(node.getText(tree));
   else ts.forEachChild(node, visit);
 }
 visit(tree);
-assert.equal(functions.length, 3);
-const code = ts.transpileModule(functions.join('\n') + '\nglobalThis.action = sidebarAction; globalThis.retry = refreshConversationList; globalThis.runAction = runNotificationAction;', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
+assert.equal(functions.length, 2);
+const code = ts.transpileModule(functions.join('\n') + '\nglobalThis.action = sidebarAction; globalThis.retry = refreshConversationList;', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 function harness() {
-  const calls = { writes: [], reads: 0, navigation: [], notifications: [], drafts: [], queues: [] };
+  const calls = { writes: [], reads: 0, navigation: [], toasts: [], drafts: [], queues: [] };
   const h = {
     sidebarMutationRef: { current: false }, conversationListNeedsRefreshRef: { current: false },
     conversationListRetryRef: { current: false }, stateRequestRef: { current: 0 },
@@ -35,8 +32,7 @@ function harness() {
     clearComposerDraft(_store, key) { calls.drafts.push(key); },
     composerDraftKeyForSession: id => `session:${id}`, composerDraftKeyForNew: cwd => `new:${cwd}`,
     setSession(update) { h.sessionRef.current = update(h.sessionRef.current); },
-    pushNotification(...args) { calls.notifications.push(args); },
-    setNotifications(update) { h.notificationItems = update(h.notificationItems || []); },
+    showToast(...args) { calls.toasts.push(args); },
     mutation: async () => ({ ok: true }), refresh: async () => {},
     conversationNavigationRef: { current: {
       start: async cwd => { calls.navigation.push(['start', cwd]); },
@@ -80,64 +76,8 @@ test('failed mutation retains retry semantics and does not claim committed succe
   assert.equal(h.sidebarMutationRef.current, false);
   assert.equal(h.conversationListNeedsRefreshRef.current, false);
   assert.equal(calls.reads, 0);
-  assert.equal(calls.notifications.length, 0);
+  assert.equal(calls.toasts.length, 0);
   assert.equal(calls.drafts.length, 0);
-});
-
-test('a newly archived conversation exposes one recoverable notification', async () => {
-  const { h, calls } = harness();
-  h.workspaces[0].sessions[0].archived = false;
-  h.workspaces[0].sessions[0].title = '可撤销归档';
-  await h.action('session', 'A', 'archive');
-
-  const archiveNotice = calls.notifications.find(args => args[2] === '会话已归档');
-  assert.ok(archiveNotice);
-  assert.equal(archiveNotice[3], 'A');
-  assert.equal(JSON.stringify(archiveNotice[4]), JSON.stringify({
-    kind: 'unarchive-session',
-    label: '撤销归档',
-    pendingLabel: '正在恢复…',
-    sessionId: 'A',
-    hideSessionLink: true,
-  }));
-
-  const suppressed = harness();
-  suppressed.h.workspaces[0].sessions[0].archived = false;
-  await suppressed.h.action('session', 'A', 'archive', undefined, {
-    preserveCurrentView: true,
-    notify: false,
-  });
-  assert.equal(
-    suppressed.calls.notifications.some(args => args[2] === '会话已归档'),
-    false,
-  );
-});
-
-test('notification undo rechecks the archived target and removes only its recoverable notice', async () => {
-  const { h, calls } = harness();
-  h.workspaces[0].sessions[0].archived = true;
-  h.notificationItems = [{
-    id: 'archive-notice',
-    sessionId: 'A',
-    action: { kind: 'unarchive-session', sessionId: 'A' },
-  }];
-  await h.runAction(h.notificationItems[0]);
-
-  assert.equal(calls.writes.length, 1);
-  assert.equal(calls.writes[0].action, 'archive');
-  assert.deepEqual(h.notificationItems, []);
-  assert.equal(calls.notifications.at(-1)[2], '已撤销归档');
-  assert.equal(calls.notifications.at(-1)[3], 'A');
-
-  h.workspaces[0].sessions[0].archived = false;
-  await assert.rejects(
-    h.runAction({
-      id: 'stale-notice',
-      action: { kind: 'unarchive-session', sessionId: 'A' },
-    }),
-    /已经恢复/,
-  );
-  assert.equal(calls.writes.length, 1, 'a stale undo never toggles the conversation again');
 });
 
 test('one synchronous mutation lock survives view remount and suppresses duplicate toggles', async () => {
@@ -171,12 +111,11 @@ test('a committed empty workspace deletion removes its row even when the list re
   await h.action('workspace', '/A', 'remove');
   assert.deepEqual(h.workspaces.map(item => item.cwd), ['/B']);
   assert.deepEqual(calls.navigation, [['start', '']]);
-  assert.equal(calls.notifications.at(-1)[2], '工作区已从 Studio 删除');
   assert.equal(h.refreshError, true);
   assert.equal(calls.writes.length, 1);
 });
 
-test('late fork completion preserves new navigation and links the created conversation in its notice', async () => {
+test('late fork completion preserves new navigation instead of replacing the current view', async () => {
   const { h, calls } = harness();
   let release;
   h.mutation = () => new Promise(resolve => { release = resolve; });
@@ -184,7 +123,6 @@ test('late fork completion preserves new navigation and links the created conver
   h.sessionLoadRef.current += 1;
   release({ id: 'fork-A', updatedAt: 123 }); await pending;
   assert.deepEqual(calls.navigation, []);
-  assert.equal(calls.notifications[0][3], 'fork-A');
   assert.equal(calls.writes.length, 1);
 });
 
@@ -213,10 +151,9 @@ test('restoring from the archive list keeps the settings view even if its source
   h.sessionRef.current = { id: 'A', cwd: '/A' };
   await h.action('session', 'A', 'archive', undefined, {
     preserveCurrentView: true,
-    notify: false,
   });
   assert.deepEqual(calls.navigation, []);
   assert.equal(calls.writes.length, 1);
   assert.equal(calls.reads, 1);
-  assert.equal(calls.notifications.some(args => args[2] === '会话已归档'), false);
+  assert.equal(calls.toasts.length, 0);
 });

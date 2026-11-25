@@ -47,6 +47,11 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
       .catch(error => { if (request === modelRequest.current) updateTemporary(id, { error: errorText(error) }); })
       .finally(() => { initializingModel.current = false; });
   }, [id, state.selection.modelRef]);
+  useEffect(() => {
+    if (!state.autoSubmit || !state.draft.trim() || state.busy || !state.selection.modelRef || state.selection.unavailable) return;
+    updateTemporary(id, { autoSubmit: false });
+    void sendTemporary(id);
+  }, [id, state.autoSubmit, state.busy, state.draft, state.selection.modelRef, state.selection.unavailable]);
   function cancelAutoScroll() {
     if (autoScrollFrame.current === null) return;
     cancelAnimationFrame(autoScrollFrame.current);
@@ -191,34 +196,34 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
       </div>
       {!atBottom && <JumpToLatestButton onClick={resumeFollow} />}
     </div>
-    <div className="temporary-composer-dock">
+    <div className="temporary-composer-dock" onPaste={event => {
+      const images = [...event.clipboardData.files].filter(file => file.type.startsWith('image/'));
+      if (!images.length) return;
+      event.preventDefault();
+      const text = event.clipboardData.getData('text');
+      const target = event.target;
+      if (text && target instanceof HTMLTextAreaElement) {
+        const start = target.selectionStart;
+        const end = target.selectionEnd;
+        target.setRangeText(text, start, end, 'end');
+        updateTemporary(id, { draft: target.value });
+        requestAnimationFrame(() => {
+          target.focus();
+          target.setSelectionRange(start + text.length, start + text.length);
+        });
+      }
+      // Image clipboard data can also carry useful text. Keep both instead of
+      // replacing copied prose with the image attachment.
+      void addImages(images);
+    }}>
       {state.error && <ComposerFeedback message={state.error} onDismiss={() => updateTemporary(id, { error: '' })} />}
-      <div className="composer temporary-composer" onPaste={event => {
-        const images = [...event.clipboardData.files].filter(file => file.type.startsWith('image/'));
-        if (!images.length) return;
-        event.preventDefault();
-        const text = event.clipboardData.getData('text');
-        const target = event.target;
-        if (text && target instanceof HTMLTextAreaElement) {
-          const start = target.selectionStart;
-          const end = target.selectionEnd;
-          target.setRangeText(text, start, end, 'end');
-          updateTemporary(id, { draft: target.value });
-          requestAnimationFrame(() => {
-            target.focus();
-            target.setSelectionRange(start + text.length, start + text.length);
-          });
-        }
-        // Image clipboard data can also carry useful text. Keep both instead of
-        // replacing copied prose with the image attachment.
-        void addImages(images);
-      }}>
-        {state.images.length > 0 && <div className="composer-attachments temporary-attachments">{state.images.map((image, index) => <ComposerImageAttachment
-          key={image.id}
-          images={images}
-          index={index}
-          onRemove={() => updateTemporary(id, { images: state.images.filter(item => item.id !== image.id) })}
-        />)}</div>}
+      {state.images.length > 0 && <div className="attachment-strip composer-attachments temporary-attachments" role="group" aria-label="待发送图片">{state.images.map((image, index) => <ComposerImageAttachment
+        key={image.id}
+        images={images}
+        index={index}
+        onRemove={() => updateTemporary(id, { images: state.images.filter(item => item.id !== image.id) })}
+      />)}</div>}
+      <div className="composer temporary-composer">
         <textarea className="temporary-textarea" aria-label="临时聊天消息" placeholder="输入消息…" value={state.draft} onChange={event => updateTemporary(id, { draft: event.target.value })} onKeyDown={event => {
           const action = temporaryChatEnterAction({
             ...submissionState,

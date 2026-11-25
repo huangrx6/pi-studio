@@ -7,7 +7,7 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
 const run = promisify(execFile);
-const emitter = fileURLToPath(new URL('./skills/excalidraw-live-canvas/scripts/emit_excalidraw.py', import.meta.url));
+const emitter = fileURLToPath(new URL('./skills/diagram-authoring/scripts/emit_excalidraw.py', import.meta.url));
 const presets = ['fit', 'doc-inline', 'doc-wide', 'slide-16x9', 'print-a4-landscape'];
 const types = ['architecture', 'dependency', 'flow', 'state', 'network', 'mindmap'];
 const maxInputBytes = 2 * 1024 * 1024;
@@ -27,7 +27,7 @@ const pythonEntry = [
 export const authoringParameters = {
   spec: {
     type: 'object',
-    description: 'The diagram-authoring specification. Use the bundled skill references for node kinds, groups, icons, styles, and port hints.',
+    description: 'The diagram-authoring specification. Use the bundled diagram-authoring skill references for node kinds, frameless shape:"icon", style.edges (rounded/curved/sharp/straight), groups, icons, and port hints.',
     required: ['type', 'nodes', 'edges'],
     properties: {
       type: { enum: types },
@@ -50,15 +50,28 @@ export const authoringParameters = {
   colors: { type: 'object', description: 'Optional diagram-authoring project palette from references/color-design.md.' },
   preset: { enum: presets, description: 'The diagram-authoring viewing preset. Defaults to fit.' },
   quality: { enum: ['standard', 'showcase'], description: 'Use showcase for final delivery with stricter layout checks.' },
-  library: { type: 'object', description: 'Optional contents of an Excalidraw .excalidrawlib file for explicitly chosen icon names.' },
+  library: { type: 'object', description: 'Optional inline contents of an Excalidraw .excalidrawlib file. Omit to auto-discover cached .excalidrawlib libraries under ~/.agent-skills/data/diagram-authoring/libraries/.' },
 };
+
+function pythonEnv() {
+  const keys = [
+    'PATH', 'SystemRoot', 'HOME', 'USERPROFILE',
+    'AGENT_SKILLS_HOME', 'AGENT_SKILLS_DATA_DIR', 'AGENT_SKILLS_CONFIG_DIR',
+    'DIAGRAM_ICON_CACHE', 'EXCALIDRAW_LIBRARY',
+  ];
+  const env = {};
+  for (const key of keys) {
+    if (process.env[key]) env[key] = process.env[key];
+  }
+  return env;
+}
 
 async function emitScene(directory, args, signal) {
   for (const [program, ...options] of pythonCommands) {
     try {
       const { stdout } = await run(program, [...options, '-I', '-B', '-X', 'utf8', '-c', pythonEntry, emitter, ...args], {
         cwd: directory,
-        env: { PATH: process.env.PATH, SystemRoot: process.env.SystemRoot },
+        env: pythonEnv(),
         maxBuffer: maxOutputBytes,
         timeout: 45_000,
         windowsHide: true,
@@ -81,8 +94,7 @@ async function emitScene(directory, args, signal) {
 export async function generateDiagram({ spec, colors, preset, quality, library }, signal) {
   const specification = JSON.stringify(spec);
   const palette = colors && JSON.stringify(colors);
-  // An explicit library keeps the canvas self-contained, including when a spec requests a missing icon.
-  const icons = JSON.stringify(library ?? { type: 'excalidrawlib', version: 2, libraryItems: [] });
+  const icons = library !== undefined ? JSON.stringify(library) : '';
   if (Buffer.byteLength(specification) + Buffer.byteLength(palette || '') + Buffer.byteLength(icons) > maxInputBytes) {
     throw new Error('图形规格和素材库合计最多 2 MB');
   }
@@ -92,8 +104,11 @@ export async function generateDiagram({ spec, colors, preset, quality, library }
   const directory = await mkdtemp(path.join(tmpdir(), 'pi-studio-diagram-'));
   try {
     await writeFile(path.join(directory, 'diagram.json'), specification, { mode: 0o600 });
-    await writeFile(path.join(directory, 'icons.excalidrawlib'), icons, { mode: 0o600 });
-    const args = ['diagram.json', '--stdout', '--library', 'icons.excalidrawlib'];
+    const args = ['diagram.json', '--stdout'];
+    if (library !== undefined) {
+      await writeFile(path.join(directory, 'icons.excalidrawlib'), icons, { mode: 0o600 });
+      args.push('--library', 'icons.excalidrawlib');
+    }
     if (palette) {
       await writeFile(path.join(directory, 'colors.json'), palette, { mode: 0o600 });
       args.push('--colors', 'colors.json');

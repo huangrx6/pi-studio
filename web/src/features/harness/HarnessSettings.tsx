@@ -7,11 +7,11 @@ import { runtimeRefreshFailure } from '../../shared/runtime-refresh';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
+import { automaticProfileIcon, SettingsProfileMark } from '../../shared/SettingsProfileIcon';
 import { SettingsProfileCard, SettingsProfileLibrary } from '../../shared/SettingsProfileLibrary';
 import { useSettingsToast } from '../../shared/SettingsToast';
 import type { HarnessProfile, HarnessSettingsSnapshot } from '../../types/harness-types';
 import { HarnessProfileEditor, type HarnessScope } from './HarnessProfileEditor';
-import { automaticHarnessIcon, HarnessProfileMark } from './HarnessProfileMark';
 import { HarnessRuntimeFields } from './HarnessRuntimeFields';
 import { cloneRuntimePolicy, createHarnessRequestOwner, createHarnessWriteQueue, type CommitHarnessChange } from './harness-state';
 import './styles/harness-settings.css';
@@ -150,7 +150,13 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated, onCompa
       if (scope !== 'global' || !cwd) return next;
       try { return { ...await window.piApi.harnessSettings(cwd), runtimeRefresh: next.runtimeRefresh }; }
       catch (cause) { throw new HarnessReloadError('全局默认已保存，但读取当前工作区配置失败。' + errorText(cause)); }
-    }, scope === 'global' ? '已设为全局默认。' : scope === 'inherit' ? '当前工作区已恢复继承。' : '已应用到当前工作区，下一条请求生效。');
+    }, scope === 'global'
+      ? '已设为全局默认。'
+      : scope === 'inherit'
+        ? '当前工作区已恢复继承。'
+        : scope === 'temporary'
+          ? '已设为临时对话默认方案。'
+          : '已应用到当前工作区，下一条请求生效。');
   }
 
   function createProfile() {
@@ -177,12 +183,17 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated, onCompa
         <button type="button" className="settings-outline" onClick={() => void reload()}>重新加载 Harness 配置</button></div>}
       {ready && <div className="settings-profile-grid">{snapshot.profiles.map(profile => {
         const global = profile.id === snapshot.globalProfileId;
-        const binding = [global && '全局默认', cwd && (profile.id === snapshot.workspaceProfileId ? '当前工作区使用'
-          : global && !snapshot.workspaceProfileId && '当前工作区继承')].filter(Boolean).join(' · ');
+        const binding = [
+          global && '全局默认',
+          cwd && (profile.id === snapshot.workspaceProfileId
+            ? '当前工作区使用'
+            : global && !snapshot.workspaceProfileId && '当前工作区继承'),
+          profile.id === snapshot.temporaryProfileId && '临时对话使用',
+        ].filter(Boolean).join(' · ');
         const enabled = snapshot.sections.filter(section => profile.sections[section.id] !== false).length;
         const guidanceCount = Object.keys(profile.toolGuidance).length;
         return <SettingsProfileCard key={profile.id} name={profile.name}
-          icon={<HarnessProfileMark icon={profile.icon ?? automaticHarnessIcon(profile.id, profile.builtin)} />}
+          icon={<SettingsProfileMark group="harness" icon={profile.icon ?? automaticProfileIcon('harness', profile.id)} />}
           subtitle={(profile.builtin ? '内置 · ' : '') + profile.id}
           description={<span className="harness-card-meta">
             {binding && <span className="harness-binding"><Check aria-hidden="true" />{binding}</span>}
@@ -199,6 +210,6 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated, onCompa
     {editor && editor.kind !== 'policy' && <HarnessProfileEditor key={editor.kind + ':' + editor.source.id} creating={editor.kind === 'create'}
       source={editor.source} snapshot={snapshot} cwd={cwd} enabledTools={enabledTools} busy={busy} commit={commit}
       onClose={close} onApply={apply} onCopy={source => open({ kind: 'create',
-        source: { ...source, icon: source.icon ?? automaticHarnessIcon(source.id, source.builtin) } })} />}
+        source: { ...source, icon: source.icon ?? automaticProfileIcon('harness', source.id) } })} />}
   </div>;
 }

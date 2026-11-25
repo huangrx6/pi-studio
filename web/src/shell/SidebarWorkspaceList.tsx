@@ -52,8 +52,8 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
   const isOpen = (cwd: string) => filtering ? !searchCollapsed.has(cwd) : expanded.has(cwd);
   const logicalRows = useMemo(() => workspaces.flatMap((item): LogicalRow[] => {
     const rows: LogicalRow[] = [{ key: workspaceKey(item.cwd), cwd: item.cwd, kind: 'workspace' }];
-    if (!(filtering ? !searchCollapsed.has(item.cwd) : expanded.has(item.cwd))) return rows;
-    return [...rows, ...(item.sessions.length ? item.sessions.map((session, index): LogicalRow => ({ key: sessionKey(session.id), cwd: item.cwd, kind: 'session', sessionId: session.id, index })) : [{ key: `empty:${item.cwd}`, cwd: item.cwd, kind: 'empty' as const }])];
+    if (!item.sessions.length || !(filtering ? !searchCollapsed.has(item.cwd) : expanded.has(item.cwd))) return rows;
+    return [...rows, ...item.sessions.map((session, index): LogicalRow => ({ key: sessionKey(session.id), cwd: item.cwd, kind: 'session', sessionId: session.id, index }))];
   }), [workspaces, filtering, searchCollapsed, expanded]);
   const rowsRef = useRef(logicalRows);
   rowsRef.current = logicalRows;
@@ -156,7 +156,7 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
     const removedOwner = previous.find((row) => (interactionKeys.has(row.key) || focusedKey === row.key) && !logicalRows.some((current) => current.key === row.key));
     if (removedOwner && !restoreRemovedRow(removedOwner, previous.indexOf(removedOwner))) document.querySelector<HTMLButtonElement>('.new-chat')?.focus();
   }, [logicalRows]);
-  // Selection changes may arrive from notifications. Locate without taking focus
+  // Selection changes may arrive from outside the sidebar (e.g. menu bar). Locate without taking focus
   // from the composer; ordinary row refreshes must not pull the user back.
   const located = useRef<{ id?: string; visible: boolean }>({ visible: false });
   useLayoutEffect(() => {
@@ -270,8 +270,11 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
       </div>)}
     </div>}
     {!(loading && !hasWorkspaces) && workspaces.map((item) => {
-      const open = isOpen(item.cwd);
-      const active = activeWorkspace === item.cwd && open;
+      const hasSessions = item.sessions.length > 0;
+      const open = hasSessions && isOpen(item.cwd);
+      const active = activeWorkspace === item.cwd && (open || !hasSessions);
+      const hasRunning = !open && item.sessions.some((session) => session.running);
+      const sessionTotal = item.sessionCount ?? item.sessions.length;
       const key = workspaceKey(item.cwd);
       const focused = logicalRows.find((row) => row.key === focusedKey && row.cwd === item.cwd);
       const retained = focused?.index !== undefined ? focusNeighborIndices(focused.index, item.sessions.length) : [];
@@ -281,13 +284,17 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
       const virtual = item.sessions.length > SIDEBAR_VIRTUAL_THRESHOLD;
       return <div className="workspace" key={item.cwd} data-workspace-cwd={item.cwd}>
         <div className="sidebar-row-shell workspace-row-shell" data-sidebar-key={key}>
-          <button className={`workspace-row ${active ? 'is-active' : ''} ${dropHint === key ? 'drop-before' : ''} ${dragging?.kind === 'workspace' && dragging.cwd === item.cwd ? 'is-dragging' : ''} ${justDropped === key ? 'just-dropped' : ''}`} title={item.name && item.name !== item.cwd ? `${item.name}\n${item.cwd}` : item.cwd} aria-expanded={open} draggable
+          <button className={`workspace-row ${active ? 'is-active' : ''} ${dropHint === key ? 'drop-before' : ''} ${dragging?.kind === 'workspace' && dragging.cwd === item.cwd ? 'is-dragging' : ''} ${justDropped === key ? 'just-dropped' : ''}`} title={item.name && item.name !== item.cwd ? `${item.name}\n${item.cwd}` : item.cwd} aria-expanded={hasSessions ? open : undefined} draggable
             onDragStart={(event) => startDrag(event, { kind: 'workspace', cwd: item.cwd }, item.name)}
             onDragOver={(event) => { if (dragRef.current?.kind !== 'workspace' || dragRef.current.cwd === item.cwd) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropHint(key); }}
             onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropHint(null); }}
             onDrop={(event) => { event.preventDefault(); if (dragRef.current?.kind === 'workspace') { actions.onReorderWorkspaces(dragRef.current.cwd, item.cwd); markDropped(key); } clearDrag(); }}
-            onClick={() => actions.onToggleWorkspace(item.cwd, open)}>
-            {open ? <FolderOpen size={15} /> : <Folder size={15} />}<span className="workspace-label">{item.name}</span><ChevronDown size={13} className={open ? 'chevron open' : 'chevron'} />
+            onClick={() => hasSessions ? actions.onToggleWorkspace(item.cwd, open) : actions.onStartSession(item.cwd)}>
+            {open ? <FolderOpen size={15} /> : <Folder size={15} />}
+            <span className="workspace-label">{item.name}</span>
+            {hasRunning && <span className="workspace-running-dot" aria-label="包含运行中的会话" title="包含运行中的会话" />}
+            {!open && sessionTotal > 0 && <span className="workspace-count" aria-hidden="true">{sessionTotal}</span>}
+            {hasSessions && <ChevronDown size={13} className={open ? 'chevron open' : 'chevron'} />}
           </button>
           <SidebarActions disabled={actionsDisabled} kind="workspace" id={item.cwd} name={item.name} sessionCount={item.sessionCount} archivedCount={item.archivedCount} onNew={() => actions.onStartSession(item.cwd)} onAction={(action, name) => actions.onAction('workspace', item.cwd, action, name)} onInteractionChange={(active) => retainInteraction(key, active)} onRestoreFocusFallback={() => restoreRemovedRow({ key, kind: 'workspace', cwd: item.cwd })} />
         </div>
@@ -309,7 +316,6 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
               <SidebarActions disabled={actionsDisabled} kind="session" id={session.id} name={session.title} pinned={session.pinned} archived={session.archived} onAction={(action, name) => actions.onAction('session', session.id, action, name)} onInteractionChange={(active) => retainInteraction(sessionRowKey, active)} onRestoreFocusFallback={() => restoreRemovedRow(logicalRow)} />
             </div>;
           })}
-          {!item.sessions.length && <div className="sidebar-row-shell" data-sidebar-key={`empty:${item.cwd}`} role="listitem"><button className="session-row empty" onClick={() => actions.onStartSession(item.cwd)}>新会话</button></div>}
         </div>}
       </div>;
     })}

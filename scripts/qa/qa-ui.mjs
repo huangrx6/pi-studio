@@ -2347,13 +2347,7 @@ try {
   await page.keyboard.press('Escape');
   await actionPalette.waitFor({ state: 'detached' });
 
-  // 扩展提示统一收进通知中心，不再浮动遮挡对话内容。
-  await page.getByRole('button', { name: '通知', exact: true }).click();
-  const notificationPanel = page.getByRole('dialog', { name: '通知中心', exact: true });
-  await notificationPanel.waitFor();
-  assert.match(await notificationPanel.innerText(), /暂无通知/);
-  await page.keyboard.press('Escape');
-  await notificationPanel.waitFor({ state: 'detached' });
+  assert.equal(await page.locator('.notification-trigger').count(), 0);
 
   // 打开文件查看器，读取根目录列表，再点开 package.json 预览代码。
   await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();

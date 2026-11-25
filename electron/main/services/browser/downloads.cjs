@@ -1,14 +1,14 @@
 /**
  * Capture downloads that originate from the in-app browser partition.
  *
- * Files land under ~/.pi-studio/browser-downloads (or a custom directory).
+ * Files land under ~/.pi-studio/downloads (or a custom directory).
  * When askDownloadPath is on, the user picks a save location first.
  * Renderer code only receives JSON-safe projections, never DownloadItem handles.
  */
 const fs = require('node:fs');
 const path = require('node:path');
 const { BrowserWindow, dialog, shell } = require('electron');
-const { studioDataDirectory } = require('../../core/studio-paths.cjs');
+const { downloadsDirectory: defaultDownloadsDirectory } = require('../../core/studio-paths.cjs');
 const { getBrowserSession } = require('./session.cjs');
 const { getBrowserPreferences } = require('./settings.cjs');
 
@@ -26,7 +26,7 @@ let sequence = 0;
 let installed = false;
 
 function downloadsDirectory() {
-  let directory = path.join(studioDataDirectory(), 'browser-downloads');
+  let directory = defaultDownloadsDirectory();
   try {
     const custom = getBrowserPreferences().downloadDirectory;
     if (custom && path.isAbsolute(custom)) directory = custom;

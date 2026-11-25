@@ -9,9 +9,10 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const zlib = require('node:zlib');
 const { randomUUID } = require('node:crypto');
 const { DatabaseSync } = require('node:sqlite');
-const { migrationBackupPath, organizeDatabaseBackups } = require('./database-backups.cjs');
+const { migrationBackupPath, organizeDatabaseBackups, pruneDatabaseBackups } = require('./database-backups.cjs');
 const { studioDataDirectory } = require('./studio-paths.cjs');
 const {
   decryptValue,
@@ -77,6 +78,26 @@ function resolveOwnership(input = {}, current) {
   };
 }
 
+
+function encodeRequestTracePayload(trace) {
+  return zlib.gzipSync(Buffer.from(JSON.stringify(trace), 'utf8'), { level: 6 });
+}
+
+function decodeRequestTracePayload(raw) {
+  if (raw === null || raw === undefined) return undefined;
+  if (raw instanceof Uint8Array || Buffer.isBuffer(raw)) {
+    const buffer = Buffer.isBuffer(raw) ? raw : Buffer.from(raw);
+    try {
+      const text = buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b
+        ? zlib.gunzipSync(buffer).toString('utf8')
+        : buffer.toString('utf8');
+      return json(text, undefined);
+    } catch {
+      return undefined;
+    }
+  }
+  return json(raw, undefined);
+}
 
 /** Strip the heavy arrays, keep everything the trace header needs. */
 function requestTraceSummary(trace) {
@@ -323,7 +344,15 @@ class StudioDatabase {
     catch (error) { console.warn('[pi-studio] 旧备份归档未完成', error.message); }
     this.filename = filename;
     this.usageLedgerWrites = 0;
+    const isFreshDatabase = (() => {
+      const stat = fs.statSync(filename, { throwIfNoEntry: false });
+      return !stat || stat.size === 0;
+    })();
     this.db = new DatabaseSync(filename, { timeout: 5_000 });
+    // auto_vacuum must be configured before journal_mode=WAL initializes page 1.
+    if (isFreshDatabase) {
+      this.db.exec('PRAGMA auto_vacuum = INCREMENTAL');
+    }
     this.db.exec('PRAGMA journal_mode = WAL');
     this.db.exec('PRAGMA synchronous = NORMAL');
     // Durable storage shares this file with a 15s timeout; Studio writes must
@@ -344,6 +373,10 @@ class StudioDatabase {
       try { this.db.close(); } catch { /* preserve the migration/snapshot error */ }
       throw error;
     }
+    try { pruneDatabaseBackups(filename); }
+    catch (error) { console.warn('[pi-studio] 过期迁移备份清理未完成', error.message); }
+    try { this.reclaimIdleDatabaseSpace(); }
+    catch (error) { console.warn('[pi-studio] 数据库空闲页回收未完成', error.message); }
   }
 
   backupBeforeMigration(current) {
@@ -2041,6 +2074,101 @@ class StudioDatabase {
     return true;
   }
 
+  pruneRequestTraces({ maxTotal = 200 } = {}) {
+    const limit = Number.isInteger(maxTotal) && maxTotal >= 0 ? maxTotal : 200;
+    const result = this.db.prepare(`
+      DELETE FROM conversation_request_traces
+      WHERE rowid IN (
+        SELECT rowid
+        FROM conversation_request_traces
+        ORDER BY created_at DESC, request_id DESC
+        LIMIT -1 OFFSET ?
+      )
+    `).run(limit);
+    return Number(result?.changes) || 0;
+  }
+
+  databaseStorageStats() {
+    const pageSize = Number(this.db.prepare('PRAGMA page_size').get()?.page_size) || 4096;
+    const pageCount = Number(this.db.prepare('PRAGMA page_count').get()?.page_count) || 0;
+    const freelistPages = Number(this.db.prepare('PRAGMA freelist_count').get()?.freelist_count) || 0;
+    const autoVacuum = Number(this.db.prepare('PRAGMA auto_vacuum').get()?.auto_vacuum) || 0;
+    const totalBytes = pageSize * pageCount;
+    const reclaimableBytes = pageSize * freelistPages;
+    return { pageSize, pageCount, freelistPages, autoVacuum, totalBytes, reclaimableBytes };
+  }
+
+  /**
+   * Compress legacy plain-text request trace rows into gzip blobs so older
+   * histories shrink by ~85-90% without losing any trace data.
+   */
+  compressLegacyRequestTraces() {
+    const rows = this.db.prepare(`
+      SELECT rowid, payload
+      FROM conversation_request_traces
+      WHERE typeof(payload) = 'text'
+    `).all();
+    if (!rows.length) return 0;
+    const update = this.db.prepare(`
+      UPDATE conversation_request_traces
+      SET payload = ?
+      WHERE rowid = ?
+    `);
+    this.transaction(() => {
+      for (const row of rows) {
+        const parsed = decodeRequestTracePayload(row.payload);
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) continue;
+        update.run(encodeRequestTracePayload(parsed), row.rowid);
+      }
+    });
+    return rows.length;
+  }
+
+  /**
+   * Automatically keep SQLite compact without requiring manual user clicks:
+   * - In INCREMENTAL mode, incrementally return freelist pages once >= 2 MB.
+   * - On legacy NONE databases with large dead space (>= 32 MB and >= 25%),
+   *   upgrade once to INCREMENTAL and VACUUM so future deletions self-reclaim.
+   */
+  reclaimIdleDatabaseSpace() {
+    const stats = this.databaseStorageStats();
+    if (stats.autoVacuum === 2) {
+      if (stats.freelistPages >= 512) {
+        this.db.exec('PRAGMA incremental_vacuum(4096)');
+      }
+      return;
+    }
+    const largeDeadSpace = stats.reclaimableBytes >= 32 * 1024 * 1024
+      && stats.totalBytes > 0
+      && stats.reclaimableBytes / stats.totalBytes >= 0.25;
+    if (largeDeadSpace) {
+      this.compressLegacyRequestTraces();
+      this.db.exec('PRAGMA auto_vacuum = INCREMENTAL');
+      this.db.exec('VACUUM');
+      this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    }
+  }
+
+  compactDatabase({ maxTotalRequestTraces = 200 } = {}) {
+    const before = this.databaseStorageStats();
+    const prunedTraces = this.pruneRequestTraces({ maxTotal: maxTotalRequestTraces });
+    this.compressLegacyRequestTraces();
+    if (before.autoVacuum !== 2) {
+      this.db.exec('PRAGMA auto_vacuum = INCREMENTAL');
+    }
+    this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    this.db.exec('VACUUM');
+    this.db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    this.db.exec('PRAGMA optimize');
+    const after = this.databaseStorageStats();
+    return {
+      beforeBytes: before.totalBytes,
+      afterBytes: after.totalBytes,
+      freedBytes: Math.max(0, before.totalBytes - after.totalBytes),
+      prunedTraces,
+    };
+  }
+
   /**
    * Persist a redacted, bounded UI projection of one actual model request.
    * A retry reuses taskId:attempt only when it is the same durable attempt, so
@@ -2062,7 +2190,7 @@ class StudioDatabase {
         ON CONFLICT(conversation_id, request_id) DO UPDATE SET
           created_at = excluded.created_at,
           payload = excluded.payload
-      `).run(key, requestId.slice(0, 320), createdAt, encode(trace));
+      `).run(key, requestId.slice(0, 320), createdAt, encodeRequestTracePayload(trace));
       this.db.prepare(`
         DELETE FROM conversation_request_traces
         WHERE conversation_id = ? AND request_id IN (
@@ -2123,7 +2251,7 @@ class StudioDatabase {
       ORDER BY created_at DESC, request_id DESC
       LIMIT ?
     `).all(key, safeLimit)
-      .map((row) => json(row.payload, undefined))
+      .map((row) => decodeRequestTracePayload(row.payload))
       .filter((trace) => trace && typeof trace === 'object' && !Array.isArray(trace))
       .map((trace) => (summary ? requestTraceSummary(trace) : trace))
       .reverse();
@@ -2141,7 +2269,7 @@ class StudioDatabase {
       FROM conversation_request_traces
       WHERE conversation_id = ? AND request_id = ?
     `).get(key, id.slice(0, 320));
-    const trace = row ? json(row.payload, undefined) : undefined;
+    const trace = row ? decodeRequestTracePayload(row.payload) : undefined;
     return trace && typeof trace === 'object' && !Array.isArray(trace) ? trace : undefined;
   }
 

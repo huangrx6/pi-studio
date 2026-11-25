@@ -101,9 +101,8 @@ async function checkLiveFilePreview() {
 }
 async function checkPanelCollapseMotion() {
   await page.emulateMedia({ reducedMotion: 'no-preference' });
-  // The notification trigger has a stable width. Other toolbar buttons show
-  // their text at a container breakpoint while the panel is collapsing.
-  const actions = '.chat-header .notification-trigger';
+  // The extension menu trigger has a stable width while the panel is collapsing.
+  const actions = '.chat-header .workspace-menu-anchor > .icon-button';
   const { open, start, middle, end } = await page.evaluate(async (selector) => {
     const panel = document.querySelector('.file-panel');
     const buttons = [...document.querySelectorAll(selector)];
@@ -143,7 +142,7 @@ async function checkPanelCollapseMotion() {
     assert.ok(Math.abs(middle.positions[index] - (initial + (final - initial) * progress)) <= 2, 'header action follows the panel throughout collapse');
     assert.ok(Math.abs(end.positions[index] - final) <= 2, 'showing the opener after collapse cannot displace the header action');
   }
-  result.checks.push('the notification button follows the panel at mid-collapse and reaches its final position before it unmounts');
+  result.checks.push('the header action button follows the panel at mid-collapse and reaches its final position before it unmounts');
 }
 async function checkCacheBytes() {
   const mib = 1024 * 1024;

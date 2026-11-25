@@ -17,9 +17,15 @@ export function useLaunchScreen(viewReady: boolean, wallpaperUrl: string | undef
         document.getElementById('root')!.inert = false;
         window.piApi.workspaceReady?.();
       };
-      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) finish();
-      else screen.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 200, easing: 'ease-out', fill: 'forwards' })
-        .finished.then(finish, finish);
+      if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        finish();
+      } else {
+        screen.animate([{ opacity: 1 }, { opacity: 0 }], {
+          duration: 180,
+          easing: 'cubic-bezier(.22, 1, .36, 1)',
+          fill: 'forwards',
+        }).finished.then(finish, finish);
+      }
     }
 
     if (wallpaperReady) { reveal(); return; }

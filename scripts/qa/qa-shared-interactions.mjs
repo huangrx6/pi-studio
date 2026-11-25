@@ -30,18 +30,26 @@ try {
   const outer = page.getByRole('dialog', { name: '测试表单', exact: true });
   const imeInput = outer.getByRole('textbox', { name: '编辑名称', exact: true });
   await focusIs(imeInput);
-  const dimensions = await outer.evaluate(dialog => {
+  const { dimensions, controlHeight, rowHeight } = await outer.evaluate(dialog => {
     const height = selector => dialog.querySelector(selector).getBoundingClientRect().height;
+    const styles = getComputedStyle(dialog);
     return {
-      text: height('input[aria-label="编辑名称"]'),
-      select: height('.pi-select-trigger'),
-      date: height('.pi-date-trigger'),
-      stepper: height('.settings-stepper'),
-      action: height('.dialog-footer > button[type="submit"]'),
-      disclosure: height('.pi-accordion-trigger'),
+      dimensions: {
+        text: height('input[aria-label="编辑名称"]'),
+        select: height('.pi-select-trigger'),
+        date: height('.pi-date-trigger'),
+        stepper: height('.settings-stepper'),
+        action: height('.dialog-footer > button[type="submit"]'),
+        disclosure: height('.pi-accordion-trigger'),
+      },
+      controlHeight: parseFloat(styles.getPropertyValue('--settings-control-height')),
+      rowHeight: parseFloat(styles.getPropertyValue('--settings-row-height')),
     };
   });
-  assert.deepEqual(dimensions, { text: 32, select: 32, date: 32, stepper: 32, action: 32, disclosure: 44 });
+  assert.deepEqual(dimensions, {
+    text: controlHeight, select: controlHeight, date: controlHeight,
+    stepper: controlHeight, action: controlHeight, disclosure: rowHeight,
+  });
   result.checks.push('single-line fields, date, select, stepper and action have equal hit heights; a disclosure retains its larger row');
   await page.evaluate(() => {
     window.__nativeImeLog = [];

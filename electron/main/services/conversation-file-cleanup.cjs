@@ -1,32 +1,65 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { managedDataSubdirectory, pluginDataDirectory, studioDataDirectory } = require('../core/studio-paths.cjs');
+const {
+  STUDIO_MANAGED_DATA_DIR,
+  managedDataSubdirectory,
+  studioDataDirectory,
+} = require('../core/studio-paths.cjs');
 const { assetOwner, removeConversationAssets } = require('./conversation-assets.cjs');
 const { removeAttachmentDirectory } = require('./attachments.cjs');
 
-const EXCALIDRAW_ID = 'studio.excalidraw';
-const CANVAS_FILE = /^([1-9]\d*)\.excalidraw\.json(?:\.[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\.tmp)?$/;
+const SESSION_ARTIFACT = /^([1-9]\d*)(?:\..+)?$/;
 
-function findExcalidrawFiles(records, root) {
-  // The package can keep its data when disabled or uninstalled. Cleanup uses
-  // the storage contract directly and never loads extension code.
-  const directories = [
-    pluginDataDirectory(EXCALIDRAW_ID, EXCALIDRAW_ID, { root }),
-    managedDataSubdirectory(root, ['extensions', EXCALIDRAW_ID, '.data']),
-  ];
-  const extensionData = managedDataSubdirectory(root, ['extension-data']);
-  if (extensionData) {
-    for (const scope of fs.readdirSync(extensionData, { withFileTypes: true })) {
-      if (!scope.isDirectory() || !/^(?:user|project-[0-9a-f]{24})$/.test(scope.name)) continue;
-      directories.push(managedDataSubdirectory(extensionData, [scope.name, EXCALIDRAW_ID]));
+function findPluginSessionFiles(records, root) {
+  // Plugins that store per-conversation files place them under `<dataDir>/sessions/<conversationId>.*`.
+  // Cleanup uses this generic storage convention without referencing any specific plugin ID
+  // and validates every segment through `managedDataSubdirectory` so symlinks are never followed.
+  const targetIds = new Set(records.map((record) => String(record.conversation_id)));
+  const files = new Map(records.map((record) => [String(record.conversation_id), []]));
+  const sessionDirs = [];
+
+  for (const baseParts of [[STUDIO_MANAGED_DATA_DIR, 'plugin-data'], ['plugin-data']]) {
+    const pluginDataRoot = managedDataSubdirectory(root, baseParts);
+    if (!pluginDataRoot) continue;
+    for (const pluginEntry of fs.readdirSync(pluginDataRoot, { withFileTypes: true })) {
+      if (pluginEntry.name.startsWith('.')) continue;
+      const pluginDir = managedDataSubdirectory(pluginDataRoot, [pluginEntry.name]);
+      if (!pluginDir) continue;
+      for (const extEntry of fs.readdirSync(pluginDir, { withFileTypes: true })) {
+        if (extEntry.name.startsWith('.')) continue;
+        const extDir = managedDataSubdirectory(pluginDir, [extEntry.name]);
+        if (!extDir) continue;
+        const sessions = managedDataSubdirectory(extDir, ['sessions']);
+        if (sessions) sessionDirs.push(sessions);
+      }
     }
   }
-  const files = new Map(records.map(record => [String(record.conversation_id), []]));
-  for (const directory of directories.filter(Boolean)) {
+
+  for (const baseParts of [[STUDIO_MANAGED_DATA_DIR, 'extension-data'], ['extension-data']]) {
+    const extensionData = managedDataSubdirectory(root, baseParts);
+    if (!extensionData) continue;
+    for (const scope of fs.readdirSync(extensionData, { withFileTypes: true })) {
+      if (!/^(?:user|project-[0-9a-f]{24})$/.test(scope.name)) continue;
+      const scopeDir = managedDataSubdirectory(extensionData, [scope.name]);
+      if (!scopeDir) continue;
+      for (const extEntry of fs.readdirSync(scopeDir, { withFileTypes: true })) {
+        if (extEntry.name.startsWith('.')) continue;
+        const extDir = managedDataSubdirectory(scopeDir, [extEntry.name]);
+        if (!extDir) continue;
+        const sessions = managedDataSubdirectory(extDir, ['sessions']);
+        if (sessions) sessionDirs.push(sessions);
+      }
+    }
+  }
+
+  for (const directory of sessionDirs) {
     for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
-      if (!entry.isFile()) continue;
-      const id = CANVAS_FILE.exec(entry.name)?.[1];
-      files.get(id)?.push(path.join(directory, entry.name));
+      if (entry.isSymbolicLink()) continue;
+      if (!entry.isFile() && !entry.isDirectory()) continue;
+      const id = SESSION_ARTIFACT.exec(entry.name)?.[1];
+      if (id && targetIds.has(id)) {
+        files.get(id)?.push(path.join(directory, entry.name));
+      }
     }
   }
   return files;
@@ -57,10 +90,10 @@ function flushConversationFileCleanup(studio, ids = null, root = studioDataDirec
   `).all(ids === null ? null : 1, JSON.stringify(ids));
   if (!records.length) return { attachmentsRemoved: 0, pendingFileCleanups: 0 };
   const done = studio.db.prepare('DELETE FROM studio_conversation_file_cleanup WHERE conversation_id = ?');
-  let canvasFiles;
-  let canvasError;
-  try { canvasFiles = findExcalidrawFiles(records, root); }
-  catch (error) { canvasError = error; }
+  let pluginSessionFiles;
+  let pluginSessionError;
+  try { pluginSessionFiles = findPluginSessionFiles(records, root); }
+  catch (error) { pluginSessionError = error; }
   let attachmentsRemoved = 0;
   let pendingFileCleanups = 0;
   for (const record of records) {
@@ -72,8 +105,8 @@ function flushConversationFileCleanup(studio, ids = null, root = studioDataDirec
         for (const key of new Set([String(id), publicId].filter(Boolean))) {
           if (removeAttachmentDirectory(key, { root, strict: true })) attachmentsRemoved += 1;
         }
-        if (canvasError) throw canvasError;
-        for (const file of canvasFiles.get(String(id))) fs.rmSync(file, { force: true });
+        if (pluginSessionError) throw pluginSessionError;
+        for (const file of pluginSessionFiles.get(String(id))) fs.rmSync(file, { recursive: true, force: true });
       }
       done.run(id);
     } catch (error) {

@@ -99,11 +99,6 @@ try {
   const openWorkbench = page.getByRole('button', { name: '打开右侧面板', exact: true });
   await openWorkbench.click();
   await page.locator('.file-panel.is-open .panel-tabbar').waitFor();
-  await page.locator('.notification-trigger').click();
-  const notifications = page.getByRole('dialog', { name: '通知中心', exact: true });
-  await notifications.waitFor();
-  await page.keyboard.press('Escape');
-  await notifications.waitFor({ state: 'hidden' });
 
   const windowed = await topRows(page);
   assertSingleTitleRow(windowed, 'windowed');

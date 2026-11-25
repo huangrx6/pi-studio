@@ -3,13 +3,46 @@ import type { ModelSelection } from '../../types/model-types';
 import { errorText } from '../../shared/error-text';
 import { temporaryChatCanSubmit } from './temporary-chat-input';
 export type TemporaryImage = { id: string; name: string; data: string; mimeType: string };
-export type TemporaryState = { messages: ChatMessage[]; draft: string; images: TemporaryImage[]; selection: ModelSelection; busy: boolean; error: string; run: number };
+export type TemporaryState = {
+  messages: ChatMessage[];
+  draft: string;
+  images: TemporaryImage[];
+  selection: ModelSelection;
+  busy: boolean;
+  error: string;
+  run: number;
+  autoSubmit?: boolean;
+};
 // Deliberately no localStorage, IndexedDB, attachment upload or session persistence.
 const chats = new Map<string, TemporaryState>();
 const listeners = new Map<string, Set<() => void>>();
 let listening = false;
+const pendingSeeds = new Map<string, { draft: string; autoSubmit: boolean }>();
+
+export function seedTemporaryChat(id: string, draft: string, autoSubmit = false) {
+  pendingSeeds.set(id, { draft, autoSubmit });
+  const existing = chats.get(id);
+  if (existing) {
+    chats.set(id, { ...existing, draft, autoSubmit });
+    listeners.get(id)?.forEach(listener => listener());
+  }
+}
+
 export function temporaryState(id: string, selection: ModelSelection) {
-  if (!chats.has(id)) chats.set(id, { messages: [], draft: '', images: [], selection, busy: false, error: '', run: 0 });
+  if (!chats.has(id)) {
+    const seed = pendingSeeds.get(id);
+    pendingSeeds.delete(id);
+    chats.set(id, {
+      messages: [],
+      draft: seed?.draft ?? '',
+      images: [],
+      selection,
+      busy: false,
+      error: '',
+      run: 0,
+      autoSubmit: seed?.autoSubmit ?? false,
+    });
+  }
   if (!listening) {
     listening = true;
     window.piApi.onTemporary(event => {

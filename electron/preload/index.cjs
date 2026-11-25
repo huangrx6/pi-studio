@@ -50,6 +50,7 @@ contextBridge.exposeInMainWorld('piApi', {
   windowState: () => ipcRenderer.invoke('pi:window-state'),
   deviceStorage: () => ipcRenderer.invoke('pi:device-storage'),
   deviceStorageLocation: (id, action) => ipcRenderer.invoke('pi:device-storage-location', id, action),
+  deviceStorageCleanup: () => ipcRenderer.invoke('pi:device-storage-cleanup'),
   onWindowState: (listener) => {
     const handler = (_event, state) => listener(state);
     ipcRenderer.on('pi:window-state', handler);
@@ -70,6 +71,12 @@ contextBridge.exposeInMainWorld('piApi', {
   permissionPolicySet: (payload) => ipcRenderer.invoke('pi:permission-policy-set', payload),
   permissionPolicyReset: (payload) => ipcRenderer.invoke('pi:permission-policy-reset', payload),
   permissionEvaluate: (payload) => ipcRenderer.invoke('pi:permission-evaluate', payload),
+  permissionEvaluateProfile: (payload) => ipcRenderer.invoke('pi:permission-evaluate-profile', payload),
+  permissionProfiles: (cwd) => ipcRenderer.invoke('pi:permission-profiles-get', cwd),
+  savePermissionProfile: (payload) => ipcRenderer.invoke('pi:save-permission-profile', payload),
+  selectPermissionProfile: (payload) => ipcRenderer.invoke('pi:select-permission-profile', payload),
+  resetPermissionProfile: (payload) => ipcRenderer.invoke('pi:reset-permission-profile', payload),
+  deletePermissionProfile: (payload) => ipcRenderer.invoke('pi:delete-permission-profile', payload),
   confirmResponse: (payload) => ipcRenderer.send('pi:confirm-response', payload),
   state: (cwd) => ipcRenderer.invoke('pi:state', cwd),
   gitRepositories: (cwd) => ipcRenderer.invoke('pi:git-repositories', cwd),
@@ -108,6 +115,11 @@ contextBridge.exposeInMainWorld('piApi', {
     const handler = (_event, keys) => listener(keys);
     ipcRenderer.on('pi:files-changed', handler);
     return () => ipcRenderer.removeListener('pi:files-changed', handler);
+  },
+  onWorkbenchRefresh: (listener) => {
+    const handler = (_event, payload) => listener(payload);
+    ipcRenderer.on('pi:workbench-refresh', handler);
+    return () => ipcRenderer.removeListener('pi:workbench-refresh', handler);
   },
   undoTurnDiff: (payload) => ipcRenderer.invoke('pi:undo-turn-diff', payload),
   turnDiffFile: (payload) => ipcRenderer.invoke('pi:turn-diff-file', payload),
@@ -233,6 +245,12 @@ contextBridge.exposeInMainWorld('piApi', {
   saveConversationExtensionUiPreferences: (payload) => ipcRenderer.invoke('pi:save-conversation-extension-ui-preferences', payload),
   agentToolCatalog: (payload) => ipcRenderer.invoke('pi:agent-tool-catalog', payload),
   setAgentTools: (payload) => ipcRenderer.invoke('pi:set-agent-tools', payload),
+  toolProfiles: (cwd) => ipcRenderer.invoke('pi:tool-profiles-get', cwd),
+  saveToolProfile: (payload) => ipcRenderer.invoke('pi:save-tool-profile', payload),
+  selectToolProfile: (payload) => ipcRenderer.invoke('pi:select-tool-profile', payload),
+  resetToolProfile: (payload) => ipcRenderer.invoke('pi:reset-tool-profile', payload),
+  deleteToolProfile: (payload) => ipcRenderer.invoke('pi:delete-tool-profile', payload),
+  temporaryCapabilities: () => ipcRenderer.invoke('pi:temporary-capabilities'),
   harnessSettings: (cwd) => ipcRenderer.invoke('pi:harness-settings', cwd),
   saveHarnessProfile: (payload) => ipcRenderer.invoke('pi:save-harness-profile', payload),
   selectHarnessProfile: (payload) => ipcRenderer.invoke('pi:select-harness-profile', payload),
@@ -316,8 +334,7 @@ contextBridge.exposeInMainWorld('piApi', {
   extensionsUi: (cwd) => ipcRenderer.invoke('pi:extensions-ui', cwd),
   openExtensionDataView: (payload) => ipcRenderer.invoke('pi:extension-data-view-open', payload),
   closeExtensionDataView: (subscriptionId) => ipcRenderer.invoke('pi:extension-data-view-close', subscriptionId),
-  writeExtensionCanvas: (payload) => ipcRenderer.invoke('pi:extension-canvas-write', payload),
-  writeExtensionTaskBoard: (payload) => ipcRenderer.invoke('pi:extension-task-board-write', payload),
+  invokeExtensionView: (payload) => ipcRenderer.invoke('pi:extension-view-invoke', payload),
   onExtensionPanelRequested: (listener) => {
     const handler = (_event, payload) => listener(payload);
     ipcRenderer.on('pi:extension-panel-requested', handler);

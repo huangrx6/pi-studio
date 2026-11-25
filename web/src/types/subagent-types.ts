@@ -17,6 +17,8 @@ export type SubagentProfile = {
   mcpServers: string[] | null;
   skills: string[] | null;
   harnessId: string;
+  toolProfileId?: string;
+  permissionProfileId?: string;
   runtimeOverrides: SubagentRuntimeOverrides;
 };
 
@@ -25,6 +27,8 @@ export type SubagentProfileResources = {
   mcpServers: string[];
   skills: { id: string; name: string }[];
   harnesses: { id: string; name: string }[];
+  toolProfiles?: { id: string; name: string; description?: string }[];
+  permissionProfiles?: { id: string; name: string; description?: string; preset?: string }[];
   defaults: SubagentConfig;
   tools: string[];
 };

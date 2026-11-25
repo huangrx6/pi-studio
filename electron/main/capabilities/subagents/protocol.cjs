@@ -43,6 +43,7 @@ function emptyChildContext() {
     worktreeId: '',
     isolation: 'workspace',
     supervisorEnabled: false,
+    permissionProfileId: '',
     createdAt: 0,
     /** 子智能体本轮结束时的正文回答，由 AnswerCapture 任务在子会话内写入。 */
     lastAnswer: '',

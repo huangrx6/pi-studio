@@ -10,6 +10,8 @@ import { createContext, type ComponentType } from 'react';
 export type MarkdownActionsValue = {
   /** Conversation working directory used to resolve relative paths. */
   cwd?: string;
+  /** Optional turn-scoped resolver for relative tokens such as `docs/PLAN.md` inside nested project folders. */
+  resolvePath?: (token: string) => string | undefined;
   /** Open a local file preview in the right panel. */
   openFile?: (path: string) => void;
   /** Open a file reference from Markdown as an external/local preview. */

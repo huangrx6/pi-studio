@@ -13,7 +13,7 @@ const { randomUUID } = require('node:crypto');
 const { BrowserWindow, app, dialog } = require('electron');
 const { makeAttachmentMarker } = require('../core/attachment-markers.cjs');
 const { readFilePath } = require('./workspace.cjs');
-const { studioDataDirectory } = require('../core/studio-paths.cjs');
+const { attachmentsDirectory, studioDataDirectory } = require('../core/studio-paths.cjs');
 
 /** 常见扩展名 → MIME。 */
 const ATTACHMENT_MIME = {
@@ -54,7 +54,7 @@ function safeAttachmentName(name) {
 
 /** 附件根目录：Pi Studio 自己的 userData，不读取或改写 ~/.pi。 */
 function attachmentRoot() {
-  return path.join(studioDataDirectory(), 'attachments');
+  return attachmentsDirectory();
 }
 
 function lstatIfPresent(target) {
@@ -121,7 +121,26 @@ function resolveAttachmentPath(root, requested) {
   if (path.resolve(root) !== canonicalRoot && fs.lstatSync(root).isSymbolicLink()) {
     throw new Error('Studio 附件根目录不能是符号链接');
   }
-  const target = fs.realpathSync(requested);
+  let resolvedRequest = requested;
+  if (!fs.existsSync(resolvedRequest)
+    && path.basename(canonicalRoot) === 'attachments'
+    && path.basename(path.dirname(canonicalRoot)) === 'data') {
+    const legacyRoots = [
+      path.join(path.dirname(path.dirname(canonicalRoot)), 'attachments'),
+      path.join(path.dirname(path.dirname(path.resolve(root))), 'attachments'),
+    ];
+    for (const legacyRoot of legacyRoots) {
+      const relative = path.relative(legacyRoot, path.resolve(requested));
+      if (relative && !relative.startsWith('..') && !path.isAbsolute(relative)) {
+        const migrated = path.join(canonicalRoot, relative);
+        if (fs.existsSync(migrated)) {
+          resolvedRequest = migrated;
+          break;
+        }
+      }
+    }
+  }
+  const target = fs.realpathSync(resolvedRequest);
   if (target !== canonicalRoot && !target.startsWith(canonicalRoot + path.sep)) {
     throw new Error('文件不在 Studio 附件目录中');
   }
@@ -307,7 +326,7 @@ function removeAttachmentDirectory(sessionId, { root: studioRoot, strict = false
   let root;
   let target;
   try {
-    root = managedAttachmentRoot({ root: studioRoot && path.join(studioRoot, 'attachments') });
+    root = managedAttachmentRoot({ root: studioRoot && attachmentsDirectory(studioRoot) });
     if (!root) return false;
     target = path.join(root, safeSession);
     const stat = lstatIfPresent(target);

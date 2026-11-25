@@ -111,7 +111,7 @@ const STORAGE_KEY = 'pi-studio:preferences';
 export const DEFAULT_PREFERENCES: Preferences = {
   theme: 'light',
   palette: 'ocean',
-  fontSize: 14,
+  fontSize: 15,
   terminalFontSize: 12,
   terminalTheme: 'studio',
   terminalFontFamily: '',
@@ -224,7 +224,7 @@ export function normalizePreferences(value: unknown): Preferences {
       source.fontSize,
       DEFAULT_PREFERENCES.fontSize,
       12,
-      18,
+      20,
     ),
     terminalFontSize: clampNumber(
       source.terminalFontSize,

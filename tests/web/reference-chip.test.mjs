@@ -46,12 +46,15 @@ test('composer and message references produce identical chips with complete tran
     '@.qa/', '@src/App.tsx', '@"docs/设计方案 v2.pdf"', '/skill:skill-creator',
     '#[agent:81a1c938-91b8-4a09-9622-ae1b2ec32ef5|indigo-bob|代码审阅]',
     '$[skill:cosmic-split|cosmic-split]', '$[mcp:query-docs|context7%2Fquery-docs]',
+    '$[mcp-server:%5B%22%22%2C%22context7%22%5D|context7]',
   ]) {
     const editor = splitComposerText(token, new Set())[0].reference;
     const message = splitMessageText(token)[0].reference;
     assert.equal(render(editor), render(message));
     assert.match(render(editor), /data-reference-token=/);
     assert.match(render(editor), /contenteditable="false"/);
+    if (editor.kind === 'mcp-server') assert.match(render(editor), /title="MCP 服务 · context7"/);
+    if (editor.kind === 'mcp') assert.match(render(editor), /title="MCP 方法 · context7\/query-docs"/);
   }
 });
 

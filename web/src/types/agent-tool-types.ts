@@ -1,3 +1,5 @@
+import type { ProfileIcon } from './profile-icon';
+
 export type AgentToolSourceKind = 'core' | 'package' | 'git' | 'local' | 'inline' | 'extension' | 'mcp';
 
 export interface AgentToolSource {
@@ -37,6 +39,43 @@ export interface AgentToolSelection {
   enabled: string[];
   /** 工具最近一次被发现时的来源；扩展暂时卸载后仍用于提示来源。 */
   sources: Record<string, AgentToolSourceSnapshot>;
+}
+
+export type AgentToolExtensionMode = 'all-enabled' | 'safe-only' | 'none';
+export type AgentToolMcpMode = 'follow-server' | 'picked' | 'none';
+
+export interface AgentToolProfile {
+  id: string;
+  name: string;
+  description: string;
+  builtin?: boolean;
+  icon?: ProfileIcon | null;
+  enabled: string[];
+  sources: Record<string, AgentToolSourceSnapshot>;
+  extensionMode: AgentToolExtensionMode;
+  mcpMode: AgentToolMcpMode;
+  mcpServers: string[];
+}
+
+export type AgentToolProfilePatch = Pick<AgentToolProfile, 'id'> & Partial<AgentToolProfile>;
+
+export interface ToolProfilesSnapshot {
+  version: number;
+  mainProfileId: string;
+  workspaceProfileId: string;
+  activeMainProfileId: string;
+  temporaryProfileId: string;
+  profiles: AgentToolProfile[];
+  storage: string;
+}
+
+export interface TemporaryCapabilitiesSnapshot {
+  profileId: string;
+  profileName: string;
+  builtinTools: string[];
+  extensionTools: string[];
+  mcpServers: string[];
+  totalTools: number;
 }
 
 export interface AgentToolCatalog {

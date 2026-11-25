@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
-import type { NotificationTone } from '../../shell/NotificationCenter';
 import type {
   SubagentBudgetSnapshot,
   SubagentChild,
@@ -26,12 +25,6 @@ type SubagentWorkspaceDependencies = {
       tone: 'danger';
     }) => Promise<boolean>;
   };
-  pushNotification: (
-    message: string,
-    tone?: NotificationTone,
-    title?: string,
-    sessionId?: string,
-  ) => void;
   loadState: () => Promise<void>;
 };
 
@@ -43,7 +36,6 @@ export function useSubagentWorkspace({
   openSubagentsTab,
   turnActive,
   actionConfirmation,
-  pushNotification,
   loadState,
 }: SubagentWorkspaceDependencies) {
   const [subagentChildren, setSubagentChildren] = useState<SubagentChild[]>([]);
@@ -198,24 +190,16 @@ export function useSubagentWorkspace({
     setSubagentDeletingKey(child.key);
     setSubagentError(null);
     try {
-      const result = await window.piApi.deleteSubagent({
+      await window.piApi.deleteSubagent({
         sessionId,
         childKey: child.key,
       });
       if (sessionRef.current?.id !== sessionId) return;
       setSubagentChildren((current) => current.filter((item) => item.key !== child.key));
       setSubagentTranscript((current) => current?.child.key === child.key ? null : current);
-      const name = result.name || child.name || '子智能体';
-      if (result.pendingFileCleanups) {
-        pushNotification(`${name} 已删除。部分本地文件会在下次启动时重试清理。`, 'warning');
-      } else {
-        pushNotification(`${name} 已永久删除`, 'success');
-      }
       await loadState();
     } catch (error) {
-      const message = errorText(error);
-      setSubagentError(message);
-      pushNotification(message, 'error', '删除子智能体失败');
+      setSubagentError(errorText(error));
     } finally {
       setSubagentDeletingKey(null);
     }
@@ -240,12 +224,9 @@ export function useSubagentWorkspace({
       setSubagentChildren(current => current.map(entry => entry.key === child.key
         ? { ...entry, supervisorRequests: entry.supervisorRequests?.filter(request => request.id !== requestId) }
         : entry));
-      pushNotification(`已回复 ${child.name || child.agent}`, 'success');
       await refreshSubagentChildren(true);
     } catch (error) {
-      const messageText = errorText(error);
-      setSubagentError(messageText);
-      pushNotification(messageText, 'error', '回复子智能体失败');
+      setSubagentError(errorText(error));
       throw error;
     } finally {
       replyInFlight.current = false;

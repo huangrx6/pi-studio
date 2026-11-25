@@ -10,7 +10,7 @@ const output = fileURLToPath(new URL('../../.qa/device-storage/', import.meta.ur
 const temp = await realpath(await mkdtemp(path.join(os.tmpdir(), 'pi-studio-storage-')));
 const workspace = path.join(temp, 'workspace');
 const profile = path.join(temp, 'profile');
-const attachments = path.join(profile, 'attachments');
+const attachments = path.join(profile, 'data', 'attachments');
 let app;
 try {
   for (const dir of [output, workspace, profile, attachments]) await mkdir(dir, { recursive: true });
@@ -27,8 +27,8 @@ try {
   });
   await writeFile(path.join(attachments, 'first.bin'), Buffer.alloc(1024));
   for (const [dir, size] of [['extension-data', 2], ['background-media', 3], ['worktrees', 1]]) {
-    await mkdir(path.join(profile, dir), { recursive: true });
-    await writeFile(path.join(profile, dir, 'storage-qa.bin'), Buffer.alloc(size * 1024 ** 2));
+    await mkdir(path.join(profile, 'data', dir), { recursive: true });
+    await writeFile(path.join(profile, 'data', dir, 'storage-qa.bin'), Buffer.alloc(size * 1024 ** 2));
   }
   await page.locator('.sidebar-bottom button[title="设置"]').click();
   const nav = page.locator('.settings-navigation');

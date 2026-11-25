@@ -24,10 +24,11 @@ test('group deletion validates the confirmed archived IDs and preserves the proj
   ]) {
     db.insertConversation({ id: String(id), publicId, workspace, archived, kind: 'conversation' });
   }
-  const boards = pluginDataDirectory('studio.excalidraw', 'studio.excalidraw', { create: true });
-  const board = path.join(boards, '1.excalidraw.json');
+  const boards = path.join(pluginDataDirectory('example.session-plugin', 'example.session-plugin', { create: true }), 'sessions');
+  fs.mkdirSync(boards, { recursive: true });
+  const board = path.join(boards, '1.data.json');
   const staging = board + '.40b37da7-22d1-4677-9cf3-ec007c061608.tmp';
-  const otherBoard = path.join(boards, '3.excalidraw.json');
+  const otherBoard = path.join(boards, '3.data.json');
   for (const file of [board, staging, otherBoard]) fs.writeFileSync(file, '{}');
   const assets = uploadDirectory(db.getConversation('selected'));
   fs.writeFileSync(path.join(assets, 'input.txt'), 'session file');
@@ -63,12 +64,14 @@ test('filesystem cleanup survives restart and never follows a replaced plugin da
   const { conversationAction } = require('../../electron/main/runtime/conversations.cjs');
   const db = getStudioDatabase();
   const row = db.insertConversation({ id: '16', workspace: directory, kind: 'conversation' });
-  const boards = pluginDataDirectory('studio.excalidraw', 'studio.excalidraw', { create: true });
+  const extRoot = pluginDataDirectory('example.session-plugin', 'example.session-plugin', { create: true });
+  const sessions = path.join(extRoot, 'sessions');
+  fs.mkdirSync(sessions, { recursive: true });
   const relocated = path.join(directory, 'relocated');
-  fs.renameSync(boards, relocated);
-  const file = '16.excalidraw.json';
+  fs.renameSync(sessions, relocated);
+  const file = '16.data.json';
   fs.writeFileSync(path.join(relocated, file), '{}');
-  fs.symlinkSync(relocated, boards, 'junction');
+  fs.symlinkSync(relocated, sessions, 'junction');
 
   const removed = await conversationAction({ kind: 'session', id: row.publicId, action: 'remove' });
   assert.equal(removed.pendingFileCleanups, 1);
@@ -76,13 +79,13 @@ test('filesystem cleanup survives restart and never follows a replaced plugin da
   assert.ok(fs.existsSync(path.join(relocated, file)));
   closeStudioDatabase();
 
-  fs.unlinkSync(boards);
-  fs.mkdirSync(boards);
-  fs.copyFileSync(path.join(relocated, file), path.join(boards, file));
+  fs.unlinkSync(sessions);
+  fs.mkdirSync(sessions);
+  fs.copyFileSync(path.join(relocated, file), path.join(sessions, file));
   const reopened = getStudioDatabase();
   assert.equal(flushConversationFileCleanup(reopened).pendingFileCleanups, 0);
   assert.equal(flushConversationFileCleanup(reopened).pendingFileCleanups, 0);
-  assert.equal(fs.existsSync(path.join(boards, file)), false);
+  assert.equal(fs.existsSync(path.join(sessions, file)), false);
   assert.ok(fs.existsSync(path.join(relocated, file)));
   assert.equal(reopened.db.prepare('SELECT count(*) AS count FROM studio_conversation_file_cleanup').get().count, 0);
 });

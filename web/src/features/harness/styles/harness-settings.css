@@ -1,28 +1,5 @@
 .harness-settings { color: var(--text); font: var(--settings-preference-body-font); }
 .harness-settings .settings-profile-actions { align-items: stretch; }
-:is(.harness-profile-icon, .harness-ink-choice) {
-  --harness-mark-hue: var(--scheme-lime);
-}
-:is(.harness-profile-icon, .harness-ink-choice)[data-ink="ocean"] { --harness-mark-hue: var(--scheme-ocean); }
-:is(.harness-profile-icon, .harness-ink-choice)[data-ink="berry"] { --harness-mark-hue: var(--scheme-berry); }
-:is(.harness-profile-icon, .harness-ink-choice)[data-ink="amber"] { --harness-mark-hue: var(--scheme-amber); }
-.harness-profile-icon {
-  --harness-mark-ink: color-mix(in srgb, var(--harness-mark-hue) 64%, var(--text));
-  --harness-mark-tip: color-mix(in srgb, var(--harness-mark-ink) 72%, var(--settings-card-bg));
-  display: grid; flex: none; place-items: center; width: var(--space-10); height: var(--space-10);
-  border: 1px solid color-mix(in srgb, var(--harness-mark-ink) 20%, var(--divider));
-  border-radius: var(--radius-control);
-  background: color-mix(in srgb, var(--harness-mark-ink) 10%, var(--settings-card-bg));
-}
-.harness-profile-layers { display: grid; width: var(--space-6); gap: 2px; }
-.harness-profile-layers > span {
-  height: var(--space-1); background: var(--harness-mark-ink);
-  mask: url('../marks/instruction-rule.webp') center / 100% 100% no-repeat;
-}
-.harness-profile-layers > .is-split {
-  mask-image: url('../marks/instruction-split.webp');
-  background: linear-gradient(to right, var(--harness-mark-ink) 74%, var(--harness-mark-tip) 74%);
-}
 .harness-card-meta {
   display: grid;
   gap: var(--space-2);
@@ -62,7 +39,6 @@
 .harness-load-error p { margin: 0; color: var(--error); overflow-wrap: anywhere; }
 .harness-editor, .harness-policy-editor { min-width: 0; }
 .harness-editor p, .harness-policy-editor p { margin: 0; }
-.harness-identity-fields { display: grid; grid-template-columns: auto minmax(0, 1.25fr) minmax(0, 1fr); gap: var(--space-3); }
 .harness-profile-dialog .dialog-footer-hint { flex: 1 1 auto; }
 .harness-actions-trigger { min-height: var(--settings-control-height); }
 .harness-actions-trigger svg { width: var(--icon-xs); height: var(--icon-xs); }
@@ -149,10 +125,6 @@
 @container settings-form (max-width: 580px) {
   .harness-editor-context { flex-direction: column; align-items: stretch; }
   .harness-binding-controls { justify-content: flex-start; }
-}
-@container settings-form (max-width: 440px) {
-  .harness-identity-fields { grid-template-columns: auto minmax(0, 1fr); }
-  .harness-identity-fields > .harness-field:last-child { grid-column: 1 / -1; }
 }
 @media (prefers-reduced-motion: reduce) {
   .harness-disclosure::details-content, .harness-section-toggle svg { transition: none; }

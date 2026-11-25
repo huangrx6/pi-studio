@@ -24,7 +24,7 @@ app.whenReady()
   .then(async () => {
     app.dock?.hide();
     await registerBackgroundProtocol();
-    const mediaDir = path.join(userData, 'background-media');
+    const mediaDir = path.join(userData, 'data', 'background-media');
     fs.mkdirSync(mediaDir, { recursive: true });
     const png = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',

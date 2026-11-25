@@ -4,6 +4,24 @@ export function installComposerInputFixture() {
   const calls = []; const holds = {}; const failures = {}; const pending = {}; const listeners = new Set(); const dataViewListeners = new Set();
   let sequence = 0; let pickerSequence = 0; let dataViewSequence = 0; const created = [];
   const dataViews = new Map(); const dataViewResponses = new Map();
+  const mcpResources = [
+    { server: 'chrome-devtools', description: '检查页面和浏览器状态', methods: [
+      { name: 'click', description: '点击页面中的元素' },
+      { name: 'list_pages', description: '列出已打开的页面' },
+    ] },
+    { server: 'context7', description: '查询开发文档', methods: [
+      { name: 'query_docs', description: '查找文档和代码示例' },
+    ] },
+  ].flatMap(({ server, description, methods }) => {
+    const serverId = JSON.stringify(['', server]);
+    const source = '个人配置';
+    return [
+      { type: 'mcp-server', id: serverId, name: server, server, description, source, methodCount: methods.length },
+      ...methods.map(method => ({
+        type: 'mcp', id: JSON.stringify(['', server, method.name]), serverId, server, source, ...method,
+      })),
+    ];
+  });
   const extensionItems = [
     {
       id: 'project:qa-extension/scope-launcher',
@@ -93,7 +111,7 @@ export function installComposerInputFixture() {
         skills: [{ name: `qa-skill-${scope}`, description: 'QA 隔离技能说明', source: 'skill', argumentHint: '<任务>' }],
         ...(input.includeCapabilities && { capabilities: [
           { type: 'skill', id: 'qa-skill', name: 'QA Skill', description: '', source: 'QA' },
-          { type: 'mcp', id: 'qa-mcp', server: 'QA', name: 'qa_method', description: '', source: 'QA' },
+          ...mcpResources,
           { type: 'plugin', id: 'qa.canvas', name: 'QA Canvas', description: '', source: 'QA' },
         ] }),
       }, input.sessionId || input.cwd);

@@ -66,7 +66,13 @@ const {
 } = require('../integrations/mcp/index.cjs');
 const {
   agentToolCatalog,
+  deleteToolProfile,
+  getToolProfilesSnapshot,
+  resetToolProfile,
   saveInstalledToolSelection,
+  saveToolProfile,
+  selectToolProfile,
+  temporaryCapabilitiesSnapshot,
 } = require('../runtime/tool-selection.cjs');
 const {
   listSubagentProfiles, removeSubagentProfile, roleResources, saveSubagentProfile,
@@ -386,6 +392,43 @@ function registerSettingsIpc() {
     );
   });
 
+  ipcMain.handle('pi:tool-profiles-get', (_event, cwd) => (
+    getToolProfilesSnapshot(typeof cwd === 'string' ? cwd : DEFAULT_CWD)
+  ));
+
+  ipcMain.handle('pi:save-tool-profile', async (_event, payload = {}) => {
+    const cwd = typeof payload.cwd === 'string' ? payload.cwd : DEFAULT_CWD;
+    const toolProfiles = saveToolProfile({ ...payload, cwd });
+    const temporaryCapabilities = await temporaryCapabilitiesSnapshot();
+    return { toolProfiles, temporaryCapabilities, runtimeRefresh: runtimeRefresh('智能体工具') };
+  });
+
+  ipcMain.handle('pi:select-tool-profile', async (_event, payload = {}) => {
+    if (!['global', 'workspace', 'inherit', 'temporary'].includes(payload.scope)) {
+      throw new Error('工具方案应用范围无效');
+    }
+    const cwd = typeof payload.cwd === 'string' ? payload.cwd : '';
+    const toolProfiles = selectToolProfile({ ...payload, cwd });
+    const temporaryCapabilities = await temporaryCapabilitiesSnapshot();
+    return { toolProfiles, temporaryCapabilities, runtimeRefresh: runtimeRefresh('智能体工具') };
+  });
+
+  ipcMain.handle('pi:reset-tool-profile', async (_event, payload = {}) => {
+    const cwd = typeof payload.cwd === 'string' ? payload.cwd : DEFAULT_CWD;
+    const toolProfiles = resetToolProfile({ ...payload, cwd });
+    const temporaryCapabilities = await temporaryCapabilitiesSnapshot();
+    return { toolProfiles, temporaryCapabilities, runtimeRefresh: runtimeRefresh('智能体工具') };
+  });
+
+  ipcMain.handle('pi:delete-tool-profile', async (_event, payload = {}) => {
+    const cwd = typeof payload.cwd === 'string' ? payload.cwd : DEFAULT_CWD;
+    const toolProfiles = deleteToolProfile({ ...payload, cwd });
+    const temporaryCapabilities = await temporaryCapabilitiesSnapshot();
+    return { toolProfiles, temporaryCapabilities, runtimeRefresh: runtimeRefresh('智能体工具') };
+  });
+
+  ipcMain.handle('pi:temporary-capabilities', async () => temporaryCapabilitiesSnapshot());
+
   ipcMain.handle('pi:subagent-settings', async (_event, cwd) => (
     subagentSettings(typeof cwd === 'string' ? cwd : DEFAULT_CWD)
   ));
@@ -450,7 +493,7 @@ function registerSettingsIpc() {
   });
 
   ipcMain.handle('pi:select-harness-profile', async (_event, payload = {}) => {
-    if (!['global', 'workspace', 'inherit'].includes(payload.scope)) {
+    if (!['global', 'workspace', 'inherit', 'temporary'].includes(payload.scope)) {
       throw new Error('Harness 应用范围无效');
     }
     const cwd = typeof payload.cwd === 'string' ? payload.cwd : '';

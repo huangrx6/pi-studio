@@ -40,7 +40,6 @@ import {
   parseStudioCommand,
 } from './composer-command-routes.ts';
 import { errorText } from '../../shared/error-text';
-import type { AppNotificationAction, NotificationTone } from '../../shell/NotificationCenter';
 import type { SettingsTab } from '../../shell/app-shell-config';
 
 type Setter<T> = Dispatch<SetStateAction<T>>;
@@ -106,13 +105,6 @@ type ComposerCommandsDependencies = {
   selectThinking: (level: ThinkingLevel) => Promise<void>;
   loadState: () => Promise<void>;
   showComposerFeedback: (message: string, tone?: 'info' | 'warning') => void;
-  pushNotification: (
-    message: string,
-    tone?: NotificationTone,
-    title?: string,
-    sessionId?: string,
-    action?: AppNotificationAction,
-  ) => void;
   openExtensionPanel: (panelId: string) => Promise<void>;
 };
 
@@ -155,7 +147,6 @@ export function useComposerCommands({
   selectThinking,
   loadState,
   showComposerFeedback,
-  pushNotification,
   openExtensionPanel,
 }: ComposerCommandsDependencies) {
   function updateComposerMenu(value: string, caret: number) {
@@ -247,7 +238,7 @@ export function useComposerCommands({
     }
     if (result.message) {
       setError(null);
-      pushNotification(result.message);
+      showComposerFeedback(result.message, 'info');
     }
     return true;
   }
@@ -280,15 +271,15 @@ export function useComposerCommands({
     try {
       const result = await window.piApi.runExtensionCommand({ commandId, sessionId: sourceId, cwd: workspace, input });
       const applied = await applyExtensionCommandResult(result, depth + 1, canApply, acceptOwnDraftChange);
-      if (!applied) {
-        const message = `扩展命令「${commandId}」已在 ${sourceLabel} 执行；输入或会话已变化，后续结果未替换当前输入。`;
-        if (sameContext()) showComposerFeedback(message, 'info');
-        else pushNotification(message, 'info', '扩展命令已执行', sourceId);
+      if (!applied && sameContext()) {
+        showComposerFeedback(
+          `扩展命令「${commandId}」已在 ${sourceLabel} 执行；输入或会话已变化，后续结果未替换当前输入。`,
+          'info',
+        );
       }
       return true;
     } catch (cause) {
       if (canApply()) setError(errorText(cause));
-      else pushNotification(`${sourceLabel} 的扩展命令「${commandId}」失败：${errorText(cause)}`, 'error', '扩展命令失败', sourceId);
       return false;
     }
   }
@@ -326,7 +317,7 @@ export function useComposerCommands({
       if (stateLoading || sessionLoading) return true;
       if (command.argument) {
         try { await selectModel(command.argument); }
-        catch (error) { pushNotification(errorText(error), 'error'); }
+        catch (error) { showComposerFeedback(errorText(error)); }
       } else if (isNewConversation && (!modelSelection.modelRef || modelSelection.unavailable)) {
         await openSettings('models');
       } else {
@@ -345,11 +336,11 @@ export function useComposerCommands({
       const level = normalized as ThinkingLevel | null;
       if (!level || !modelSelection.thinkingLevels.includes(level)) {
         const available = modelSelection.thinkingLevels.map((item) => thinkingLabels[item]).join('、');
-        pushNotification(`当前模型可用等级：${available || 'Default'}`, 'info');
+        showComposerFeedback(`当前模型可用等级：${available || 'Default'}`, 'info');
         return true;
       }
       try { await selectThinking(level); }
-      catch (error) { pushNotification(errorText(error), 'error'); }
+      catch (error) { showComposerFeedback(errorText(error)); }
       return true;
     }
     if (command.route === 'goal.control') {
@@ -370,13 +361,6 @@ export function useComposerCommands({
         const canApply = () => sessionLoadRef.current === generation
           && composerDraftKeyRef.current === ownerKey
           && composerDraftMatches(readComposerDraft(composerDraftsRef.current, ownerKey), original);
-        const sourceLabel = workspace;
-        const reportDetached = (id: string, started: boolean) => pushNotification(
-          started
-            ? `目标已在 ${sourceLabel} 的新会话中建立，当前输入未被替换。`
-            : `已在 ${sourceLabel} 创建会话；输入或会话已变化，目标尚未提交，原草稿已保留。`,
-          'info', started ? '目标已建立' : '目标尚未启动', id,
-        );
         setLongTaskBusy(true);
         try {
           const created = await window.piApi.createConversation({
@@ -384,7 +368,6 @@ export function useComposerCommands({
             title: goalCommand.text.replace(/\s+/g, ' ').slice(0, 48),
           });
           if (!canApply()) {
-            reportDetached(created.id, false);
             await loadState().catch(() => {});
             return true;
           }
@@ -392,19 +375,14 @@ export function useComposerCommands({
             kind: 'session', id: created.id, action: 'long-task-set', goal: goalCommand.text,
           });
           if (!canApply()) {
-            reportDetached(created.id, true);
             await loadState().catch(() => {});
             return true;
           }
           await loadState().catch(() => {});
-          if (!canApply()) {
-            reportDetached(created.id, true);
-            return true;
-          }
+          if (!canApply()) return true;
           const navigationGeneration = sessionLoadRef.current + 1;
           const opened = await conversationNavigationRef.current.open(created);
           if (!opened || sessionRef.current?.id !== created.id || sessionLoadRef.current !== navigationGeneration) {
-            reportDetached(created.id, true);
             return true;
           }
           const sourceUnchanged = composerDraftMatches(readComposerDraft(composerDraftsRef.current, ownerKey), original);
@@ -415,7 +393,6 @@ export function useComposerCommands({
             : '新目标已建立，等待期间的输入已保留在原草稿。', 'info');
         } catch (error) {
           if (canApply()) showComposerFeedback(errorText(error));
-          else pushNotification(`${sourceLabel} 的目标操作失败：${errorText(error)}，当前草稿已保留。`, 'error', '目标操作失败');
         } finally {
           setLongTaskBusy(false);
         }

@@ -52,10 +52,10 @@
 
 /* 会话表面按用途派生，浮动面板继续使用独立的不透明阅读底。 */
 .app {
-  --conversation-control-surface: var(--surface-floating);
-  --conversation-reading-surface: var(--surface-raised);
-  --conversation-inset-surface: color-mix(in srgb, var(--text-1) 4%, transparent);
-  --conversation-hover-surface: color-mix(in srgb, var(--text-1) 6%, transparent);
+  --conversation-control-surface: color-mix(in srgb, var(--text-1) 5.5%, var(--surface-raised));
+  --conversation-reading-surface: color-mix(in srgb, var(--text-1) 3.2%, var(--surface-raised));
+  --conversation-inset-surface: color-mix(in srgb, var(--text-1) 4.5%, transparent);
+  --conversation-hover-surface: color-mix(in srgb, var(--text-1) 7%, transparent);
   --conversation-selected-surface: var(--tint-neutral);
 }
 
@@ -70,25 +70,30 @@
 }
 
 .app .composer {
-  background: var(--conversation-control-surface);
+  background: var(--composer-surface);
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-card);
+  box-shadow: inset 0 1px 0 var(--composer-highlight), var(--shadow-card);
 }
 
-.app .composer:has(.composer-input textarea:focus) {
-  border-color: var(--focus-color);
-  box-shadow: none;
+.app.is-wallpaper-inside .composer {
+  background: color-mix(in srgb, var(--composer-surface) 84%, transparent);
+}
+
+.app .composer:has(.composer-editor:focus),
+.app .composer.is-drag-over {
+  border-color: var(--accent);
+  box-shadow: inset 0 1px 0 var(--composer-highlight), var(--composer-focus-shadow);
 }
 
 /* 对话正文只保留一层阅读底，代码内部与表头不再叠加不透明色块。 */
 .app .chat-scroll .markdown :is(.markdown-code, table) {
   background: var(--conversation-reading-surface);
-  border-color: var(--border);
+  border-color: var(--divider);
 }
 
 .app .chat-scroll .markdown :is(.markdown-code-bar, th) {
   background: var(--conversation-inset-surface);
-  border-color: var(--border);
+  border-color: var(--divider);
 }
 
 .app .chat-scroll .markdown code {

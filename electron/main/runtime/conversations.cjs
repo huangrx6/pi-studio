@@ -845,6 +845,7 @@ async function createConversation({ cwd, title = '新会话', goal = '' } = {}) 
   await reconcileRuntimeForWorkspace(workspace, { verifyExtensionIntegrity: true });
   const agentSelection = await runtimeSelection({
     longTask: Boolean(cleanGoal),
+    cwd: workspace,
   });
   const modelSelection = await modelInfo(workspace);
   const ref = splitModelRef(modelSelection.modelRef);
@@ -1033,13 +1034,13 @@ async function submitConversation(input = {}, options = {}) {
 
 async function admitConversation(row, conversation, runtime, originalText, input, options) {
   const projectedGoal = Boolean(row.goal);
-  let selection = await runtimeSelection({ kind: row.kind, longTask: projectedGoal });
+  let selection = await runtimeSelection({ kind: row.kind, longTask: projectedGoal, cwd: row.workspace });
   // A revoked reference must not create or resume a goal before admission.
   let references = submissionReferences(originalText, row.workspace, selection);
   const longTask = await prepareLongTaskSubmission({ row, conversation, text: references.readable });
   const activeGoal = Boolean(longTask?.enabled && longTask?.goal);
   if (row.kind !== 'durable' && activeGoal !== projectedGoal) {
-    selection = await runtimeSelection({ kind: row.kind, longTask: activeGoal });
+    selection = await runtimeSelection({ kind: row.kind, longTask: activeGoal, cwd: row.workspace });
     references = submissionReferences(originalText, row.workspace, selection);
   }
   const { displayText, readable, prompt } = references;
@@ -1418,6 +1419,7 @@ async function submitLongTaskContinuation(row, conversation, state, requestPrefi
   const selection = await runtimeSelection({
     kind: row.kind,
     longTask: true,
+    cwd: row.workspace,
   });
   await conversation.configure({
     extensions: selection.extensions,
@@ -2381,7 +2383,7 @@ async function composerResources(input = {}) {
     ],
     skills: composerSkills(cwd, skills),
     ...(input.includeCapabilities ? {
-      capabilities: composerCapabilityCatalog(cwd, await runtimeSelection({ kind: row?.kind }), { skills, includeIcons: true })
+      capabilities: composerCapabilityCatalog(cwd, await runtimeSelection({ kind: row?.kind, cwd }), { skills, includeIcons: true })
         .map(row => row.option),
     } : {}),
   };

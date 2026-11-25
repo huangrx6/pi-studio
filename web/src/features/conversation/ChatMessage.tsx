@@ -1,10 +1,9 @@
 import { Accordion } from '../../shared/Accordion';
 import { memo, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
-import { ChevronDown, PanelRightOpen } from 'lucide-react';
-import type { ChatMessage, ContentBlock } from '../../types/chat-types';
-import { AttachmentIcon } from '../../shared/AttachmentIcon';
+import { ChevronDown } from 'lucide-react';
+import type { ChatAttachment, ChatMessage } from '../../types/chat-types';
+import { AttachmentFileDetails } from './AttachmentFileDetails';
 import { LoadingIndicator } from '../../shared/LoadingState';
-import { previewTypeLabel } from '../../shared/file-preview';
 import { isComposingKey } from '../../shared/keyboard-navigation';
 import { ConversationImageGallery } from './ConversationImageGallery';
 import { imagesFromBlocks, textBlocks } from './message-content';
@@ -12,27 +11,23 @@ import { MessageActions } from './MessageActions';
 import { readableComposerReferences, splitMessageText, type Reference } from './references';
 import { ReferenceChip } from './ReferenceChip';
 import { ComposerEditor, type ComposerEditorHandle } from './ComposerEditor';
+import './styles/attachment-strip.css';
 import './styles/user-message.css';
 
 const editCommands = new Set<string>();
 
-/**
- * 内联图片列表。
- * 只取 image 块，base64 数据直接拼成 data URI；没有任何图片时不占位。
- *
- * @param blocks 消息内容块（用户消息或工具结果都可能带图片）
- */
-function MessageImages({ blocks }: { blocks: ContentBlock[] }) {
-  const images = imagesFromBlocks(blocks);
-  if (images.length === 0) return null;
-  return <ConversationImageGallery className="message-images" images={images} />;
-}
-
-/** 字节数转可读体积；附件卡片用，保留一位小数。 */
-function formatBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${bytes} B`;
+function SentFileCard({ attachment, onOpenFile }: {
+  attachment: ChatAttachment;
+  onOpenFile?: (path: string) => void;
+}) {
+  const details = <AttachmentFileDetails attachment={attachment} />;
+  if (attachment.path && onOpenFile) {
+    return <button type="button" className="attachment-card is-openable" title={attachment.name}
+      aria-label={`在右侧面板查看 ${attachment.name}`} onClick={() => onOpenFile(attachment.path)}>
+      {details}
+    </button>;
+  }
+  return <div className="attachment-card" title={attachment.name}>{details}</div>;
 }
 
 /**
@@ -116,7 +111,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
   // 兜底：同一组件被误用于其他角色时不渲染，避免出现空气泡。
   if (message.role !== 'user') return null;
   const text = textBlocks(message.content);
-  const messageImages = imagesFromBlocks(message.content).map((image) => image.src);
+  const images = imagesFromBlocks(message.content);
   // 历史里技能命令已被展开成 <skill> 块；复制时还原成用户实际输入的命令形式。
   const segments = splitMessageText(text);
   const hasReferenceChip = segments.some(part => part.kind === 'reference' && (part.reference.kind === 'agent' || part.reference.capabilityId));
@@ -128,7 +123,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
         : segment.reference.token)
     .join('')
     .trim();
-  const preservedCount = messageImages.length + (message.attachments?.length ?? 0);
+  const attachmentCount = images.length + (message.attachments?.length ?? 0);
   const canEdit = Boolean(onEdit && Number.isSafeInteger(message.sourceIndex));
 
   function resizeEdit() {
@@ -197,64 +192,50 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
   }
 
   return <div id={id} className={`message user ${editing ? 'is-editing' : ''}`}>
-  {editing
-    ? <div className="message-edit">
-      <div className="message-edit-body">
-        {hasReferenceChip ? <ComposerEditor ref={roleEditRef} value={draft} scope={id || 'edit'} readOnly={savingEdit}
-          aria-label="编辑消息" placeholder="编辑消息" commandNames={editCommands}
-          onChange={setDraft} onKeyDown={onEditKey} /> : <textarea
-          ref={editRef}
-          value={draft}
-          aria-label="编辑消息"
-          disabled={savingEdit}
-          onChange={(event) => {
-            setDraft(event.target.value);
-            requestAnimationFrame(resizeEdit);
-          }}
-          onKeyDown={onEditKey}
-        />}
-        {preservedCount > 0 && <div className="message-edit-preserved">保留 {preservedCount} 个图片或附件</div>}
-        {editError && <div className="message-edit-error" role="alert">{editError}</div>}
-      </div>
-      <div className="message-edit-actions">
-        <button type="button" className="message-edit-cancel" disabled={savingEdit} onClick={cancelEdit}>取消</button>
-        <button type="button" className="message-edit-send" disabled={savingEdit || !draft.trim()} onClick={() => void saveEdit()}>
-          {savingEdit ? <LoadingIndicator /> : null}
-          {savingEdit ? '发送中' : (draft.trim() === copyText ? '重新发送' : '发送')}
-        </button>
-      </div>
-    </div>
-    : <div className="user-message">
-    {/* 图片/文件与正文同属一个气泡：附件在上横排滚动，正文在下，避免附件“飘”在气泡外。 */}
-    {(preservedCount > 0 || text) && <div className={`user-bubble${preservedCount > 0 ? ' has-attachments' : ''}${text ? ' has-text' : ''}`}>
-      {preservedCount > 0 && <div className="user-attachments">
-        <MessageImages blocks={message.content} />
-        {message.attachments?.map((attachment) => {
-          const openable = Boolean(attachment.path && onOpenFile);
-          return <div className={`attachment-card ${openable ? 'is-openable' : ''}`} key={attachment.path} title={`${attachment.path}${openable ? ' · 点击查看' : ''}`}
-            role={openable ? 'button' : undefined} tabIndex={openable ? 0 : undefined} aria-label={openable ? `在右侧面板查看 ${attachment.name}` : undefined}
-            onClick={() => { if (openable) onOpenFile?.(attachment.path); }}
-            onKeyDown={(event) => { if (openable && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); onOpenFile?.(attachment.path); } }}>
-            <AttachmentIcon name={attachment.name} mime={attachment.mime} />
-            <span className="attachment-main"><strong title={attachment.name}>{attachment.name}</strong><span>{formatBytes(attachment.bytes)}{attachment.lines ? ` · ${attachment.lines.toLocaleString('zh-CN')} 行` : ''}</span></span>
-            <span className="attachment-kind">{previewTypeLabel(attachment.name)}</span>
-            {openable && <span className="attachment-open-cue" aria-hidden="true"><PanelRightOpen /></span>}
-          </div>;
-        })}
+    <div className="user-message">
+      {attachmentCount > 0 && <div className="user-attachments attachment-strip" role="group" aria-label="消息附件"
+        tabIndex={attachmentCount > 1 ? 0 : undefined}>
+        <ConversationImageGallery images={images} inAttachmentStrip />
+        {message.attachments?.map((attachment) => <SentFileCard key={attachment.path} attachment={attachment} onOpenFile={onOpenFile} />)}
       </div>}
-      {text ? <UserText text={text} /> : null}
-    </div>}
-  </div>}
-  {/* 用户消息同样在悬浮时显示复制、编辑与发送时间；复制时带上消息里的图片。 */}
-  {!editing && <MessageActions
-    text={readableComposerReferences(copyText)}
-    images={messageImages}
-    time={message.timestamp}
-    label="复制消息"
-    align="end"
-    onEdit={canEdit ? beginEdit : undefined}
-    editDisabled={editDisabled}
-  />}
+      {editing
+        ? <div className="message-edit">
+          <div className="message-edit-body">
+            {hasReferenceChip ? <ComposerEditor ref={roleEditRef} value={draft} scope={id || 'edit'} readOnly={savingEdit}
+              aria-label="编辑消息" placeholder="编辑消息" commandNames={editCommands}
+              onChange={setDraft} onKeyDown={onEditKey} /> : <textarea
+              ref={editRef}
+              value={draft}
+              aria-label="编辑消息"
+              disabled={savingEdit}
+              onChange={(event) => {
+                setDraft(event.target.value);
+                requestAnimationFrame(resizeEdit);
+              }}
+              onKeyDown={onEditKey}
+            />}
+            {editError && <div className="message-edit-error" role="alert">{editError}</div>}
+          </div>
+          <div className="message-edit-actions">
+            <button type="button" className="message-edit-cancel" disabled={savingEdit} onClick={cancelEdit}>取消</button>
+            <button type="button" className="message-edit-send" disabled={savingEdit || !draft.trim()} onClick={() => void saveEdit()}>
+              {savingEdit ? <LoadingIndicator /> : null}
+              {savingEdit ? '发送中' : (draft.trim() === copyText ? '重新发送' : '发送')}
+            </button>
+          </div>
+        </div>
+        : text.trim() && <div className="user-bubble"><UserText text={text} /></div>}
+    </div>
+    {/* 用户消息同样在悬浮时显示复制、编辑与发送时间；复制时带上消息里的图片。 */}
+    {!editing && <MessageActions
+      text={readableComposerReferences(copyText)}
+      images={images.map(image => image.src)}
+      time={message.timestamp}
+      label="复制消息"
+      align="end"
+      onEdit={canEdit ? beginEdit : undefined}
+      editDisabled={editDisabled}
+    />}
   </div>;
 }
 

@@ -11,6 +11,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { STUDIO_MANAGED_DATA_DIR } = require('../core/studio-paths.cjs');
 
 const SUPPORTED_SHELLS = new Set(['zsh']);
 
@@ -77,7 +78,7 @@ function shellIntegrationEnvironment({ dataDirectory, shell, environment = proce
   const executable = path.basename(shell || '').replace(/\.exe$/i, '').toLowerCase();
   if (!SUPPORTED_SHELLS.has(executable)) return {};
 
-  const root = path.join(dataDirectory, 'shell', 'zsh');
+  const root = path.join(dataDirectory, STUDIO_MANAGED_DATA_DIR, 'shell', 'zsh');
   try {
     fs.mkdirSync(root, { recursive: true });
     fs.writeFileSync(path.join(root, 'integration.zsh'), INTEGRATION_SCRIPT);

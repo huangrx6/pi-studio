@@ -716,5 +716,6 @@ test('Agent tool wildcards select MCP namespaces and legacy selections gain new 
   const selection = readAgentToolSelection(db);
   assert.equal(selection.enabled.includes('mcp__*'), true);
   assert.equal(selection.enabled.includes('todo'), true);
-  assert.equal(values.get('studio.agent.tools.version'), 6);
+  assert.equal(selection.enabled.includes('workbench_refresh'), true);
+  assert.equal(values.get('studio.agent.tools.version'), 7);
 });

@@ -2,7 +2,7 @@
 
 聊天开始绘图时，Excalidraw 自动打开当前会话的侧栏。画笔依次勾勒节点、沿路径画出连线，并逐字写入标题与标签。绘制完成后，可以手动编辑和导出 `.excalidraw` 文件。
 
-需要 Pi Studio **0.0.14 或更新版本**。从聊天自动排版需要本机 **Python 3.10+**。逐笔动画需要支持 `canvasPlaybackVersion: 1` 的 Studio 构建，早期支持画布的构建会分批呈现图形。手动编辑、导入与导出由 Studio 提供的官方 `@excalidraw/excalidraw` 编辑器处理。
+需要 Pi Studio **0.0.14 或更新版本**。从聊天自动排版需要本机 **Python 3.10+**。画布编辑器、逐笔动画与场景校验完全打包在插件自身的 `extension/ui/` 与 `extension/scene.mjs` 中，通过 Studio 的通用沙箱视图协议 `panel.view`（`pi-ext://`）加载，不与主应用前端耦合。
 
 ## 安装
 
@@ -27,7 +27,7 @@
 | Mermaid | 在工具栏选择「从 Mermaid 导入」，粘贴支持的 Mermaid 图形并插入到画布。 |
 | `.drawio` | 在 Draw.io 中编辑。需要在侧栏继续时，可用同一份规格生成 `.excalidraw` 版。 |
 
-随包的 [`excalidraw-live-canvas`](extension/skills/excalidraw-live-canvas/SKILL.md) 包含 `diagram-authoring` 的脚本、参考文档、示例和图标资源。聊天工具直接调用包内的 `emit_excalidraw.py`，因此和命令行生成共用规格、配色、图标、排版和校验。包内保留 Draw.io 和 Mermaid 后端，文件交付也可使用这份技能。已有的全局 `diagram-authoring` 可以同时安装，插件运行使用自己的版本。
+随包的 [`diagram-authoring`](extension/skills/diagram-authoring/SKILL.md) 与上游 `agent-skills` 仓库同名同源，包含完整脚本、参考文档、示例与跨后端 `.excalidrawlib` 图标支持（含 `style.edges` 圆角/曲线/直连、无框 `shape: "icon"` 与平行边错开）。聊天工具直接调用包内的 `emit_excalidraw.py`，因此和命令行生成共用规格、配色、图标、排版和校验。包内保留 Draw.io 和 Mermaid 后端，文件交付也可使用这份技能；后续直接替换该目录即可完成同步。
 
 聊天绘图走 Studio 本地工具和事件接口，安装后可直接使用。官方编辑器在 Studio 内运行，绘图无需连接 Excalidraw MCP 或 Excalidraw 网站。
 
@@ -44,28 +44,32 @@ excalidraw/
 ├── extension/
 │   ├── pi-studio.extension.json
 │   ├── extension.mjs
+│   ├── scene.mjs
 │   ├── diagram-authoring.mjs
 │   ├── diagram.mjs
 │   ├── integrity.json
-│   └── skills/excalidraw-live-canvas/
+│   ├── ui/                    # 独立构建的前端静态产物与 Excalidraw 字体资源
+│   └── skills/diagram-authoring/
 │       ├── SKILL.md
 │       ├── scripts/
 │       ├── references/
 │       └── examples/
 ```
 
-`extension.mjs` 提供 `excalidraw_draw`、`excalidraw_read` 和画布数据源。`diagram-authoring.mjs` 调用随包的技能排版引擎；`diagram.mjs` 处理连接到现有对象的节点与连线。整个目录可以复制出来单独安装。
+`extension.mjs` 提供 `excalidraw_draw`、`excalidraw_read` 和 `scene` 数据源（支持 `invoke('save', ...)`）。`scene.mjs` 负责画布结构校验；`diagram-authoring.mjs` 调用随包的技能排版引擎；`diagram.mjs` 处理连接到现有对象的节点与连线。整个目录可以复制出来单独安装。
 
 ## 校验与打包
 
 在 Pi Studio 仓库根目录运行：
 
 ```sh
+node scripts/build/build-excalidraw-plugin-ui.mjs
 plugin_dir="$PWD/assets/official-plugins/packages/excalidraw"
+node sdk/cli/pi-studio-extension.mjs seal "$plugin_dir/extension" --scope user
 node sdk/cli/pi-studio-plugin.mjs validate "$plugin_dir" --json
 node sdk/cli/pi-studio-extension.mjs validate "$plugin_dir/extension" --scope user --json
 
-archive="$PWD/release/studio.excalidraw-1.1.0.pi-plugin.zip"
+archive="$PWD/release/studio.excalidraw-2.0.0.pi-plugin.zip"
 mkdir -p "$PWD/release"
 (
   cd "$plugin_dir"
@@ -77,4 +81,4 @@ mkdir -p "$PWD/release"
 
 ## 许可
 
-插件代码和随包技能均使用 MIT 许可。包内图标来自 Excalidraw。分别见 [插件许可](LICENSE)、[技能许可](extension/skills/excalidraw-live-canvas/LICENSE) 和 [Excalidraw 许可](assets/EXCALIDRAW-LICENSE)。
+插件代码和随包技能均使用 MIT 许可。包内图标来自 Excalidraw。分别见 [插件许可](LICENSE)、[技能许可](extension/skills/diagram-authoring/LICENSE) 和 [Excalidraw 许可](assets/EXCALIDRAW-LICENSE)。

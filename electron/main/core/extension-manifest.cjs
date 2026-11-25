@@ -10,6 +10,7 @@ const {
   satisfiesSemver,
 } = require('./extension-semver.cjs');
 const { normalizeExternalHttpUrl } = require('./external-url.cjs');
+const { normalizeViewEntry, normalizeViewScope } = require('./extension-view.cjs');
 
 const API_VERSION = 1;
 const MAX_CONTRIBUTIONS = 256;
@@ -577,7 +578,7 @@ function normalizeManifest(raw, source, scope, { appVersion } = {}) {
   const panels = requestedPanels.map((item, index) => {
     assertAllowedKeys(
       item,
-      new Set(['id', 'title', 'description', 'slot', 'slots', 'icon', 'color', 'size', 'priority', 'content', 'details', 'visibility', 'canvas', 'taskBoard']),
+      new Set(['id', 'title', 'description', 'slot', 'slots', 'icon', 'color', 'size', 'priority', 'content', 'details', 'visibility', 'view']),
       `panels[${index}]`,
     );
     const id = text(item?.id, 64);
@@ -619,25 +620,27 @@ function normalizeManifest(raw, source, scope, { appVersion } = {}) {
       throw contributionError('panels', index, 'priority 必须是数字');
     }
     const content = normalizeContentList(item?.content, owner);
-    const viewKinds = ['canvas', 'taskBoard'].filter(kind => item[kind] !== undefined);
-    if (viewKinds.length > 1) throw contributionError('panels', index, 'canvas 与 taskBoard 只能声明一个');
-    const [viewKind] = viewKinds;
     let view;
-    if (viewKind) {
+    if (item.view !== undefined) {
       if (slot !== 'panel.side' || content.length || !hasPermission(permissions, 'ui.data')) {
-        throw contributionError('panels', index, `${viewKind} 需要 panel.side 和 ui.data，且不能与 content 混用`);
+        throw contributionError('panels', index, 'view 需要 panel.side 和 ui.data，且不能与 content 混用');
       }
-      if (viewKind === 'taskBoard' && scope === 'project') {
-        throw contributionError('panels', index, '全局任务看板需要用户级安装');
-      }
-      const declaration = item[viewKind];
+      const declaration = item.view;
       if (!declaration || typeof declaration !== 'object' || Array.isArray(declaration)) {
-        throw contributionError('panels', index, `${viewKind} 必须是对象`);
+        throw contributionError('panels', index, 'view 必须是对象');
       }
-      assertAllowedKeys(declaration, new Set(['sourceId']), `panels[${index}].${viewKind}`);
+      assertAllowedKeys(declaration, new Set(['entry', 'sourceId', 'scope', 'fullscreen']), `panels[${index}].view`);
+      const entry = normalizeViewEntry(declaration.entry);
       const sourceId = contributionReference(declaration.sourceId, owner);
-      if (!sourceId) throw contributionError('panels', index, `${viewKind}.sourceId 无效`);
-      view = { [viewKind]: { sourceId } };
+      if (!sourceId) throw contributionError('panels', index, 'view.sourceId 无效');
+      const viewScope = normalizeViewScope(declaration.scope);
+      if (viewScope === 'global' && scope === 'project') {
+        throw contributionError('panels', index, '全局视图面板需要用户级安装');
+      }
+      if (declaration.fullscreen !== undefined && typeof declaration.fullscreen !== 'boolean') {
+        throw contributionError('panels', index, 'view.fullscreen 必须是布尔值');
+      }
+      view = { view: { entry, sourceId, scope: viewScope, ...(declaration.fullscreen && { fullscreen: true }) } };
     }
     const details = optionalStrictText(item?.details, 64, COMMAND_PATTERN, `panels[${index}].details`);
     if (details && !workbenchPanelIds.has(details)) {
@@ -770,7 +773,7 @@ function normalizeManifest(raw, source, scope, { appVersion } = {}) {
   }
   const panelSources = new Set();
   for (const panel of panels) {
-    const source = panel.canvas?.sourceId ?? panel.taskBoard?.sourceId;
+    const source = panel.view?.sourceId;
     if (source) {
       if (panelSources.has(source)) throw new Error(`数据源已被其他专用面板使用：${source}`);
       assertDataViewSources([{ kind: 'dataView', sourceId: source }], owner, dataSources);

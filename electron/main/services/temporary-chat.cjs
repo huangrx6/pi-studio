@@ -2,12 +2,17 @@
  * In-memory temporary conversations.
  *
  * Temporary chats use the same Pi Durable execution engine as regular Studio
- * conversations, but a private MemoryStorage and an empty registry. They never
- * write SQLite, JSONL, workspace files, credentials, or attachment files.
+ * conversations, with a private MemoryStorage. Transcripts, images, and run
+ * state live only in memory and never write SQLite, JSONL, or attachments.
+ * Tool availability, permissions, and prompt harness follow Studio's temporary
+ * profile bindings when configured.
  */
 
+const fs = require('node:fs');
 const os = require('node:os');
 const { serializeMessage } = require('../core/serialize.cjs');
+const { databasePath } = require('../core/studio-db.cjs');
+const { getTemporaryHarnessProfile } = require('../core/app-settings.cjs');
 const { getStudioModelsRuntime } = require('../core/studio-models.cjs');
 const {
   modelInfoFor,
@@ -17,10 +22,189 @@ const {
 const { getDurableRuntime } = require('../runtime/durable-runtime.cjs');
 const durableView = require('../runtime/view.cjs');
 const { releaseProviderSession } = require('../runtime/provider-session.cjs');
+const { temporarySafeExtensions } = require('./studio-extensions.cjs');
+const { temporaryRuntimeSelection } = require('../runtime/tool-selection.cjs');
+const { evaluateTemporaryToolCall } = require('../capabilities/permissions/index.cjs');
+const { requestPolicyConfirmation } = require('./confirmations.cjs');
+const { redactToolSecrets, resolveToolSecrets } = require('./secret-vault.cjs');
+const { CODING_RULES, toolGuidance } = require('../capabilities/harness/index.cjs');
 
 const chats = new Map();
 let memoryRuntime;
 let memoryOpening;
+
+function buildDefaultInstructions(hasTools) {
+  return [
+    'You are Pi in a temporary chat inside Pi Studio.',
+    hasTools
+      ? 'Answer directly in the user language. No workspace files are attached, but read-only user plugin tools are available when helpful.'
+      : 'Answer directly in the user language. No workspace is attached and no tools are available.',
+    'Messages, images, and transcript state exist only in process memory and disappear when the chat or app closes.',
+  ].join('\n');
+}
+
+function buildHarnessInstructions(tools, harnessProfile) {
+  if (!harnessProfile) return buildDefaultInstructions(tools.length > 0);
+  const sections = harnessProfile.sections || {};
+  const overrides = harnessProfile.sectionOverrides || {};
+  const parts = [];
+  if (sections.preamble !== false) {
+    parts.push(
+      overrides.preamble?.trim()
+      || [
+        'You are Pi in a temporary chat inside Pi Studio.',
+        tools.length > 0
+          ? 'Answer directly in the user language. Use the configured tools and MCP services only when helpful.'
+          : 'Answer directly in the user language. No workspace is attached and no tools are available.',
+      ].join('\n'),
+    );
+  }
+  if (sections.tools !== false && tools.length > 0) {
+    parts.push(overrides.tools?.trim() || toolGuidance({ agent: { tools } }, harnessProfile));
+  }
+  if (sections.rules !== false) {
+    parts.push(overrides.rules?.trim() || CODING_RULES);
+  }
+  if (sections.addendum !== false) {
+    const addendum = overrides.addendum?.trim() || String(harnessProfile.customInstructions || '').trim();
+    if (addendum) parts.push(addendum);
+  }
+  parts.push('Messages, images, and transcript state exist only in process memory and disappear when the chat or app closes.');
+  return parts.filter(Boolean).join('\n\n');
+}
+
+function createTemporaryPermissionsExtension(durable) {
+  return durable.defineExtension({
+    name: 'studio-temporary-permissions',
+    hooks: [
+      durable.hook(durable.ToolTask, {
+        async beforeTool(call) {
+          const secrets = await resolveToolSecrets(call.arguments || {});
+          const evaluatedCall = secrets.expanded
+            ? { ...call, arguments: secrets.arguments }
+            : call;
+          const evaluation = await evaluateTemporaryToolCall(evaluatedCall);
+          if (evaluation.decision === 'allow') return;
+          if (evaluation.decision === 'deny') {
+            return {
+              block: secrets.redact(
+                `${evaluation.hardProtection?.title || '操作被权限策略拒绝'}：${evaluation.explanation}`,
+              ),
+            };
+          }
+          const response = await requestPolicyConfirmation(secrets.redact({
+            sessionId: '',
+            cwd: evaluation.cwd,
+            tool: call.name,
+            decision: evaluation.decision,
+            explanation: evaluation.explanation,
+            risk: evaluation.risk,
+            rememberScopes: ['once'],
+            title: evaluation.risk?.title || '允许在临时对话中执行这个工具？',
+            message: call.name === 'bash'
+              ? `执行命令 · ${String(call.arguments?.command || '')}${secrets.expanded ? `\n\n使用凭据：${secrets.referenced.join('、')}` : ''}`
+              : call.arguments?.path
+                ? `${call.name} → ${String(call.arguments.path)}${secrets.expanded ? `\n\n使用凭据：${secrets.referenced.join('、')}` : ''}`
+                : `${call.name}\n\n${JSON.stringify(call.arguments, null, 2).slice(0, 4_000)}${secrets.expanded ? `\n\n使用凭据：${secrets.referenced.join('、')}` : ''}`,
+          }));
+          if (!response.accepted) return { block: '用户拒绝了这次工具调用。' };
+        },
+        async afterTool(_call, result) {
+          return redactToolSecrets(result);
+        },
+      }),
+    ],
+  });
+}
+
+function syncExtensionEntries(runtime, entries, permissionExtension) {
+  const previous = runtime.installedExtensions || new Map();
+  const desiredMap = new Map(entries.map((ext) => [ext.name, ext]));
+  if (permissionExtension) desiredMap.set(permissionExtension.name, permissionExtension);
+  for (const [name, ext] of previous.entries()) {
+    if (desiredMap.has(name) && previous.get(name) === desiredMap.get(name)) continue;
+    try { runtime.registry?.uninstall?.(ext); } catch { /* ignore */ }
+    previous.delete(name);
+  }
+  const installed = [];
+  for (const ext of desiredMap.values()) {
+    try {
+      if (previous.get(ext.name) !== ext) {
+        runtime.registry.install(ext);
+        previous.set(ext.name, ext);
+      }
+      installed.push(ext);
+    } catch {
+      // Ignore conflicting or unloaded optional plugin tools in temporary chat.
+    }
+  }
+  runtime.installedExtensions = previous;
+  return installed;
+}
+
+function syncTemporarySafeExtensions(runtime) {
+  const desired = temporarySafeExtensions();
+  const desiredExtensions = desired.map((entry) => entry.extension);
+  const installed = syncExtensionEntries(runtime, desiredExtensions);
+  const installedNames = new Set(installed.map((ext) => ext.name));
+  const extensions = [];
+  const tools = [];
+  const signatureEntries = [];
+  for (const entry of desired) {
+    if (!installedNames.has(entry.extension.name)) continue;
+    extensions.push(entry.extension);
+    const toolsByName = new Map(
+      (entry.extension.tools || [])
+        .filter((tool) => tool && typeof tool.name === 'string')
+        .map((tool) => [tool.name, tool]),
+    );
+    const entryToolNames = Array.isArray(entry.toolNames) && entry.toolNames.length > 0
+      ? entry.toolNames
+      : [...toolsByName.keys()];
+    for (const toolName of entryToolNames) {
+      if (typeof toolName === 'string' && toolName) {
+        tools.push(toolsByName.get(toolName) || { name: toolName });
+      }
+    }
+    signatureEntries.push([entry.extension.name, entryToolNames]);
+  }
+  return {
+    extensions,
+    tools,
+    instructions: buildDefaultInstructions(tools.length > 0),
+    signature: JSON.stringify(signatureEntries),
+  };
+}
+
+async function resolveTemporaryCapabilities(runtime, durableRuntime) {
+  const hasPersistedDb = fs.existsSync(databasePath()) && Boolean(durableRuntime?.registry);
+  if (!hasPersistedDb) {
+    return syncTemporarySafeExtensions(runtime);
+  }
+  const selection = await temporaryRuntimeSelection();
+  const harnessProfile = getTemporaryHarnessProfile();
+  const permissionExt = selection.tools.length > 0
+    ? (runtime.permissionExtension ??= createTemporaryPermissionsExtension(runtime.durable))
+    : undefined;
+  const installedExtensions = syncExtensionEntries(
+    runtime,
+    selection.extensions,
+    permissionExt,
+  );
+  const instructions = buildHarnessInstructions(selection.tools, harnessProfile);
+  const signature = JSON.stringify({
+    profileId: selection.profile.id,
+    tools: selection.tools.map((tool) => tool.name),
+    extensions: installedExtensions.map((ext) => ext.name),
+    instructions,
+  });
+  return {
+    extensions: installedExtensions,
+    tools: selection.tools,
+    instructions,
+    signature,
+  };
+}
 
 async function openMemoryRuntime() {
   if (memoryRuntime) return memoryRuntime;
@@ -30,6 +214,18 @@ async function openMemoryRuntime() {
     const studioModels = await getStudioModelsRuntime();
     const storage = new durableRuntime.durable.MemoryStorage();
     const registry = durableRuntime.durable.createRegistry();
+    let envFactory;
+    if (durableRuntime.registry) {
+      try {
+        const durableEnv = await import('@earendil-works/pi-durable/env/node');
+        envFactory = ({ cwd }) => new durableEnv.NodeExecutionEnv({
+          cwd: cwd || os.tmpdir(),
+          shellEnv: process.env,
+        });
+      } catch {
+        envFactory = undefined;
+      }
+    }
     const harness = await durableRuntime.durable.Harness.open(storage, {
       models: studioModels.models,
       registry,
@@ -50,12 +246,15 @@ async function openMemoryRuntime() {
         documentRetentionMs: 30_000,
         afterFailedRun: 'withdraw',
       },
+      ...(envFactory ? { env: envFactory } : {}),
     }, durableRuntime.context);
     memoryRuntime = {
       durable: durableRuntime.durable,
       context: durableRuntime.context,
       cleanupSessionResources: durableRuntime.cleanupSessionResources,
+      durableRuntime,
       harness,
+      registry,
       storage,
     };
     return memoryRuntime;
@@ -143,8 +342,10 @@ function content(input) {
   ];
 }
 
-function assistantMessage(message) {
-  return message?.role === 'assistant' ? serializeMessage(message) : undefined;
+function chatMessage(message) {
+  return message?.role === 'assistant' || message?.role === 'toolResult'
+    ? serializeMessage(message)
+    : undefined;
 }
 
 async function temporaryPrompt(owner, payload, send) {
@@ -163,19 +364,17 @@ async function temporaryPrompt(owner, payload, send) {
   }
 
   if (!entry) {
+    const safeTools = await resolveTemporaryCapabilities(runtime, runtime.durableRuntime);
+    const extensionSignature = safeTools.signature;
     const conversation = await runtime.harness.createConversation({
       ownership: { kind: 'ownerless' },
       agent: {
         model: { provider: model.provider, modelId: model.id },
         thinkingLevel: selection.effectiveThinkingLevel,
         cwd: os.tmpdir(),
-        extensions: [],
-        tools: [],
-        instructions: [
-          'You are Pi in a temporary chat inside Pi Studio.',
-          'Answer directly in the user language. No workspace is attached and no tools are available.',
-          'Messages, images, and transcript state exist only in process memory and disappear when the chat or app closes.',
-        ].join('\n'),
+        extensions: safeTools.extensions,
+        tools: safeTools.tools,
+        instructions: safeTools.instructions,
       },
     }, runtime.context);
     // 1.5.0：watchEvents() 已移除，临时聊天同样走会话视图 watch。
@@ -186,6 +385,7 @@ async function temporaryPrompt(owner, payload, send) {
       busy: false,
       cancelled: false,
       conversation,
+      extensionSignature,
       hadImages: false,
       partial: initial.generation?.message,
       live: initial,
@@ -198,7 +398,7 @@ async function temporaryPrompt(owner, payload, send) {
       if (call.kind !== 'value') return;
       const live = durableView.liveFromView(call.value);
       for (const record of durableView.appendedEntries(entry.entryIds, call.value.entries)) {
-        const message = assistantMessage(record.model?.[0]);
+        const message = chatMessage(record.model?.[0]);
         if (!message) continue;
         entry.partial = undefined;
         send({ type: 'message', message });
@@ -206,7 +406,7 @@ async function temporaryPrompt(owner, payload, send) {
       const streamed = live.generation?.message;
       if (streamed && streamed !== entry.live?.generation?.message) {
         entry.partial = streamed;
-        const message = assistantMessage(streamed);
+        const message = chatMessage(streamed);
         if (message) send({ type: 'message', message: { ...message, streaming: true } });
       }
       if (live.runFailure && live.runFailure !== entry.live?.runFailure) {
@@ -218,9 +418,18 @@ async function temporaryPrompt(owner, payload, send) {
       entry.live = live;
     });
   } else {
+    const safeTools = await resolveTemporaryCapabilities(runtime, runtime.durableRuntime);
+    const nextSignature = safeTools.signature;
+    const toolsChanged = nextSignature !== entry.extensionSignature;
+    if (toolsChanged) entry.extensionSignature = nextSignature;
     await entry.conversation.configure({
       model: { provider: model.provider, modelId: model.id },
       thinkingLevel: selection.effectiveThinkingLevel,
+      ...(toolsChanged ? {
+        extensions: safeTools.extensions,
+        tools: safeTools.tools,
+        instructions: safeTools.instructions,
+      } : {}),
     }, runtime.context);
   }
 
@@ -277,7 +486,7 @@ async function closeOwner(owner) {
 }
 
 async function shutdownTemporaryChats() {
-  await Promise.all([...chats.values()].map(entry => {
+  await Promise.all([...chats.values()].map((entry) => {
     entry.cancelled = true;
     entry.closing ??= disposeTemporaryEntry(entry);
     return entry.closing;

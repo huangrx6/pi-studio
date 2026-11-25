@@ -4,7 +4,7 @@ const path = require('node:path');
 const os = require('node:os');
 const { createHash, randomUUID } = require('node:crypto');
 const { chatAttachments } = require('../core/attachment-markers.cjs');
-const { studioDataDirectory } = require('../core/studio-paths.cjs');
+const { STUDIO_MANAGED_DATA_DIR, studioDataDirectory } = require('../core/studio-paths.cjs');
 const { assertNotProtected, expandUserPath } = require('./file-target.cjs');
 
 const MAX_FILE_BYTES = 20_000_000;
@@ -44,7 +44,7 @@ function archiveFolder(root, parts, create = true, strict = false) {
 function sessionParts({ workspace, publicId, childId }) {
   if (!ownedId(publicId) || (childId && !ownedId(childId))) throw new Error('附件会话标识无效');
   const project = workspace ? filename(path.basename(workspace)) + '-' + hash(workspace).slice(0, 12) : 'no-workspace';
-  return ['attachments', 'projects', project, 'sessions', String(publicId),
+  return [STUDIO_MANAGED_DATA_DIR, 'attachments', 'projects', project, 'sessions', String(publicId),
     ...(childId ? ['agents', String(childId)] : [])];
 }
 
@@ -58,7 +58,7 @@ function uploadDirectory(owner, root = studioDataDirectory()) {
 }
 
 function archiveUpload(root, owner, attachment) {
-  const managed = archiveFolder(root, ['attachments'], false);
+  const managed = archiveFolder(root, [STUDIO_MANAGED_DATA_DIR, 'attachments'], false);
   const unavailable = () => Object.assign(new Error('上传文件已不可用'), { code: 'ATTACHMENT_UNAVAILABLE' });
   if (!managed || !path.isAbsolute(attachment.path)) throw unavailable();
   const canonicalRoot = fs.realpathSync(managed);
@@ -93,7 +93,7 @@ function removeConversationAssets(owner, root = studioDataDirectory(), { strict 
   if (!target) return false;
   fs.rmSync(target, { recursive: true, force: true });
   // Remove only empty Studio-created grouping directories.
-  const projects = path.join(root, 'attachments', 'projects');
+  const projects = path.join(root, STUDIO_MANAGED_DATA_DIR, 'attachments', 'projects');
   for (let parent = path.dirname(target); inside(projects, parent); parent = path.dirname(parent)) {
     try { fs.rmdirSync(parent); } catch { break; }
   }
@@ -192,7 +192,7 @@ function entryUploads(root, owner, entry) {
   if (!owner.childId) return [...attachments.values()];
   const parent = archiveFolder(root, sessionParts({ ...owner, childId: '' }), false);
   const roots = [parent, ...[owner.id, owner.publicId].filter(ownedId)
-    .map(id => archiveFolder(root, ['attachments', String(id)], false))]
+    .map(id => archiveFolder(root, [STUDIO_MANAGED_DATA_DIR, 'attachments', String(id)], false))]
     .filter(Boolean).flatMap(dir => [dir, fs.realpathSync(dir)]);
   if (!roots.length) return [...attachments.values()];
   for (const message of entry.model) {

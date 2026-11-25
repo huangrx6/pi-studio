@@ -6,7 +6,7 @@
  */
 
 const path = require('node:path');
-const harnessIcons = require('../../../assets/settings/harness-profile-icons.json');
+const { normalizeProfileIcon } = require('./profile-icon.cjs');
 const { getStudioDatabase } = require('./studio-db.cjs');
 const { normalizeWindowBounds } = require('./window-bounds.cjs');
 const {
@@ -27,6 +27,7 @@ const {
   THINKING_LEVELS: SUBAGENT_THINKING_LEVELS,
   normalizeConfig: normalizeSubagentConfig,
 } = require('./subagent-config.cjs');
+const { deleteWorkspaceToolProfile } = require('./tool-profiles.cjs');
 
 const KEYS = Object.freeze({
   theme: 'studio.app.theme',
@@ -36,6 +37,7 @@ const KEYS = Object.freeze({
   menuBarEnabled: 'studio.app.menuBarEnabled',
   permissionMode: 'studio.permissions.mode',
   permissionPolicy: 'studio.permissions.policy',
+  permissionProfiles: 'studio.permissions.profiles.v1',
   subagents: 'studio.subagents',
   harness: 'studio.harness',
   runtimePolicy: 'studio.runtime.policy',
@@ -118,6 +120,30 @@ const DEFAULT_HARNESS_PROFILE = Object.freeze({
   sectionOverrides: {},
   customInstructions: '',
   toolGuidance: {},
+});
+const TEMPORARY_HARNESS_SECTIONS = Object.freeze({
+  preamble: true,
+  tools: true,
+  rules: false,
+  repositoryDocs: false,
+  projectContext: false,
+  skills: false,
+  cwd: false,
+  addendum: true,
+});
+const DEFAULT_TEMPORARY_HARNESS_PROFILE = Object.freeze({
+  id: 'studio-temporary',
+  name: '临时对话基线',
+  builtin: true,
+  icon: null,
+  sections: TEMPORARY_HARNESS_SECTIONS,
+  sectionOverrides: {},
+  customInstructions: '',
+  toolGuidance: {},
+});
+const BUILTIN_HARNESS_PROFILES = Object.freeze({
+  [DEFAULT_HARNESS_PROFILE.id]: DEFAULT_HARNESS_PROFILE,
+  [DEFAULT_TEMPORARY_HARNESS_PROFILE.id]: DEFAULT_TEMPORARY_HARNESS_PROFILE,
 });
 const RUNTIME_POLICY_DEFAULTS = Object.freeze({
   version: 1,
@@ -245,10 +271,8 @@ function normalizeHarnessProfile(value, fallback) {
   return {
     id,
     name,
-    builtin: id === DEFAULT_HARNESS_PROFILE.id,
-    icon: icon && typeof icon.shape === 'string' && Object.hasOwn(harnessIcons.shapes, icon.shape)
-      && typeof icon.ink === 'string' && Object.hasOwn(harnessIcons.inks, icon.ink)
-      ? { shape: icon.shape, ink: icon.ink } : null,
+    builtin: Object.hasOwn(BUILTIN_HARNESS_PROFILES, id),
+    icon: normalizeProfileIcon(icon),
     sections: normalizeHarnessSections(source.sections, fallbackProfile.sections),
     sectionOverrides: normalizeSectionOverrides(
       source.sectionOverrides === undefined
@@ -419,9 +443,11 @@ function defaultHarnessStore() {
   return {
     version: 1,
     activeProfileId: DEFAULT_HARNESS_PROFILE.id,
+    temporaryProfileId: DEFAULT_TEMPORARY_HARNESS_PROFILE.id,
     workspaceProfiles: {},
     profiles: {
       [DEFAULT_HARNESS_PROFILE.id]: clone(DEFAULT_HARNESS_PROFILE),
+      [DEFAULT_TEMPORARY_HARNESS_PROFILE.id]: clone(DEFAULT_TEMPORARY_HARNESS_PROFILE),
     },
   };
 }
@@ -437,9 +463,17 @@ function normalizeHarnessStore(value) {
     rawProfiles[DEFAULT_HARNESS_PROFILE.id],
     DEFAULT_HARNESS_PROFILE,
   );
+  profiles[DEFAULT_TEMPORARY_HARNESS_PROFILE.id] = normalizeHarnessProfile(
+    rawProfiles[DEFAULT_TEMPORARY_HARNESS_PROFILE.id],
+    DEFAULT_TEMPORARY_HARNESS_PROFILE,
+  );
   for (const [id, profile] of Object.entries(rawProfiles)) {
     if (Object.keys(profiles).length >= MAX_HARNESS_PROFILES) break;
-    if (!HARNESS_PROFILE_ID.test(id) || RESERVED_HARNESS_PROFILE_IDS.has(id) || id === DEFAULT_HARNESS_PROFILE.id) continue;
+    if (
+      !HARNESS_PROFILE_ID.test(id)
+      || RESERVED_HARNESS_PROFILE_IDS.has(id)
+      || Object.hasOwn(BUILTIN_HARNESS_PROFILES, id)
+    ) continue;
     const normalized = normalizeHarnessProfile({ ...(profile || {}), id }, {
       ...DEFAULT_HARNESS_PROFILE,
       id,
@@ -468,9 +502,14 @@ function normalizeHarnessStore(value) {
     && Object.hasOwn(profiles, source.activeProfileId)
     ? source.activeProfileId
     : fallback.activeProfileId;
+  const temporaryProfileId = typeof source.temporaryProfileId === 'string'
+    && Object.hasOwn(profiles, source.temporaryProfileId)
+    ? source.temporaryProfileId
+    : fallback.temporaryProfileId;
   return {
     version: 1,
     activeProfileId,
+    temporaryProfileId,
     workspaceProfiles,
     profiles,
   };
@@ -638,6 +677,387 @@ function savePermissionPolicyStore(value) {
   return next;
 }
 
+const PERMISSION_PROFILE_ID = /^[a-z0-9][a-z0-9._-]{1,63}$/;
+const MAX_PERMISSION_PROFILES = 24;
+const DEFAULT_PERMISSION_PROFILE_IDS = Object.freeze({
+  smart: 'smart-default',
+  ask: 'strict-ask',
+  full: 'full-access',
+});
+
+function builtinPermissionProfiles(userPolicy) {
+  return {
+    [DEFAULT_PERMISSION_PROFILE_IDS.smart]: {
+      id: DEFAULT_PERMISSION_PROFILE_IDS.smart,
+      name: '帮我批准（默认）',
+      description: '只自动允许明确的只读工具；风险或未知工具仍会确认。',
+      builtin: true,
+      icon: null,
+      policy: userPolicy?.preset === 'smart'
+        ? normalizePermissionPolicy(userPolicy)
+        : defaultPermissionPolicy('smart'),
+    },
+    [DEFAULT_PERMISSION_PROFILE_IDS.ask]: {
+      id: DEFAULT_PERMISSION_PROFILE_IDS.ask,
+      name: '严格确认',
+      description: '所有工具调用逐次确认，适合临时对话或高敏感操作。',
+      builtin: true,
+      icon: null,
+      policy: userPolicy?.preset === 'ask'
+        ? normalizePermissionPolicy(userPolicy)
+        : defaultPermissionPolicy('ask'),
+    },
+    [DEFAULT_PERMISSION_PROFILE_IDS.full]: {
+      id: DEFAULT_PERMISSION_PROFILE_IDS.full,
+      name: '完全权限',
+      description: '普通工具直接执行，仅拦截高危命令与显式规则。',
+      builtin: true,
+      icon: null,
+      policy: userPolicy?.preset === 'full'
+        ? normalizePermissionPolicy(userPolicy)
+        : defaultPermissionPolicy('full'),
+    },
+  };
+}
+
+function isBuiltinPermissionProfileId(id) {
+  return id === DEFAULT_PERMISSION_PROFILE_IDS.smart
+    || id === DEFAULT_PERMISSION_PROFILE_IDS.ask
+    || id === DEFAULT_PERMISSION_PROFILE_IDS.full;
+}
+
+function normalizePermissionProfile(value, fallback, { strict = false } = {}) {
+  const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+  const base = fallback || builtinPermissionProfiles()[DEFAULT_PERMISSION_PROFILE_IDS.smart];
+  const id = typeof source.id === 'string' && PERMISSION_PROFILE_ID.test(source.id) && !RESERVED_OBJECT_KEYS.has(source.id)
+    ? source.id
+    : base.id;
+  const name = typeof source.name === 'string' && source.name.trim()
+    ? source.name.trim().slice(0, 80)
+    : base.name;
+  const description = typeof source.description === 'string'
+    ? source.description.trim().slice(0, 240)
+    : (base.description || '');
+  const policySource = source.policy && typeof source.policy === 'object' && !Array.isArray(source.policy)
+    ? source.policy
+    : base.policy;
+  const policy = normalizePermissionPolicy(policySource, { strict });
+  return {
+    id,
+    name,
+    description,
+    builtin: isBuiltinPermissionProfileId(id),
+    icon: normalizeProfileIcon(source.icon === undefined ? base.icon : source.icon),
+    policy,
+  };
+}
+
+function initialMainProfileIdForUserPolicy(policy) {
+  if (policy?.preset === 'full') return DEFAULT_PERMISSION_PROFILE_IDS.full;
+  if (policy?.preset === 'ask') return DEFAULT_PERMISSION_PROFILE_IDS.ask;
+  return DEFAULT_PERMISSION_PROFILE_IDS.smart;
+}
+
+function getPermissionProfilesStore() {
+  const db = getStudioDatabase();
+  const policyStore = getPermissionPolicyStore();
+  const builtins = builtinPermissionProfiles(policyStore.user);
+  const raw = db.getSetting(KEYS.permissionProfiles, undefined);
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    return {
+      version: 1,
+      mainProfileId: initialMainProfileIdForUserPolicy(policyStore.user),
+      workspaceProfiles: {},
+      temporaryProfileId: DEFAULT_PERMISSION_PROFILE_IDS.ask,
+      profiles: builtins,
+    };
+  }
+  const rawProfiles = raw.profiles && typeof raw.profiles === 'object' && !Array.isArray(raw.profiles)
+    ? raw.profiles
+    : {};
+  let smartProfile = normalizePermissionProfile(
+    rawProfiles[DEFAULT_PERMISSION_PROFILE_IDS.smart],
+    builtins[DEFAULT_PERMISSION_PROFILE_IDS.smart],
+  );
+  let askProfile = normalizePermissionProfile(
+    rawProfiles[DEFAULT_PERMISSION_PROFILE_IDS.ask],
+    builtins[DEFAULT_PERMISSION_PROFILE_IDS.ask],
+  );
+  let fullProfile = normalizePermissionProfile(
+    rawProfiles[DEFAULT_PERMISSION_PROFILE_IDS.full],
+    builtins[DEFAULT_PERMISSION_PROFILE_IDS.full],
+  );
+  let migratedMainId = '';
+  // Guard against older migrations that wrote non-smart user policy into smart-default.
+  if (smartProfile.policy.preset !== 'smart') {
+    const misassignedPreset = smartProfile.policy.preset;
+    migratedMainId = initialMainProfileIdForUserPolicy(smartProfile.policy);
+    if (misassignedPreset === 'full' && !rawProfiles[DEFAULT_PERMISSION_PROFILE_IDS.full]) {
+      fullProfile = { ...fullProfile, policy: clone(smartProfile.policy) };
+    } else if (misassignedPreset === 'ask' && !rawProfiles[DEFAULT_PERMISSION_PROFILE_IDS.ask]) {
+      askProfile = { ...askProfile, policy: clone(smartProfile.policy) };
+    }
+    smartProfile = { ...smartProfile, policy: defaultPermissionPolicy('smart') };
+  }
+  const profiles = {
+    [DEFAULT_PERMISSION_PROFILE_IDS.smart]: smartProfile,
+    [DEFAULT_PERMISSION_PROFILE_IDS.ask]: askProfile,
+    [DEFAULT_PERMISSION_PROFILE_IDS.full]: fullProfile,
+  };
+  for (const [id, entry] of Object.entries(rawProfiles)) {
+    if (Object.keys(profiles).length >= MAX_PERMISSION_PROFILES) break;
+    if (!PERMISSION_PROFILE_ID.test(id) || RESERVED_OBJECT_KEYS.has(id) || isBuiltinPermissionProfileId(id)) continue;
+    profiles[id] = {
+      ...normalizePermissionProfile({ ...(entry || {}), id }, {
+        id,
+        name: id,
+        description: '',
+        builtin: false,
+        policy: defaultPermissionPolicy('smart'),
+      }),
+      builtin: false,
+    };
+  }
+  const workspaceProfiles = {};
+  if (raw.workspaceProfiles && typeof raw.workspaceProfiles === 'object' && !Array.isArray(raw.workspaceProfiles)) {
+    for (const [rawCwd, profileId] of Object.entries(raw.workspaceProfiles)) {
+      if (RESERVED_OBJECT_KEYS.has(rawCwd)) continue;
+      const cwd = canonicalWorkspaceKey(rawCwd);
+      if (!cwd || !path.isAbsolute(cwd) || typeof profileId !== 'string' || !Object.hasOwn(profiles, profileId)) continue;
+      workspaceProfiles[cwd] = profileId;
+    }
+  }
+  let mainProfileId = typeof raw.mainProfileId === 'string' && Object.hasOwn(profiles, raw.mainProfileId)
+    ? raw.mainProfileId
+    : initialMainProfileIdForUserPolicy(policyStore.user);
+  if (migratedMainId && mainProfileId === DEFAULT_PERMISSION_PROFILE_IDS.smart) {
+    mainProfileId = migratedMainId;
+  }
+  const temporaryProfileId = typeof raw.temporaryProfileId === 'string' && Object.hasOwn(profiles, raw.temporaryProfileId)
+    ? raw.temporaryProfileId
+    : DEFAULT_PERMISSION_PROFILE_IDS.ask;
+  return {
+    version: 1,
+    mainProfileId,
+    workspaceProfiles,
+    temporaryProfileId,
+    profiles,
+  };
+}
+
+function getPermissionProfilesSnapshot(cwd = '') {
+  const store = getPermissionProfilesStore();
+  const workspace = canonicalWorkspaceKey(cwd);
+  const workspaceProfileId = workspace ? store.workspaceProfiles[workspace] || '' : '';
+  return {
+    version: store.version,
+    mainProfileId: store.mainProfileId,
+    workspaceProfileId,
+    activeMainProfileId: workspaceProfileId || store.mainProfileId,
+    temporaryProfileId: store.temporaryProfileId,
+    profiles: Object.values(store.profiles)
+      .sort((left, right) => Number(right.builtin) - Number(left.builtin) || left.name.localeCompare(right.name))
+      .map(clone),
+    storage: `SQLite · ${KEYS.permissionProfiles}`,
+  };
+}
+
+function getPermissionProfileById(id) {
+  if (!id) return undefined;
+  const store = getPermissionProfilesStore();
+  return store.profiles[id] ? clone(store.profiles[id]) : undefined;
+}
+
+function getTemporaryPermissionPolicy() {
+  const store = getPermissionProfilesStore();
+  const profile = store.profiles[store.temporaryProfileId] || store.profiles[DEFAULT_PERMISSION_PROFILE_IDS.ask];
+  return clone(profile.policy);
+}
+
+function syncUserPermissionProfile(policy) {
+  const db = getStudioDatabase();
+  if (!Object.hasOwn(db.getSettings(), KEYS.permissionProfiles)) return;
+  const store = getPermissionProfilesStore();
+  if (Object.hasOwn(store.profiles, store.mainProfileId)) {
+    store.profiles[store.mainProfileId] = {
+      ...store.profiles[store.mainProfileId],
+      policy: clone(policy),
+    };
+    db.setSetting(KEYS.permissionProfiles, store);
+  }
+}
+
+function savePermissionProfile(input = {}) {
+  const db = getStudioDatabase();
+  const payload = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
+  const source = payload.profile && typeof payload.profile === 'object' && !Array.isArray(payload.profile)
+    ? payload.profile
+    : payload;
+  return db.transaction(() => {
+    const store = getPermissionProfilesStore();
+    const id = typeof source.id === 'string' ? source.id.trim() : store.mainProfileId;
+    if (!PERMISSION_PROFILE_ID.test(id) || RESERVED_OBJECT_KEYS.has(id)) {
+      throw new Error('权限方案 ID 需要 2–64 个小写字母、数字、点、横线或下划线');
+    }
+    const exists = Object.hasOwn(store.profiles, id);
+    if (payload.mode === 'create' && exists) throw new Error('这个权限方案 ID 已存在，请使用其他 ID。');
+    if (payload.mode === 'edit' && !exists) throw new Error('这份权限方案已被删除。');
+    if (!exists && Object.keys(store.profiles).length >= MAX_PERMISSION_PROFILES) {
+      throw new Error(`最多保存 ${MAX_PERMISSION_PROFILES} 个权限方案`);
+    }
+    const fallback = store.profiles[id] || {
+      id,
+      name: id,
+      description: '',
+      builtin: false,
+      policy: defaultPermissionPolicy('smart'),
+    };
+    assertSafePermissionPolicy(source.policy);
+    const next = normalizePermissionProfile({ ...fallback, ...source, id }, fallback, { strict: true });
+    if (!isBuiltinPermissionProfileId(id)) next.builtin = false;
+    store.profiles[id] = next;
+    db.setSetting(KEYS.permissionProfiles, store);
+
+    if (source.policy === undefined) return getPermissionProfilesSnapshot(payload.cwd);
+    const policyStore = getPermissionPolicyStore();
+    let policyChanged = false;
+    if (store.mainProfileId === id) {
+      policyStore.user = clone(next.policy);
+      db.setSetting(KEYS.permissionMode, next.policy.preset);
+      policyChanged = true;
+    }
+    for (const [workspace, boundId] of Object.entries(store.workspaceProfiles)) {
+      if (boundId === id) {
+        policyStore.workspaces[workspace] = clone(next.policy);
+        policyChanged = true;
+      }
+    }
+    if (policyChanged) savePermissionPolicyStore(policyStore);
+    return getPermissionProfilesSnapshot(payload.cwd);
+  });
+}
+
+function selectPermissionProfile(payload = {}) {
+  const input = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+  const scope = input.scope;
+  if (!['global', 'workspace', 'inherit', 'temporary'].includes(scope)) {
+    throw new Error('权限方案应用范围无效');
+  }
+  const requestedCwd = typeof input.cwd === 'string' ? input.cwd.trim() : '';
+  const workspace = requestedCwd && path.isAbsolute(requestedCwd) ? path.resolve(requestedCwd) : '';
+  if ((scope === 'workspace' || scope === 'inherit') && !workspace) {
+    throw new Error('工作区权限范围需要绝对工作区路径');
+  }
+  const db = getStudioDatabase();
+  return db.transaction(() => {
+    const store = getPermissionProfilesStore();
+    const policyStore = getPermissionPolicyStore();
+    if (scope === 'inherit') {
+      delete store.workspaceProfiles[workspace];
+      delete policyStore.workspaces[workspace];
+      db.setSetting(KEYS.permissionProfiles, store);
+      savePermissionPolicyStore(policyStore);
+      return getPermissionProfilesSnapshot(workspace);
+    }
+    const id = typeof input.id === 'string' ? input.id.trim() : '';
+    if (!PERMISSION_PROFILE_ID.test(id) || !Object.hasOwn(store.profiles, id)) {
+      throw new Error('指定的权限方案不存在');
+    }
+    const chosen = store.profiles[id];
+    if (scope === 'temporary') {
+      store.temporaryProfileId = id;
+    } else if (scope === 'workspace') {
+      store.workspaceProfiles[workspace] = id;
+      policyStore.workspaces[workspace] = clone(chosen.policy);
+      savePermissionPolicyStore(policyStore);
+    } else {
+      store.mainProfileId = id;
+      policyStore.user = clone(chosen.policy);
+      db.setSetting(KEYS.permissionMode, chosen.policy.preset);
+      savePermissionPolicyStore(policyStore);
+    }
+    db.setSetting(KEYS.permissionProfiles, store);
+    return getPermissionProfilesSnapshot(scope === 'global' ? '' : workspace || requestedCwd);
+  });
+}
+
+function resetPermissionProfile(payload = {}) {
+  const input = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+  const id = typeof input.id === 'string' ? input.id.trim() : DEFAULT_PERMISSION_PROFILE_IDS.smart;
+  const db = getStudioDatabase();
+  return db.transaction(() => {
+    const store = getPermissionProfilesStore();
+    if (!Object.hasOwn(store.profiles, id)) throw new Error('指定的权限方案不存在');
+    const current = store.profiles[id];
+    const builtins = builtinPermissionProfiles();
+    const baseline = builtins[id] || {
+      id,
+      name: current.name,
+      description: '',
+      builtin: false,
+      policy: defaultPermissionPolicy('smart'),
+    };
+    store.profiles[id] = {
+      ...clone(baseline),
+      id,
+      name: current.builtin ? baseline.name : current.name,
+      builtin: current.builtin,
+      icon: current.icon,
+    };
+    db.setSetting(KEYS.permissionProfiles, store);
+    const policyStore = getPermissionPolicyStore();
+    let policyChanged = false;
+    if (store.mainProfileId === id) {
+      policyStore.user = clone(store.profiles[id].policy);
+      db.setSetting(KEYS.permissionMode, store.profiles[id].policy.preset);
+      policyChanged = true;
+    }
+    for (const [workspace, boundId] of Object.entries(store.workspaceProfiles)) {
+      if (boundId === id) {
+        policyStore.workspaces[workspace] = clone(store.profiles[id].policy);
+        policyChanged = true;
+      }
+    }
+    if (policyChanged) savePermissionPolicyStore(policyStore);
+    return getPermissionProfilesSnapshot(input.cwd);
+  });
+}
+
+function deletePermissionProfile(payload = {}) {
+  const input = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
+  const id = typeof input.id === 'string' ? input.id.trim() : '';
+  if (isBuiltinPermissionProfileId(id)) throw new Error('内置默认权限方案不能删除');
+  const db = getStudioDatabase();
+  return db.transaction(() => {
+    const store = getPermissionProfilesStore();
+    if (!PERMISSION_PROFILE_ID.test(id) || !Object.hasOwn(store.profiles, id)) {
+      throw new Error('指定的权限方案不存在');
+    }
+    delete store.profiles[id];
+    const policyStore = getPermissionPolicyStore();
+    let policyChanged = false;
+    for (const [workspace, boundId] of Object.entries(store.workspaceProfiles)) {
+      if (boundId === id) {
+        delete store.workspaceProfiles[workspace];
+        delete policyStore.workspaces[workspace];
+        policyChanged = true;
+      }
+    }
+    if (store.mainProfileId === id) {
+      store.mainProfileId = DEFAULT_PERMISSION_PROFILE_IDS.smart;
+      policyStore.user = clone(store.profiles[DEFAULT_PERMISSION_PROFILE_IDS.smart].policy);
+      db.setSetting(KEYS.permissionMode, policyStore.user.preset);
+      policyChanged = true;
+    }
+    if (store.temporaryProfileId === id) {
+      store.temporaryProfileId = DEFAULT_PERMISSION_PROFILE_IDS.ask;
+    }
+    if (policyChanged) savePermissionPolicyStore(policyStore);
+    db.setSetting(KEYS.permissionProfiles, store);
+    return getPermissionProfilesSnapshot(input.cwd);
+  });
+}
+
 function canonicalPermissionSessionId(value) {
   const sessionId = typeof value === 'string' ? value.trim() : '';
   if (!sessionId) return '';
@@ -706,7 +1126,10 @@ function setPermissionMode(mode, options = {}) {
   else if (scope === 'session') store.sessions[sessionId] = normalizePermissionPolicy(nextPolicy);
   else store.user = normalizePermissionPolicy(nextPolicy);
   savePermissionPolicyStore(store);
-  if (scope === 'user') getStudioDatabase().setSetting(KEYS.permissionMode, mode);
+  if (scope === 'user') {
+    getStudioDatabase().setSetting(KEYS.permissionMode, mode);
+    syncUserPermissionProfile(store.user);
+  }
   return mode;
 }
 
@@ -722,6 +1145,7 @@ function setPermissionPolicy({ scope = 'user', cwd = '', sessionId = '', policy 
   } else if (scope === 'user') {
     store.user = normalized;
     getStudioDatabase().setSetting(KEYS.permissionMode, normalized.preset);
+    syncUserPermissionProfile(normalized);
   } else {
     throw new Error('无效的权限策略范围');
   }
@@ -740,6 +1164,7 @@ function resetPermissionPolicy({ scope = 'user', cwd = '', sessionId = '' } = {}
   } else if (scope === 'user') {
     store.user = defaultPermissionPolicy('smart');
     getStudioDatabase().setSetting(KEYS.permissionMode, 'smart');
+    syncUserPermissionProfile(store.user);
   } else {
     throw new Error('无效的权限策略范围');
   }
@@ -807,6 +1232,14 @@ function deleteWorkspaceScopedSettings(cwd, sessionIds = []) {
     const harnessStore = getHarnessStore();
     delete harnessStore.workspaceProfiles[workspace];
     db.setSetting(KEYS.harness, harnessStore);
+
+    if (Object.hasOwn(db.getSettings(), KEYS.permissionProfiles)) {
+      const permProfiles = getPermissionProfilesStore();
+      delete permProfiles.workspaceProfiles[workspace];
+      db.setSetting(KEYS.permissionProfiles, permProfiles);
+    }
+
+    deleteWorkspaceToolProfile(workspace, db);
     return true;
   });
 }
@@ -1073,6 +1506,11 @@ function getHarnessProfile(cwd = '') {
   return clone(store.profiles[harnessProfileIdForWorkspace(store, cwd)]);
 }
 
+function getTemporaryHarnessProfile() {
+  const store = getHarnessStore();
+  return clone(store.profiles[store.temporaryProfileId] || store.profiles[DEFAULT_TEMPORARY_HARNESS_PROFILE.id]);
+}
+
 function getHarnessSettings(cwd = '') {
   const store = getHarnessStore();
   const workspace = canonicalWorkspaceKey(cwd);
@@ -1081,6 +1519,7 @@ function getHarnessSettings(cwd = '') {
     version: store.version,
     activeProfileId,
     globalProfileId: store.activeProfileId,
+    temporaryProfileId: store.temporaryProfileId,
     workspaceProfileId: workspace ? store.workspaceProfiles[workspace] || '' : '',
     sections: clone(HARNESS_SECTIONS),
     profiles: Object.values(store.profiles)
@@ -1127,7 +1566,7 @@ function saveHarnessProfile(input = {}) {
     ...current,
     ...source,
     id: requestedId,
-    builtin: requestedId === DEFAULT_HARNESS_PROFILE.id,
+    builtin: Object.hasOwn(BUILTIN_HARNESS_PROFILES, requestedId),
   }, current);
   db.setSetting(KEYS.harness, store);
   return getHarnessSettings(payload.cwd);
@@ -1139,7 +1578,7 @@ function selectHarnessProfile(payload = {}) {
   const store = getHarnessStore();
   if (
     input.scope !== undefined
-    && !['global', 'workspace', 'inherit'].includes(input.scope)
+    && !['global', 'workspace', 'inherit', 'temporary'].includes(input.scope)
   ) {
     throw new Error('Harness 应用范围无效');
   }
@@ -1159,6 +1598,11 @@ function selectHarnessProfile(payload = {}) {
   if (!HARNESS_PROFILE_ID.test(id) || !Object.hasOwn(store.profiles, id)) {
     throw new Error('Harness profile 不存在');
   }
+  if (input.scope === 'temporary') {
+    store.temporaryProfileId = id;
+    getStudioDatabase().setSetting(KEYS.harness, store);
+    return getHarnessSettings(workspace);
+  }
   const cwd = input.scope === 'global' ? '' : workspace;
   if (cwd) store.workspaceProfiles[cwd] = id;
   else store.activeProfileId = id;
@@ -1172,10 +1616,11 @@ function resetHarnessProfile(payload = {}) {
   const store = getHarnessStore();
   if (!Object.hasOwn(store.profiles, id)) throw new Error('Harness profile 不存在');
   const current = store.profiles[id];
+  const baseline = BUILTIN_HARNESS_PROFILES[id] || DEFAULT_HARNESS_PROFILE;
   store.profiles[id] = {
-    ...clone(DEFAULT_HARNESS_PROFILE),
+    ...clone(baseline),
     id,
-    name: current.builtin ? DEFAULT_HARNESS_PROFILE.name : current.name,
+    name: current.builtin ? baseline.name : current.name,
     builtin: current.builtin,
     icon: current.icon,
   };
@@ -1186,7 +1631,7 @@ function resetHarnessProfile(payload = {}) {
 function deleteHarnessProfile(payload = {}) {
   const input = payload && typeof payload === 'object' && !Array.isArray(payload) ? payload : {};
   const id = typeof input.id === 'string' ? input.id : '';
-  if (id === DEFAULT_HARNESS_PROFILE.id) throw new Error('默认 Harness profile 不能删除');
+  if (Object.hasOwn(BUILTIN_HARNESS_PROFILES, id)) throw new Error('默认 Harness profile 不能删除');
   const store = getHarnessStore();
   if (!HARNESS_PROFILE_ID.test(id) || !Object.hasOwn(store.profiles, id)) {
     throw new Error('Harness profile 不存在');
@@ -1196,6 +1641,7 @@ function deleteHarnessProfile(payload = {}) {
     if (profileId === id) delete store.workspaceProfiles[cwd];
   }
   if (store.activeProfileId === id) store.activeProfileId = DEFAULT_HARNESS_PROFILE.id;
+  if (store.temporaryProfileId === id) store.temporaryProfileId = DEFAULT_TEMPORARY_HARNESS_PROFILE.id;
   getStudioDatabase().setSetting(KEYS.harness, store);
   return getHarnessSettings(input.cwd);
 }
@@ -1248,6 +1694,8 @@ module.exports = {
   canonicalPermissionSessionId,
   DEFAULT_HARNESS_PROFILE,
   DEFAULT_HARNESS_SECTIONS,
+  DEFAULT_PERMISSION_PROFILE_IDS,
+  DEFAULT_TEMPORARY_HARNESS_PROFILE,
   HARNESS_SECTION_IDS,
   HARNESS_SECTIONS,
   KEYS,
@@ -1256,14 +1704,21 @@ module.exports = {
   RADIUS_STYLES,
   PERMISSION_MODES,
   RUNTIME_POLICY_DEFAULTS,
+  TEMPORARY_HARNESS_SECTIONS,
   THEMES,
   defaultHarnessStore,
   deletePermissionPoliciesForWorkspace,
+  deletePermissionProfile,
   deleteWorkspaceScopedSettings,
   deleteHarnessProfile,
   getHarnessProfile,
   getHarnessSettings,
   getHarnessStore,
+  getPermissionProfileById,
+  getPermissionProfilesSnapshot,
+  getPermissionProfilesStore,
+  getTemporaryHarnessProfile,
+  getTemporaryPermissionPolicy,
   getConversationExtensionUiPreferences,
   getExtensionRegistryUrl,
   getMenuBarEnabled,
@@ -1284,11 +1739,14 @@ module.exports = {
   normalizeSectionOverrides,
   normalizeToolGuidance,
   resetHarnessProfile,
+  resetPermissionProfile,
   saveHarnessProfile,
   savePermissionPolicyStore,
+  savePermissionProfile,
   saveRuntimePolicy,
   saveConversationExtensionUiPreferences,
   selectHarnessProfile,
+  selectPermissionProfile,
   setPermissionMode,
   setPermissionPolicy,
   setWindowBounds,

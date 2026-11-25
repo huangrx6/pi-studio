@@ -165,3 +165,63 @@ test('a pre-existing unreadable snapshot survives publishing a validated replace
     assert.equal(studio.migrationBackupPath, target.replace(/\.sqlite$/, '-copy-1.sqlite'));
   } finally { studio.close(); }
 });
+
+test('pruneDatabaseBackups keeps the newest snapshots and removes older backups and stale partials', () => {
+  const { listDatabaseBackups, pruneDatabaseBackups } = require('../../electron/main/core/database-backups.cjs');
+  const dir = fs.mkdtempSync(path.join(temporary, 'prune-'));
+  const db = path.join(dir, 'pi-studio.sqlite');
+  const folder = path.join(dir, 'backups', 'sqlite');
+  fs.mkdirSync(folder, { recursive: true });
+  const names = [
+    'pi-studio.sqlite.migration-backup-v18-to-v19.sqlite',
+    'pi-studio.sqlite.migration-backup-v19-to-v20.sqlite',
+    'pi-studio.sqlite.migration-backup-v20-to-v21.sqlite',
+    'pi-studio.sqlite.migration-backup-v25-to-v26.sqlite',
+  ];
+  for (const name of names) fs.writeFileSync(path.join(folder, name), 'backup-bytes');
+  const stalePartial = path.join(folder, 'pi-studio.sqlite.migration-backup-v25-to-v26.sqlite.abc.partial');
+  fs.writeFileSync(stalePartial, 'partial');
+  const twoHoursAgo = (Date.now() - 2 * 60 * 60 * 1000) / 1000;
+  fs.utimesSync(stalePartial, twoHoursAgo, twoHoursAgo);
+  fs.writeFileSync(path.join(folder, 'unrelated.sqlite'), 'keep');
+
+  const result = pruneDatabaseBackups(db, { keep: 2 });
+  assert.deepEqual(result.kept, [
+    'pi-studio.sqlite.migration-backup-v25-to-v26.sqlite',
+    'pi-studio.sqlite.migration-backup-v20-to-v21.sqlite',
+  ]);
+  assert.equal(result.removed.length, 3);
+  assert.equal(listDatabaseBackups(db).length, 2);
+  assert.equal(fs.existsSync(stalePartial), false);
+  assert.equal(fs.existsSync(path.join(folder, 'unrelated.sqlite')), true);
+});
+
+test('new databases enable incremental auto_vacuum and compress request traces transparently', () => {
+  const filename = path.join(temporary, 'compressed-traces.sqlite');
+  const studio = createStudioDatabase(filename);
+  try {
+    assert.equal(studio.databaseStorageStats().autoVacuum, 2);
+    const largeText = 'repeated prompt context '.repeat(4000);
+    studio.saveRequestTrace('conv-1', {
+      id: 'trace-1',
+      requestId: 'req-1',
+      conversationId: 'conv-1',
+      createdAt: Date.now(),
+      messages: [{ role: 'user', content: largeText }],
+      tools: [{ name: 'read', description: 'read file' }],
+    });
+    const raw = studio.db.prepare('SELECT payload, length(payload) AS bytes FROM conversation_request_traces WHERE request_id = ?').get('req-1');
+    assert.ok(Buffer.isBuffer(raw.payload) || raw.payload instanceof Uint8Array);
+    assert.ok(raw.bytes < largeText.length / 5, `expected gzip compression, got ${raw.bytes} bytes`);
+    const decoded = studio.getRequestTrace('conv-1', 'req-1');
+    assert.equal(decoded.messages[0].content, largeText);
+    const legacy = JSON.stringify({ id: 'trace-legacy', requestId: 'req-legacy', conversationId: 'conv-1', createdAt: 1, messages: [{ role: 'user', content: 'legacy' }] });
+    studio.db.prepare('INSERT INTO conversation_request_traces(conversation_id, request_id, created_at, payload) VALUES (?, ?, ?, ?)').run('conv-1', 'req-legacy', 1, legacy);
+    assert.equal(studio.getRequestTrace('conv-1', 'req-legacy').messages[0].content, 'legacy');
+    const compressedCount = studio.compressLegacyRequestTraces();
+    assert.equal(compressedCount, 1);
+    assert.equal(studio.getRequestTrace('conv-1', 'req-legacy').messages[0].content, 'legacy');
+  } finally {
+    studio.close();
+  }
+});

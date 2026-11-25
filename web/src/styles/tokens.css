@@ -128,6 +128,10 @@
   --transition: 160ms ease;
   /* 行、拖拽把手这类高频小元素用比标准控件更短的一档，避免鼠标扫过时出现拖尾。 */
   --transition-fast: 120ms ease;
+  --motion-enter: 160ms cubic-bezier(.22, 1, .36, 1);
+  --motion-expand: 220ms cubic-bezier(.22, 1, .36, 1);
+  --motion-switch: 200ms cubic-bezier(.22, 1, .36, 1);
+  --motion-press: 110ms cubic-bezier(.2, 0, 0, 1);
   /* 加载提示共用尺寸与动效。行内状态保留一行，独立区域为内容预留空间。 */
   --loading-icon-size: var(--icon-xs);
   --loading-panel-icon-size: var(--icon-xl);
@@ -157,7 +161,7 @@
   --settings-row-gap: var(--space-3);
   --settings-row-padding: var(--space-2);
   --settings-row-height: 52px;
-  --settings-control-height: var(--space-10);
+  --settings-control-height: var(--row-height);
   --settings-compact-control-height: var(--space-8);
   --settings-icon-hit: var(--settings-control-height);
   --settings-title-mark: var(--space-10);

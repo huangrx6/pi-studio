@@ -1,16 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { desktopPlatform } from './shared/desktop-platform';
-import { loadPreferences, resolveTheme } from './shared/preferences';
 import { SettingsToastProvider } from './shared/SettingsToast';
 import './styles/dsh-scrollbar.css';
 import './styles/app.css';
 import './shell/styles/session-view.css';
 
-const preferences = loadPreferences();
 document.documentElement.dataset.platform = desktopPlatform();
-document.documentElement.dataset.theme = resolveTheme(preferences.theme);
-document.documentElement.dataset.palette = preferences.palette;
 
 async function start() {
   try {

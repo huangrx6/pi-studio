@@ -14,7 +14,7 @@ test('zsh 会写出 ZDOTDIR 启动文件并返回环境补丁', () => {
   try {
     const env = shellIntegrationEnvironment({ dataDirectory, shell: '/bin/zsh', environment: {} });
     assert.deepEqual(SUPPORTED_SHELLS.has('zsh'), true);
-    assert.equal(env.ZDOTDIR, path.join(dataDirectory, 'shell', 'zsh'));
+    assert.equal(env.ZDOTDIR, path.join(dataDirectory, 'data', 'shell', 'zsh'));
     assert.equal(env.PI_STUDIO_SHELL_INTEGRATION, path.join(env.ZDOTDIR, 'integration.zsh'));
     assert.equal(env.PI_STUDIO_USER_ZDOTDIR, '');
     for (const file of ['.zshenv', '.zprofile', '.zshrc', 'integration.zsh']) {

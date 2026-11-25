@@ -1,11 +1,13 @@
 .file-change-summary {
   margin-top: var(--space-4);
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 1px solid var(--divider);
   border-radius: var(--radius-card);
-  background: var(--surface);
+  background: var(--conversation-reading-surface, var(--surface));
   color: var(--text);
-  font: var(--text-13)/var(--leading-normal) var(--font);
+  font-family: var(--font);
+  font-size: max(var(--text-13), calc(var(--chat-font-size, 15px) * 0.88));
+  line-height: var(--leading-normal);
 }
 .file-change-summary > header, .file-change-item {
   display: flex;
@@ -63,10 +65,14 @@
 .file-change-item:disabled { opacity: 1; cursor: default; }
 .file-change-path { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .file-change-item.is-openable:hover { background: var(--surface-hover); }
-.file-change-item small { color: var(--muted); font-size: var(--text-xs); }
+.file-change-item small { color: var(--muted); font-size: var(--text-sm); }
 .file-change-item.is-missing .file-change-path { color: var(--muted); text-decoration: line-through; }
 .file-change-undo + .file-change-more { margin-inline-start: 0; }
+.file-change-more svg { transition: transform var(--motion-switch); }
 .file-change-more[aria-expanded="true"] svg { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .file-change-more svg { transition: none; }
+}
 .file-change-incomplete-note, .file-change-missing-note { margin: 0; padding: var(--space-2) var(--space-4); color: var(--warning); font-size: var(--text-xs); }
 .file-change-incomplete-note { display: flex; align-items: center; gap: var(--space-2); }
 .file-change-incomplete-note svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); }

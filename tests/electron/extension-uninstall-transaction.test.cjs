@@ -55,9 +55,9 @@ function tombstones(parent) { return fs.readdirSync(parent).filter(name => name.
 function directInstall(root, id) {
   root = fs.realpathSync(root);
   const code = path.join(root, 'extensions', id, '1.0.0');
-  const stateDirectory = path.join(root, 'extension-state', 'user');
+  const stateDirectory = path.join(root, 'data', 'extension-state', 'user');
   const state = path.join(stateDirectory, `${id}.json`);
-  const data = path.join(root, 'extension-data', 'user', id);
+  const data = path.join(root, 'data', 'extension-data', 'user', id);
   fs.mkdirSync(code, { recursive: true });
   fs.mkdirSync(stateDirectory, { recursive: true });
   fs.mkdirSync(data, { recursive: true });
@@ -260,7 +260,7 @@ for (const installed of [true, false]) {
     const files = directInstall(root, id);
     const child = crashAfterStaging(root, id);
     assert.equal(child.status, 73, child.stderr);
-    const journalRoot = path.join(root, 'extension-state', '.uninstall-journal');
+    const journalRoot = path.join(root, 'data', 'extension-state', '.uninstall-journal');
     assert.equal(fs.readdirSync(journalRoot).filter(name => name.endsWith('.json')).length, 1);
     assert.equal(fs.existsSync(files.code), false);
     assert.equal(fs.existsSync(files.state), false);
@@ -288,7 +288,7 @@ test('restart recovery preserves a replacement at an interrupted tombstone', t =
   directInstall(root, id);
   const child = crashAfterStaging(root, id);
   assert.equal(child.status, 73, child.stderr);
-  const journalRoot = path.join(root, 'extension-state', '.uninstall-journal');
+  const journalRoot = path.join(root, 'data', 'extension-state', '.uninstall-journal');
   const [journalName] = fs.readdirSync(journalRoot).filter(name => name.endsWith('.json'));
   const journalFile = path.join(journalRoot, journalName);
   const journal = JSON.parse(fs.readFileSync(journalFile, 'utf8'));

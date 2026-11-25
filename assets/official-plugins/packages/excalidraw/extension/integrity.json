@@ -4,8 +4,8 @@
   "files": [
     {
       "path": "diagram-authoring.mjs",
-      "sha256": "ee5ed47a5c9e04552708b892734746eccb334b6c5392d4e6d178798c58027d03",
-      "size": 7160
+      "sha256": "8160e45043ad1249afa2021f857d15e91ef47fb73a88948d130a4ac5b1f4a24b",
+      "size": 7532
     },
     {
       "path": "diagram.mjs",
@@ -14,1153 +14,2963 @@
     },
     {
       "path": "extension.mjs",
-      "sha256": "b215dd2946872926000f9d31bc2e65b1989bc8964991ddfebc3ac0c1ff759aea",
-      "size": 10697
+      "sha256": "a32150894b6748820d9f771b59dfa232b4fbc32449b49cc3dda25ceb8f680b1c",
+      "size": 24554
     },
     {
       "path": "pi-studio.extension.json",
-      "sha256": "8f83221b246d9455d73e1f46dc1b00ff28f0ae98b7eb1c87b242e6b1b9000101",
-      "size": 1248
+      "sha256": "7eeb38551524501c93079444b00712bd66a3e7de1aca8077f226137b4bec1913",
+      "size": 1453
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/manifest.json",
+      "path": "scene.mjs",
+      "sha256": "c880e666ea9f3eafab1cff9f5637c29dc60e0d026073998f89dc42b20994de07",
+      "size": 5731
+    },
+    {
+      "path": "skills/diagram-authoring/benchmarks/first-pass/manifest.json",
       "sha256": "25cba318304c47c2cfb4806f4006534f1178b6d6e9415892f6bb2323c49c98f5",
       "size": 8040
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/README.md",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/README.md",
       "sha256": "7b361b88db72a25dc8fd866b4ba9df15d50613c0c562670966d2611707b58149",
       "size": 2402
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/candidate.diagram.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/candidate.diagram.json",
       "sha256": "702b8bd737b4d0e762fd3d325f55cc368dc044a10c00c09814e382e98cd0f132",
       "size": 548
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/receipt.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/receipt.json",
       "sha256": "a749d3472ee4d1f8aea4498067d9120881ab0552d5efc9943d42e13a029a45c1",
       "size": 1328
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/render.excalidraw",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/render.excalidraw",
       "sha256": "b953b55b848c775b0a89d3c2c0fd7ae3fcfc96b499dd98ca91f9cbe1f5b94457",
       "size": 15694
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/run.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/run.json",
       "sha256": "4dfd9421fc87e0ec149d9213d40046c4c0af306d2770ab10ef0e1c31c397ca40",
       "size": 441
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/verify.stderr",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/module-dependency/verify.stderr",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "size": 0
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/candidate.diagram.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/candidate.diagram.json",
       "sha256": "893c3cb86ccb73419cb7d1e6b641c66bd38d9d3961d300645c7c260eed16b5e6",
       "size": 842
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/receipt.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/receipt.json",
       "sha256": "751da6b52dfc9b80fb12a2071db64ac62e4973874d89482424da57acb14f4f77",
       "size": 1323
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/render.excalidraw",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/render.excalidraw",
       "sha256": "2219f8083800fe5553681c609f2c3b466a3d0c6a52cefaff31e490382bc30e96",
       "size": 22130
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/run.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/run.json",
       "sha256": "4dfd9421fc87e0ec149d9213d40046c4c0af306d2770ab10ef0e1c31c397ca40",
       "size": 441
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/verify.stderr",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/order-state/verify.stderr",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "size": 0
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/candidate.diagram.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/candidate.diagram.json",
       "sha256": "7b5b4cc8540f190df6abb1034515e5ea8af1315f9d877c471f1bf2dce3055730",
       "size": 779
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/receipt.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/receipt.json",
       "sha256": "082ae1b27835d75ee88d533d0e96989718e21c07cd33c60d1792930593793d5c",
       "size": 1323
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/render.excalidraw",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/render.excalidraw",
       "sha256": "4b90bf43cfd8e182f92e823389c2650e1e885bd4ebe29ee0bec21f130e2db8a4",
       "size": 19727
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/run.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/run.json",
       "sha256": "4dfd9421fc87e0ec149d9213d40046c4c0af306d2770ab10ef0e1c31c397ca40",
       "size": 441
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/verify.stderr",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/release-flow/verify.stderr",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "size": 0
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/results.jsonl",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/results.jsonl",
       "sha256": "a6741f0440809e089b6cc8b988527f83bd524ef63e47f1e1ed1bbba0b99bb920",
       "size": 1779
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/RESULTS.md",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/RESULTS.md",
       "sha256": "fd3963c7313a6720738172f13f054ed4385a60aafc61ed416152149ef77a2956",
       "size": 2154
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/candidate.diagram.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/candidate.diagram.json",
       "sha256": "6570829321f3a0704885e29e2e15cf4fdcfaae9a3bdec677a64cb23336185d3f",
       "size": 958
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/receipt.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/receipt.json",
       "sha256": "18599726cabaee988aef56730940cb8eb4d5690064e95e5aaa82f41031bfa7bf",
       "size": 1326
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/render.excalidraw",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/render.excalidraw",
       "sha256": "87f9064b89f568ec4741183a28f97251e54e3bb4b3aa87d4c447aac7da8db165",
       "size": 24624
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/run.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/run.json",
       "sha256": "4dfd9421fc87e0ec149d9213d40046c4c0af306d2770ab10ef0e1c31c397ca40",
       "size": 441
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/verify.stderr",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/service-network/verify.stderr",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "size": 0
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/candidate.diagram.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/candidate.diagram.json",
       "sha256": "d2dc0a769c92a9b3055ebfd863bb3513159a65297323c1c1fb581dd6ad973d18",
       "size": 1304
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/receipt.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/receipt.json",
       "sha256": "998c1a9a1bdc4fa0345917f4026b752620947d4c2f79de6f7ebf30b13cf0ed37",
       "size": 1336
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/render.excalidraw",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/render.excalidraw",
       "sha256": "004f8ca38caefdeaf81177cf40a6d9fda6f18c7737a8a45cf841efc85cadb4bb",
       "size": 32821
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/run.json",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/run.json",
       "sha256": "4dfd9421fc87e0ec149d9213d40046c4c0af306d2770ab10ef0e1c31c397ca40",
       "size": 441
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/verify.stderr",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/results/2026-09-16-author-selfrun/web-runtime-architecture/verify.stderr",
       "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
       "size": 0
     },
     {
-      "path": "skills/excalidraw-live-canvas/benchmarks/first-pass/verify.py",
+      "path": "skills/diagram-authoring/benchmarks/first-pass/verify.py",
       "sha256": "73e4eabaf36cbbcba93136294139d771ee00a4951c5d75f2c5e40b12d1ec0e66",
       "size": 9570
     },
     {
-      "path": "skills/excalidraw-live-canvas/dev-tools/check_examples.py",
+      "path": "skills/diagram-authoring/dev-tools/check_examples.py",
       "sha256": "13dc7c0ef9179f761ddc830d53e5175508b5bdb4196a4b9dba9e420582b2d3a8",
       "size": 4892
     },
     {
-      "path": "skills/excalidraw-live-canvas/dev-tools/check_render_regressions.py",
+      "path": "skills/diagram-authoring/dev-tools/check_render_regressions.py",
       "sha256": "0af50ed85a0d981c7472d6d3d668a4706532a1a6e1d1acadccd99a20ff2e1cf1",
       "size": 3531
     },
     {
-      "path": "skills/excalidraw-live-canvas/dev-tools/check_render.py",
+      "path": "skills/diagram-authoring/dev-tools/check_render.py",
       "sha256": "8b7bc5dd0d9a59577fa0f4a64b4fbfb23b6bef602fa5ee9736c763ca8ed87f3e",
       "size": 11672
     },
     {
-      "path": "skills/excalidraw-live-canvas/dev-tools/export_drawio.py",
+      "path": "skills/diagram-authoring/dev-tools/export_drawio.py",
       "sha256": "68751ca1f9019dfd83363bd0c8f2c20159689d30bb4866e6c42de5f211bb1ac1",
       "size": 20777
     },
     {
-      "path": "skills/excalidraw-live-canvas/dev-tools/export_excalidraw.py",
+      "path": "skills/diagram-authoring/dev-tools/export_excalidraw.py",
       "sha256": "da1b4a2e6321745123fd6cfe2237ab76f8108bfb547a20bb0cb41218901a609a",
       "size": 27230
     },
     {
-      "path": "skills/excalidraw-live-canvas/dev-tools/export_mermaid.py",
+      "path": "skills/diagram-authoring/dev-tools/export_mermaid.py",
       "sha256": "aee106129138671b9ba6f31c1347119d7a92b0237d452c25d49325be8293abe3",
       "size": 8748
     },
     {
-      "path": "skills/excalidraw-live-canvas/dev-tools/preview.py",
+      "path": "skills/diagram-authoring/dev-tools/preview.py",
       "sha256": "a069be51bc783eefe8f881e1b484a6862033b469db871d5f9ba1ebcf04f12081",
       "size": 17620
     },
     {
-      "path": "skills/excalidraw-live-canvas/dev-tools/render_probe.js",
+      "path": "skills/diagram-authoring/dev-tools/render_probe.js",
       "sha256": "76f994008fd3c48bc47453e4c989aff5681459af5b008282a461f482f2a8a826",
       "size": 6918
     },
     {
-      "path": "skills/excalidraw-live-canvas/dev-tools/sync_exports.py",
+      "path": "skills/diagram-authoring/dev-tools/sync_exports.py",
       "sha256": "395d05af8d94765ad3baa58d96d560dc81f1ee8fc670489db8c12528df806237",
       "size": 9465
     },
     {
-      "path": "skills/excalidraw-live-canvas/evals/evals.json",
+      "path": "skills/diagram-authoring/evals/evals.json",
       "sha256": "e100ff1cca8d89a9d9fb57fa170e9f8c2dd579d0d822821bfb7cda2e2e5d9196",
       "size": 18009
     },
     {
-      "path": "skills/excalidraw-live-canvas/evals/triggers.json",
+      "path": "skills/diagram-authoring/evals/triggers.json",
       "sha256": "8642caf15c77ab35a6cc031ab0aa5e1dcc5b89ae5de961c2a9c0c31164bbc84c",
       "size": 1989
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/diagram.drawio",
-      "sha256": "3cbde37a5c37f929c33f3e7d373eafa9d0fe1217cf4c88abd47bdf484c0c28f9",
-      "size": 4769
+      "path": "skills/diagram-authoring/examples/architecture/diagram.drawio",
+      "sha256": "8907fb947f9dac4b4d925bbc23bb4cfe5c86a3db42cc33a4e3ec338ff94973d4",
+      "size": 4802
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/diagram.excalidraw",
+      "path": "skills/diagram-authoring/examples/architecture/diagram.excalidraw",
       "sha256": "2ac9833f2188ba5fa4a4bd83886f7e285b28e5a12ea16cacd3ece79681762acb",
       "size": 16562
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/drawio.png",
+      "path": "skills/diagram-authoring/examples/architecture/drawio.png",
       "sha256": "4e064b9e264090b263e5c019ec8bb3717bd2db0516a2bc14df8ce07ef455a864",
       "size": 92576
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/excalidraw.png",
+      "path": "skills/diagram-authoring/examples/architecture/excalidraw.png",
       "sha256": "3cf48d87b0674a0d5436ad9878804337ae93376ced8c03506052d7ec87ba40c4",
       "size": 95786
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/generation.json",
+      "path": "skills/diagram-authoring/examples/architecture/generation.json",
       "sha256": "d3fb1c872933d79bb87fd081f989778600491544801e8a50e7dcb9fbce556ec5",
       "size": 1104
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/mermaid.mmd",
+      "path": "skills/diagram-authoring/examples/architecture/mermaid.mmd",
       "sha256": "5e8cdc17b13a8c9e9c7c4be65e2c5a666c02600724e25579acbe9bab3f39b9b6",
       "size": 1774
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/mermaid.png",
+      "path": "skills/diagram-authoring/examples/architecture/mermaid.png",
       "sha256": "1c5efe4dadca07fbe3bd17da19a853746755a1638b46edbf2d65ce6721519c40",
       "size": 106018
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/presentation.json",
+      "path": "skills/diagram-authoring/examples/architecture/presentation.json",
       "sha256": "e4c8aa42939ee0279cd072ff4b126b0fb99bac8551abfee3aac0eedc968c9020",
       "size": 1295
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/render-excalidraw.json",
+      "path": "skills/diagram-authoring/examples/architecture/render-excalidraw.json",
       "sha256": "8b9a6bcad5e6d9d5f66c0c7ef363ec373676b29e9d1c82739bebea0d6c660b42",
       "size": 285
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/render.json",
+      "path": "skills/diagram-authoring/examples/architecture/render.json",
       "sha256": "50c5e7ade1a5b3be5b3676dbafc6c7300b5f69f9d747d96db0f6b7bbc89a23f8",
       "size": 263
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/semantics.json",
+      "path": "skills/diagram-authoring/examples/architecture/semantics.json",
       "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
       "size": 64
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/architecture/source.diagram.json",
+      "path": "skills/diagram-authoring/examples/architecture/source.diagram.json",
       "sha256": "c943278cb2a73234b6d8704c4edf882aaeeac1c89cad4d64e74c4e3143e9729f",
       "size": 1089
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand-contrast.json",
+      "path": "skills/diagram-authoring/examples/colors/brand-contrast.json",
       "sha256": "4f6746617b13f1ecd639e366ae95ed9f4ed7c27f665ea4588f104c406b21c775",
       "size": 10372
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand-drawio-check.json",
+      "path": "skills/diagram-authoring/examples/colors/brand-drawio-check.json",
       "sha256": "9d65eee6bac469f1f458a9beb0c7ec9eef9ecf5217bf3c3172d7637ef9bc0eaf",
       "size": 1059
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand-drawio-export.json",
+      "path": "skills/diagram-authoring/examples/colors/brand-drawio-export.json",
       "sha256": "7b04f33629b457ebfe02b04e1954ca47ff98be0355ac97526a6253eb3d6da8c0",
       "size": 527
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand-drawio.png",
+      "path": "skills/diagram-authoring/examples/colors/brand-drawio.png",
       "sha256": "f803b3f3f4fc147d0cab03f6b79ec0bebc23be120af825dddf6c753ea50f3b4f",
       "size": 61229
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand-drawio.svg",
+      "path": "skills/diagram-authoring/examples/colors/brand-drawio.svg",
       "sha256": "e155d121b76653e6842490bfc72c77a274455b81e90e3444aa6e1b8f939c2a3d",
       "size": 140115
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand-excalidraw-check.json",
+      "path": "skills/diagram-authoring/examples/colors/brand-excalidraw-check.json",
       "sha256": "d013cb26b95744e9aded26d88a6182218ead98426978b7d497bde170590162b2",
       "size": 1070
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand-excalidraw-export.json",
+      "path": "skills/diagram-authoring/examples/colors/brand-excalidraw-export.json",
       "sha256": "ad084f600a45184cf5f61f9a37a415b9065e2a4faaa662e3afb3abe37e81984c",
       "size": 247
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand-excalidraw.png",
+      "path": "skills/diagram-authoring/examples/colors/brand-excalidraw.png",
       "sha256": "8707a8b964e1da705e22e499b3647093f4caf639502a882c65a122e0d23ede90",
       "size": 52474
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand-excalidraw.svg",
+      "path": "skills/diagram-authoring/examples/colors/brand-excalidraw.svg",
       "sha256": "32c5748367bc6e725093edf90df32bf8019c638f8db81dc2c7bb6f5c23a39afa",
       "size": 19439
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand.colors.json",
+      "path": "skills/diagram-authoring/examples/colors/brand.colors.json",
       "sha256": "8740ed01f9fed9fa8fc0764988c11daeec358e21e40d5279e677ee920436cfcd",
       "size": 540
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand.drawio",
+      "path": "skills/diagram-authoring/examples/colors/brand.drawio",
       "sha256": "f536605194f345f4109d9f0b41567ab06ea135402041dec06390b58dfa81e9ca",
       "size": 4685
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/brand.excalidraw",
+      "path": "skills/diagram-authoring/examples/colors/brand.excalidraw",
       "sha256": "33c3a970ed1b2d9af2fc174c304dcee259da283a1387437da6feeacae3f56ebf",
       "size": 18470
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/comparison.png",
+      "path": "skills/diagram-authoring/examples/colors/comparison.png",
       "sha256": "71bdb7a7e928bf1aa9dad4f8a4a07c2b18dd3c9a95d3ad159a595ec161c4b21a",
       "size": 241181
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-contrast.json",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark-contrast.json",
       "sha256": "62c4fd77368540ecf14bfcc8a868da23555122291f40f4c69c708871a8d3511d",
       "size": 9686
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-drawio-check.json",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark-drawio-check.json",
       "sha256": "53b2195bd22febf69b6422315763116a4ef9606f031c36194c626ea5a76242f8",
       "size": 1059
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-drawio-export.json",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark-drawio-export.json",
       "sha256": "f178cad726263e4a69340593fde966d96b3fb14ac1d31e79a587470cf9eec4a8",
       "size": 539
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-drawio.png",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark-drawio.png",
       "sha256": "a907febbd8dd8d79f2c0186e9a240631d7355022f97053c9afa91e807d37147e",
       "size": 60379
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-drawio.svg",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark-drawio.svg",
       "sha256": "71a713432ef94f4d5cb5d59ef1f4ee03477ca63278d09d7b53e3cb33b5fc7d86",
       "size": 136417
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-excalidraw-check.json",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark-excalidraw-check.json",
       "sha256": "c2d4a791086d98dfc512715e9689afeeb3feb4e29b72718739e3744ca9d0efd3",
       "size": 1070
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-excalidraw-export.json",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark-excalidraw-export.json",
       "sha256": "1391c21ef733a05e258164e4e4320c61eca91256af3fd5c946442085ce1de248",
       "size": 348
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-excalidraw.png",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark-excalidraw.png",
       "sha256": "0e563d05c6d0c5f2072bf805ebe73e53ce02928b932528f4b7850947a1f630d5",
       "size": 52524
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark-excalidraw.svg",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark-excalidraw.svg",
       "sha256": "8291f3cd7b797913b8a925723b28d7e1186dd70cb17dbf131a3b8fffff6115b2",
       "size": 19427
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark.colors.json",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark.colors.json",
       "sha256": "9fc033a4c494b196c8cbfc2a1ac3d834dc278e5cafdc30b7c9b440e5f4b03b27",
       "size": 510
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark.drawio",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark.drawio",
       "sha256": "da81ee1e0c57cdf3b941f7b7e7d283cd51105cb45d11f033e818012ac2a821a3",
       "size": 4685
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/custom-dark.excalidraw",
+      "path": "skills/diagram-authoring/examples/colors/custom-dark.excalidraw",
       "sha256": "6bc85c6fd23cb90e344e0f8a2e641686e9b187823d8df81a2abc265b088e6b33",
       "size": 18470
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/gallery.html",
+      "path": "skills/diagram-authoring/examples/colors/gallery.html",
       "sha256": "1ba929ce5600dbff9b74c15fce5a5c62fde75763df3d7b9cef0ea4a1ae722d09",
       "size": 2021
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/README.md",
+      "path": "skills/diagram-authoring/examples/colors/README.md",
       "sha256": "5dd599d61735412f1d62926feeb4f4d8c1358c90547abfed75b6e79f58f0424e",
       "size": 3196
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/source.diagram.json",
+      "path": "skills/diagram-authoring/examples/colors/source.diagram.json",
       "sha256": "4f9a1568017758b03f08972cf2bf4c53a899d91242e342526ca5db8fd3f037eb",
       "size": 1100
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website-contrast.json",
+      "path": "skills/diagram-authoring/examples/colors/website-contrast.json",
       "sha256": "b0415db6f3aa8d0f76dea1d44c5e5ed3c0bec0b237221df2072ff7a8b6251107",
       "size": 10779
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website-drawio-check.json",
+      "path": "skills/diagram-authoring/examples/colors/website-drawio-check.json",
       "sha256": "1d5be9b3019b9b8cadb07db25c7026ffe4c977bd4247b0942f66d4399231e6fc",
       "size": 1059
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website-drawio-export.json",
+      "path": "skills/diagram-authoring/examples/colors/website-drawio-export.json",
       "sha256": "82249afe1d7baed0163603158487abd39071328f86a9c73dec4dfe63da767d97",
       "size": 531
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website-drawio.png",
+      "path": "skills/diagram-authoring/examples/colors/website-drawio.png",
       "sha256": "3b111b10dcdbad52d15d6678c80130065361ef37246bb235a15139f6315ca15d",
       "size": 57884
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website-drawio.svg",
+      "path": "skills/diagram-authoring/examples/colors/website-drawio.svg",
       "sha256": "b9da05fecab12d4ca868086b207b1656655f0644e133d739d6aa2020f0e6a23c",
       "size": 139792
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website-excalidraw-check.json",
+      "path": "skills/diagram-authoring/examples/colors/website-excalidraw-check.json",
       "sha256": "722db2ece904b3dfe7c3808fbf61f2dd27c43e8c62da7d0c24dbb9870a9ee5e9",
       "size": 1070
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website-excalidraw-export.json",
+      "path": "skills/diagram-authoring/examples/colors/website-excalidraw-export.json",
       "sha256": "9261eb16fb62c1e1895eea2a809ba8c3218fe33e76dc6525b3718711a3a51e2e",
       "size": 340
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website-excalidraw.png",
+      "path": "skills/diagram-authoring/examples/colors/website-excalidraw.png",
       "sha256": "c52a5468ad0898173af35e2f4edea9e6fc92c6401c4125418e6ddfea59cee1e2",
       "size": 51740
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website-excalidraw.svg",
+      "path": "skills/diagram-authoring/examples/colors/website-excalidraw.svg",
       "sha256": "3223152a2a127dfb60e8b5f0aa1d2681aec70d51f0737b278fc25fcaf2f3d8d4",
       "size": 19427
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website.colors.json",
+      "path": "skills/diagram-authoring/examples/colors/website.colors.json",
       "sha256": "4b6094318557bfc0f946cebc4e0f3b81cd085327f9e0e9558b6ee51d7eef1bfb",
       "size": 516
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website.drawio",
+      "path": "skills/diagram-authoring/examples/colors/website.drawio",
       "sha256": "5c654af09ed86dafa63149922f973db51e5b7d757aecb1541f8c58bd295815b5",
       "size": 4685
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/colors/website.excalidraw",
+      "path": "skills/diagram-authoring/examples/colors/website.excalidraw",
       "sha256": "8c5ad58efc9257f9c763d2ed42940ae3dec3ea9ca896e0dd6b31b08dc0c45622",
       "size": 18470
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/dependency/diagram.drawio",
-      "sha256": "8cdf9554a9b54013fa628603b6aef5190c07701ea5282944cb11c76a54361763",
-      "size": 4685
+      "path": "skills/diagram-authoring/examples/dependency/diagram.drawio",
+      "sha256": "7ecc43f4ed7912f48c4672ca1fda7a994f9f78f2a99ed99be7281b36b51711dc",
+      "size": 4906
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/dependency/diagram.excalidraw",
-      "sha256": "aefa18a41a70923347026b2f2995092bca67448660636e680255d49932d33db0",
-      "size": 17158
+      "path": "skills/diagram-authoring/examples/dependency/diagram.excalidraw",
+      "sha256": "ca0ad70f11af7ccf09eaf56fa7a0d05484d324e7f9baae3a6e4582bc9f4dcc07",
+      "size": 17085
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/dependency/drawio.png",
+      "path": "skills/diagram-authoring/examples/dependency/drawio.png",
       "sha256": "b88f163aaaaa2fde1cd68d2a4549857ed4f094ada8eaddcb67361de9d311c19d",
       "size": 85048
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/dependency/excalidraw.png",
+      "path": "skills/diagram-authoring/examples/dependency/excalidraw.png",
       "sha256": "af1e613576e83f6b0f62c7b058ec527df4290ba5525ae1c01e01790bfacca433",
       "size": 93307
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/dependency/generation.json",
+      "path": "skills/diagram-authoring/examples/dependency/generation.json",
       "sha256": "3bcea6fc503da505686b426c600d89d2c899b28a2ac05eee9f0d7b8ac962e757",
       "size": 1100
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/dependency/presentation.json",
+      "path": "skills/diagram-authoring/examples/dependency/presentation.json",
       "sha256": "621ee4614ec80a675e5a86ca13dc286dc54f4f9ffc3200a6be31664dddaf95c0",
       "size": 1290
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/dependency/render-excalidraw.json",
+      "path": "skills/diagram-authoring/examples/dependency/render-excalidraw.json",
       "sha256": "17ef80a3a14d2aa5b477a6e24cead9c2e02d3fc527cc37833cc4ac091fbee02d",
       "size": 283
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/dependency/render.json",
+      "path": "skills/diagram-authoring/examples/dependency/render.json",
       "sha256": "396de38a67c227e7d182139335b8db07d99c4e9256cb6e7342ae9b2ac4bf62f9",
       "size": 261
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/dependency/semantics.json",
+      "path": "skills/diagram-authoring/examples/dependency/semantics.json",
       "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
       "size": 64
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/dependency/source.diagram.json",
+      "path": "skills/diagram-authoring/examples/dependency/source.diagram.json",
       "sha256": "de9e08e7877e02568f7190ee0d9b7570f870b96f4fb602f2528f88d174427cba",
       "size": 1138
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/flow/diagram.drawio",
-      "sha256": "11b8c9f075858c9ff0b87286bb766d6ad3f4a723aaea75717686d24fbcac88be",
-      "size": 4190
+      "path": "skills/diagram-authoring/examples/flow/diagram.drawio",
+      "sha256": "263351220bf664069729fede352b4f2dad5cc572387bf8714dc8f0a4b96a429e",
+      "size": 4223
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/flow/diagram.excalidraw",
-      "sha256": "f3513551aba3eecdf1dbb771685c18558aeda06ee8e028ac5bd671cb410310c3",
-      "size": 14461
+      "path": "skills/diagram-authoring/examples/flow/diagram.excalidraw",
+      "sha256": "a1311ad25ffbb1688854f255a4dae9abbb56215f2e0f34fd8698d7a3aadbf61d",
+      "size": 14504
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/flow/drawio.png",
+      "path": "skills/diagram-authoring/examples/flow/drawio.png",
       "sha256": "939e2dfd5d08fe75d93b3e6feb300434ff7aa445b59bd3ff9f9980a2d811fbf7",
       "size": 103312
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/flow/excalidraw.png",
+      "path": "skills/diagram-authoring/examples/flow/excalidraw.png",
       "sha256": "902517d5eeae1225afc556566761ba5ff95132828349e50f499f4d1f5d28398e",
       "size": 100572
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/flow/generation.json",
+      "path": "skills/diagram-authoring/examples/flow/generation.json",
       "sha256": "2bd1be651d97e6c2a30623255a902a6bdb9ea904c8a1d642385ed3f2be20eee0",
       "size": 1088
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/flow/presentation.json",
+      "path": "skills/diagram-authoring/examples/flow/presentation.json",
       "sha256": "e0a0932691193782fdf9deebc008f4008bf00111fc9e0bd45e8236dc9eac884c",
       "size": 1285
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/flow/render-excalidraw.json",
+      "path": "skills/diagram-authoring/examples/flow/render-excalidraw.json",
       "sha256": "e4bac5b91e5c8a819f5ebdb68544b4c92fbc96e9c74b12679e74f83484844ee8",
       "size": 277
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/flow/render.json",
+      "path": "skills/diagram-authoring/examples/flow/render.json",
       "sha256": "840cd35b55245596ec157004f4e7b0c91ab302ebbd32df975055e857386b2f4a",
       "size": 256
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/flow/semantics.json",
+      "path": "skills/diagram-authoring/examples/flow/semantics.json",
       "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
       "size": 64
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/flow/source.diagram.json",
+      "path": "skills/diagram-authoring/examples/flow/source.diagram.json",
       "sha256": "db63de4ac877e29066953652fbde9b0c16724f8ec718b56bae2b9501487cd75d",
       "size": 939
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/manifest.json",
+      "path": "skills/diagram-authoring/examples/manifest.json",
       "sha256": "207bdcf37c874d1ad3fbcd85c8596379b3a34dcda35c85f29fd8400ebdf794ab",
       "size": 36434
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/mindmap/diagram.drawio",
-      "sha256": "c33e4e44e45abbfcb4315bd873a4aedd6b5515217e24f0c9fd7f58d6756e91a5",
-      "size": 4666
+      "path": "skills/diagram-authoring/examples/mindmap/diagram.drawio",
+      "sha256": "0f75a1b736dbeb0a6cd14d0807e8bd5ac20a9ee6dfedffdd4b6101972858b374",
+      "size": 4710
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/mindmap/diagram.excalidraw",
+      "path": "skills/diagram-authoring/examples/mindmap/diagram.excalidraw",
       "sha256": "9fe5d2036076a365a261aa67b7ecb60b5de7b6eca39f367c0c6eccdd1a6e099d",
       "size": 14479
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/mindmap/drawio.png",
+      "path": "skills/diagram-authoring/examples/mindmap/drawio.png",
       "sha256": "eff4cb43d5a0ec9e7cd5fd13ddd271ba8f589ec6fbf3f88cfec607aceb06ad27",
       "size": 61760
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/mindmap/excalidraw.png",
+      "path": "skills/diagram-authoring/examples/mindmap/excalidraw.png",
       "sha256": "9d680df54738c43d5770409ccdf57b1e0ac05038c11d934b7aaca0eec47d01ea",
       "size": 86519
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/mindmap/generation.json",
+      "path": "skills/diagram-authoring/examples/mindmap/generation.json",
       "sha256": "7ea4b74f36ed35d2b65c4b0ef38d4d50fea20a4b93606ea001c7f70ffbc6e6a5",
       "size": 1094
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/mindmap/presentation.json",
+      "path": "skills/diagram-authoring/examples/mindmap/presentation.json",
       "sha256": "6ee7ad4cfcc3d6b2e84917f38d5a72ff2a27b9bddc7a357ea1cec1e21988bab7",
       "size": 1292
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/mindmap/render-excalidraw.json",
+      "path": "skills/diagram-authoring/examples/mindmap/render-excalidraw.json",
       "sha256": "0702de46bc55d9b1376ff2456afbfd7207f9ffb73e45a7316d4ac00e21deccf7",
       "size": 280
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/mindmap/render.json",
+      "path": "skills/diagram-authoring/examples/mindmap/render.json",
       "sha256": "7f430a120a0e7658edd99db4107c8e2eee42a0fb896bcbb41d815c6b1696ad41",
       "size": 259
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/mindmap/semantics.json",
+      "path": "skills/diagram-authoring/examples/mindmap/semantics.json",
       "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
       "size": 64
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/mindmap/source.diagram.json",
+      "path": "skills/diagram-authoring/examples/mindmap/source.diagram.json",
       "sha256": "ade768cd61ce9ecd5c8882be7510480bda3d7364d63255be09b1655f6ce762f5",
       "size": 1045
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/network/diagram.drawio",
-      "sha256": "b3047d8b4c02265c5c9aa2592fe61ebd57064f3bdaa9cfaa4addbcb20ce2995c",
-      "size": 5256
+      "path": "skills/diagram-authoring/examples/network/diagram.drawio",
+      "sha256": "72d4d292c0b9a8a0180a5f79613e0a1928608939ec8a0df28732f003f49d2407",
+      "size": 5564
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/network/diagram.excalidraw",
+      "path": "skills/diagram-authoring/examples/network/diagram.excalidraw",
       "sha256": "fb884f798023c49bfb196c9d2e4bfef4b2111b92b2bcc881908d74ed2e1acb34",
       "size": 20899
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/network/drawio.png",
+      "path": "skills/diagram-authoring/examples/network/drawio.png",
       "sha256": "18cb04c98b1367ba0b0877291dd1fb81436bd2a18f21158c18bd150e212e6957",
       "size": 78755
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/network/excalidraw.png",
+      "path": "skills/diagram-authoring/examples/network/excalidraw.png",
       "sha256": "295cec48cdba3c99798b1f3f3ff4d408d263d77212d69a390a5232aeec7a9aff",
       "size": 106541
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/network/generation.json",
+      "path": "skills/diagram-authoring/examples/network/generation.json",
       "sha256": "bf62bd580adba788dcd4330fc4af860269fd98c6272541fbb072e1f85a802294",
       "size": 1094
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/network/presentation.json",
+      "path": "skills/diagram-authoring/examples/network/presentation.json",
       "sha256": "31e7cdeb70fbef5940cef06531c5503ff0b3d7d41b9be58ba22971b01c7f9827",
       "size": 1289
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/network/render-excalidraw.json",
+      "path": "skills/diagram-authoring/examples/network/render-excalidraw.json",
       "sha256": "7c39496deb498ca5a0c96d235b1a7a7d683c9760afaa9d3ca7b298b50d4a592c",
       "size": 280
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/network/render.json",
+      "path": "skills/diagram-authoring/examples/network/render.json",
       "sha256": "de4e278e18af51a1368e3e164ae9d662d08b073dd7468de84ef8d7bfe9c3aa20",
       "size": 258
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/network/semantics.json",
+      "path": "skills/diagram-authoring/examples/network/semantics.json",
       "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
       "size": 64
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/network/source.diagram.json",
+      "path": "skills/diagram-authoring/examples/network/source.diagram.json",
       "sha256": "e105ac5d4ba920302e723c556b4b53846e61e0aacc7e7d7b479b356344873772",
       "size": 1176
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/document-drawio-check.json",
+      "path": "skills/diagram-authoring/examples/presentation/document-drawio-check.json",
       "sha256": "d956ddc05e961701b9d05788a410373ed94c19a771d02bb9700290419b151a3f",
       "size": 1058
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/document-drawio-export.json",
+      "path": "skills/diagram-authoring/examples/presentation/document-drawio-export.json",
       "sha256": "3f3bef3a09a3da9faf31a2cae953f0b525d9a4dae61f122ee7ae795a3d1253b5",
       "size": 545
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/document-drawio.png",
+      "path": "skills/diagram-authoring/examples/presentation/document-drawio.png",
       "sha256": "11c5a355ae918905d9ea99c44a1f0324365bd2fcceeffe3b0d59903f16966f6a",
       "size": 63945
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/document-drawio.svg",
+      "path": "skills/diagram-authoring/examples/presentation/document-drawio.svg",
       "sha256": "9948b3e5e1c8f3ca5879852e0d4ee5959d8423e00308cb25d55a3850f2354be4",
       "size": 173069
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/document-excalidraw-check.json",
+      "path": "skills/diagram-authoring/examples/presentation/document-excalidraw-check.json",
       "sha256": "380d850e34b2c20af767e8eb9a13aeffd7f0a2db573601015f9ecb72d27d22f7",
       "size": 1057
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/document-excalidraw-export.json",
+      "path": "skills/diagram-authoring/examples/presentation/document-excalidraw-export.json",
       "sha256": "a4eb35e36f1c3b636660d9791acaf28dd5e749fb4e560aecf6d69debc9cb8324",
       "size": 353
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/document-excalidraw.png",
+      "path": "skills/diagram-authoring/examples/presentation/document-excalidraw.png",
       "sha256": "2589262593f856b424bc8aeb42840eb87a7736ba512db24e5742d2bdfbd9abd1",
       "size": 68907
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/document-excalidraw.svg",
+      "path": "skills/diagram-authoring/examples/presentation/document-excalidraw.svg",
       "sha256": "234855a015bfd41e1c947c7c807314f58c39db79dff767f5d1af0c22a3d21f44",
       "size": 14860
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/document.drawio",
+      "path": "skills/diagram-authoring/examples/presentation/document.drawio",
       "sha256": "8a0f7a9e53dc3d7964337a998086a7a855dc68a6edd373c03ab2b13ec3f82e6b",
       "size": 4828
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/document.excalidraw",
+      "path": "skills/diagram-authoring/examples/presentation/document.excalidraw",
       "sha256": "3d365ab21cb61afd6da413e26eab95e46aa88816c54f9b6065068e119502b8c3",
       "size": 18067
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/README.md",
+      "path": "skills/diagram-authoring/examples/presentation/README.md",
       "sha256": "8b30031d827fe1729c3ddcf8364eed018d8e1645ccdc904ae400a16a54879f32",
       "size": 2828
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/render-occlusion-regressions.json",
+      "path": "skills/diagram-authoring/examples/presentation/render-occlusion-regressions.json",
       "sha256": "de64e1c5dfc3af7ad7d769c41f65279009aca9e4e869ebff0a454659206af0d4",
       "size": 1190
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/render-regressions.json",
+      "path": "skills/diagram-authoring/examples/presentation/render-regressions.json",
       "sha256": "50e6b3462374217519364634d2d50b13392f5e1a1e1f5c319b77fee784981d5e",
       "size": 6043
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-drawio-check.json",
+      "path": "skills/diagram-authoring/examples/presentation/slide-drawio-check.json",
       "sha256": "fe1baf631fcf0908886522bcad921c7e7d85b669d496dcded6a9cabfcedf1453",
       "size": 1061
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-drawio-export.json",
+      "path": "skills/diagram-authoring/examples/presentation/slide-drawio-export.json",
       "sha256": "4115901d26a24fc0189d8643aff119b87772c88bd8134a5da6728173b90aa24e",
       "size": 539
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-drawio.png",
+      "path": "skills/diagram-authoring/examples/presentation/slide-drawio.png",
       "sha256": "b62168762c63c27a9f8f6e636d10e9bdc983cb6918378a75f365edd08df53fc8",
       "size": 95693
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-drawio.svg",
+      "path": "skills/diagram-authoring/examples/presentation/slide-drawio.svg",
       "sha256": "1a18fc0b0cde2c410e8e8fe2b7aadd4f18b4a95a7e689a566fd8891c8d4d39b1",
       "size": 258071
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-excalidraw-check.json",
+      "path": "skills/diagram-authoring/examples/presentation/slide-excalidraw-check.json",
       "sha256": "15115dc6f09dd112b20152da55159c4ed9ea5c512d85d0bd1f0034fe39542ce8",
       "size": 1061
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-excalidraw-export.json",
+      "path": "skills/diagram-authoring/examples/presentation/slide-excalidraw-export.json",
       "sha256": "a096a98870196d7ef95ad2918e0fc12823298929a0ebee970fdfad528c5e61ba",
       "size": 436
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-excalidraw.png",
+      "path": "skills/diagram-authoring/examples/presentation/slide-excalidraw.png",
       "sha256": "28915164289cdffce1cb2c7dcc0da41122449ec58454a5af804596a857b2c31e",
       "size": 102283
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/slide-excalidraw.svg",
+      "path": "skills/diagram-authoring/examples/presentation/slide-excalidraw.svg",
       "sha256": "78a4775e5b110980235ad0a59346486627f655260251102584c75fe2053aa5ec",
       "size": 15435
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/slide.drawio",
+      "path": "skills/diagram-authoring/examples/presentation/slide.drawio",
       "sha256": "4346bc9d689877df1de5a298cdf0c2555ad701f6dbc73217b5b1234cd024e906",
       "size": 4830
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/slide.excalidraw",
+      "path": "skills/diagram-authoring/examples/presentation/slide.excalidraw",
       "sha256": "b748501cce9a06d84bfc27092aae709b61638139385a181c2ad17acd3dbd011a",
       "size": 18046
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/presentation/source.diagram.json",
+      "path": "skills/diagram-authoring/examples/presentation/source.diagram.json",
       "sha256": "0d2a6adb808c0754de9646749362db473cd1dbe098c43a13e6414bbca791ba1b",
       "size": 1135
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/README.md",
+      "path": "skills/diagram-authoring/examples/README.md",
       "sha256": "49e65516214d0edf143d5ed78f70e04fdb841edaeb643184f3a12c0aa39cc826",
       "size": 6392
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-drawio-check.json",
+      "path": "skills/diagram-authoring/examples/regions/diagram-drawio-check.json",
       "sha256": "b3f1607343577589327a40e7fb6adcf8c3d22343b08b4ee99cb964a02134016e",
       "size": 1058
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-drawio-export.json",
+      "path": "skills/diagram-authoring/examples/regions/diagram-drawio-export.json",
       "sha256": "cce369493fc11a428fc9558120a1e806e93501516130268d887d28455d3c7168",
       "size": 533
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-drawio.png",
+      "path": "skills/diagram-authoring/examples/regions/diagram-drawio.png",
       "sha256": "601a05281078573d08ae5e957d01534f5abf486f1cc8ee2a4cfb68dee31c0987",
       "size": 56201
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-drawio.svg",
+      "path": "skills/diagram-authoring/examples/regions/diagram-drawio.svg",
       "sha256": "a836fdc1d2d21e78d7fe04ef8682ee572113122efbdbf66df2c31ed9d8714a0f",
       "size": 174833
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-excalidraw-check.json",
+      "path": "skills/diagram-authoring/examples/regions/diagram-excalidraw-check.json",
       "sha256": "55bbce34383f972d78108a2bdce01db2211490c27b4524de6ff9e8ab7777001d",
       "size": 1064
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-excalidraw-export.json",
+      "path": "skills/diagram-authoring/examples/regions/diagram-excalidraw-export.json",
       "sha256": "9b53b88b9c1a5ccd569dcec1e7fc6d3baaa4b9a36c20db52208a7851b98c74cb",
       "size": 341
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-excalidraw.png",
+      "path": "skills/diagram-authoring/examples/regions/diagram-excalidraw.png",
       "sha256": "bf95743c23b98d0411746416c1fe132a767e132c574d1564c06e757a7c7c94cd",
       "size": 61665
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/diagram-excalidraw.svg",
+      "path": "skills/diagram-authoring/examples/regions/diagram-excalidraw.svg",
       "sha256": "3ab6f92ba31c2c15415044249c4f6c1b2a7754c0d242c015b913e5f686eb14fb",
       "size": 16007
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/diagram.drawio",
+      "path": "skills/diagram-authoring/examples/regions/diagram.drawio",
       "sha256": "719fca6635735bdf9fc86bff9ebf8ab39fedaf81ac9bb89a77314abd3b4e72b5",
       "size": 5797
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/diagram.excalidraw",
+      "path": "skills/diagram-authoring/examples/regions/diagram.excalidraw",
       "sha256": "1cf586ff9b6c3fcf032b15031e39309ed4d7887019b0ffeccbe0d7866e261d58",
       "size": 18759
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/project.colors.json",
+      "path": "skills/diagram-authoring/examples/regions/project.colors.json",
       "sha256": "238257dc3897397e8728bfd8a8bc4537e51b6bf7b2b16f8709898f55412b152b",
       "size": 545
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/README.md",
+      "path": "skills/diagram-authoring/examples/regions/README.md",
       "sha256": "8cb08bc01db038f69e686a3c7ee31fa69b7506007b81a61ea9afdbc86963e32c",
       "size": 864
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/regions/source.diagram.json",
+      "path": "skills/diagram-authoring/examples/regions/source.diagram.json",
       "sha256": "16f7cc0d40a8f8253c4a0a606228cb77c4f28bec8ef2fc72bc5c5d75304682ed",
       "size": 1068
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/state/diagram.drawio",
-      "sha256": "d239deb96c62336cde81202a7e9ec842093b650b45f0da4ab60d2ef3299b1ae1",
-      "size": 4455
+      "path": "skills/diagram-authoring/examples/state/diagram.drawio",
+      "sha256": "2a829d861b31d78d50520d972ae4e6979edf6bc6391dfd9021656d71c47d0dde",
+      "size": 4499
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/state/diagram.excalidraw",
+      "path": "skills/diagram-authoring/examples/state/diagram.excalidraw",
       "sha256": "59e52e9aebfa9bf509f5ba2fec3b9a96f1e74542568a9b3b63b2b077c9f3b9e1",
       "size": 16428
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/state/drawio.png",
+      "path": "skills/diagram-authoring/examples/state/drawio.png",
       "sha256": "0c519ade3b743a89e91522aafa256e0c22fca418c1d5152e635e842323de4f50",
       "size": 48588
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/state/excalidraw.png",
+      "path": "skills/diagram-authoring/examples/state/excalidraw.png",
       "sha256": "8edd0ae8f08e2bcca5e8474439f609738adfa2da5188681ef353b8c43612ca89",
       "size": 52949
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/state/generation.json",
+      "path": "skills/diagram-authoring/examples/state/generation.json",
       "sha256": "1cf69fe826afa636286e229c54342b61d2c7df6facbe37b4c0bb7c32705912db",
       "size": 1090
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/state/presentation.json",
+      "path": "skills/diagram-authoring/examples/state/presentation.json",
       "sha256": "7bdaaf83c6e6e267fd41fa0b89b59a7f3ed87b9d89f27f662c00355c55c3990f",
       "size": 1284
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/state/render-excalidraw.json",
+      "path": "skills/diagram-authoring/examples/state/render-excalidraw.json",
       "sha256": "7644d9b8813717edef1bcfc18793311a9ed9aa8c2b875c5c00a3f1c458e1f217",
       "size": 278
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/state/render.json",
+      "path": "skills/diagram-authoring/examples/state/render.json",
       "sha256": "dfc0d096ba10aa706be59f5d37db6a6935e164e71547dc64928e7cc859bda1be",
       "size": 256
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/state/semantics.json",
+      "path": "skills/diagram-authoring/examples/state/semantics.json",
       "sha256": "c26c0bc807e08f9602b738eb5f2ac1aa5cc3e128de95a49f9e28fc9febfeca31",
       "size": 64
     },
     {
-      "path": "skills/excalidraw-live-canvas/examples/state/source.diagram.json",
+      "path": "skills/diagram-authoring/examples/state/source.diagram.json",
       "sha256": "64323a03e30f969e1cc4c870410df53a4bea7c697156bacc343ff6c37e1cbcab",
       "size": 1046
     },
     {
-      "path": "skills/excalidraw-live-canvas/LICENSE",
+      "path": "skills/diagram-authoring/LICENSE",
       "sha256": "eda96b641402fc398cc5d79005948fd0c7fb84a0b379a51b5dc692f7548f37c2",
       "size": 1082
     },
     {
-      "path": "skills/excalidraw-live-canvas/README.md",
-      "sha256": "d8c0dbcdae403c0e26259802a6fa8ee31c666d80cec12bcce8f4b202bd9f21f9",
-      "size": 9467
+      "path": "skills/diagram-authoring/README.md",
+      "sha256": "f2ff7450b0eaa7407c24552388cf04b86256d6bcaa97b25f7f5f62dd88e03f62",
+      "size": 11030
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/color-design.md",
-      "sha256": "353d7c7f51d6a66018fb1dd8ce5f3e37281d80268dbb96740d554e54d32cec27",
-      "size": 8263
+      "path": "skills/diagram-authoring/references/color-design.md",
+      "sha256": "203034625786b463ed5d8b9acf2c0a67aa020d5427f55803fbd9b8c628038ebe",
+      "size": 8821
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/decision-gates.md",
+      "path": "skills/diagram-authoring/references/decision-gates.md",
       "sha256": "cdea6c0cd3092a9b87549f105477513634776872f4ded8d05cf4a3cff12d1386",
       "size": 7575
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/delivery-files.md",
+      "path": "skills/diagram-authoring/references/delivery-files.md",
       "sha256": "3cec6e1ee00c92a84c318e7eb4caa023f19348c617ed6846c900f9264dfd53de",
       "size": 5529
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/diagram-spec.md",
-      "sha256": "18a71622586ff8e5416e86dafa90e3d5d93714d10c1561f7ff37a532de52e7a0",
-      "size": 6777
+      "path": "skills/diagram-authoring/references/diagram-spec.md",
+      "sha256": "96c254c20a53f42bc194759f19c61bc85c0ce8da290a8054571ddb89554d9494",
+      "size": 7293
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/drawio-backend.md",
-      "sha256": "7244da3bab57b46cec5deabcef0f145b74745da56cc177ec1a96d94bb9e613f9",
-      "size": 4809
+      "path": "skills/diagram-authoring/references/drawio-backend.md",
+      "sha256": "f248f70315468f200a2f170d9647b5fafeb8ffbe5b66354d5f7492bdf9dab370",
+      "size": 5284
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/excalidraw-backend.md",
-      "sha256": "bd37fef93984ef662f005887510c229ffbab78a7f5d29baac99225d3149bc68f",
-      "size": 4045
+      "path": "skills/diagram-authoring/references/excalidraw-backend.md",
+      "sha256": "75c91fbaf5e77feaeba6ab881c6ae8c4f3c4306c28681163230e2de8afc6d961",
+      "size": 4260
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/icons.md",
-      "sha256": "24fa8f18b150bf4d34ee2d35f9d83d290b46701ac42ae7b7788797eff36de6ec",
-      "size": 2999
+      "path": "skills/diagram-authoring/references/icons.md",
+      "sha256": "205619fd9cdeedd16746d64002f10ee39e906a9c39f86964760f8cfe155bf281",
+      "size": 3977
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/mermaid-backend.md",
-      "sha256": "efef46f82662159f5dac91fc4d8f632c126dbcdbc10aede90ad87b3b6df54d71",
-      "size": 5233
+      "path": "skills/diagram-authoring/references/mermaid-backend.md",
+      "sha256": "3e845dcb6db3b8b8ea20333c0abeaa2ba78867361c3f2b3e77264bc4f012dc92",
+      "size": 5393
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/mixed-direction.md",
+      "path": "skills/diagram-authoring/references/mixed-direction.md",
       "sha256": "76a1c3d0055477666fd0bde3c5e0ae25baf8b69f5af15a83e37faedf8456fa43",
       "size": 2423
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/output-presets.md",
+      "path": "skills/diagram-authoring/references/output-presets.md",
       "sha256": "3e713a174cb1c6935de1ae10c477d3cb74cd80d06f830c056564895135b135c5",
       "size": 6440
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/reading-views.md",
+      "path": "skills/diagram-authoring/references/reading-views.md",
       "sha256": "b22496d4946566ac2c4451937f0507c2e765dac7621f5a12ecf49ac966041468",
       "size": 5491
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/semantic-patterns.md",
+      "path": "skills/diagram-authoring/references/semantic-patterns.md",
       "sha256": "8546f2ad807fe30c7436e1b0308b55b6586ef608bab854a5c3f4fe116e3eedc9",
       "size": 2367
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/type-guides.md",
+      "path": "skills/diagram-authoring/references/type-guides.md",
       "sha256": "18a260ba578e6a4dec7c19e6009eabd8509d6012932bda6bc709187ae57f5927",
       "size": 4919
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/validation.md",
+      "path": "skills/diagram-authoring/references/validation.md",
       "sha256": "d32716f391152fea8ef12ada742476a885202a837c0ebf166518376aca31acb5",
       "size": 5621
     },
     {
-      "path": "skills/excalidraw-live-canvas/references/visual-design.md",
-      "sha256": "d762342b067a70b69fa9ed1a57834c5a1f4dfefd4937d79ef03db11b1cda6287",
-      "size": 3673
+      "path": "skills/diagram-authoring/references/visual-design.md",
+      "sha256": "95af5820ce87135d9192dadf0f25469077e21a0099b875368c438324a0a7b973",
+      "size": 4485
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/authoring.py",
+      "path": "skills/diagram-authoring/scripts/authoring.py",
       "sha256": "565e8339080fb0fcdc9c448217664417a90adc5d5ce5e6c14bb07a397a20a72c",
       "size": 4043
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/check_drawio.py",
+      "path": "skills/diagram-authoring/scripts/check_drawio.py",
       "sha256": "b5ba045b797665db8192ed02ffeb4ff7033718320d336b46bc7dcfab421c29c7",
       "size": 8272
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/check_layout.py",
-      "sha256": "772ee69de362a06ed8970d08dbbc3b90e6513b814d659f1d5f19909047ed8325",
-      "size": 56454
+      "path": "skills/diagram-authoring/scripts/check_layout.py",
+      "sha256": "cddd2808e6bcce984f0279cf0b1b2014838de35cd05f32fd23aebb59dd512647",
+      "size": 56477
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/check_mermaid.py",
+      "path": "skills/diagram-authoring/scripts/check_mermaid.py",
       "sha256": "fe3287949780c8ad612103ffdc173a343d7922ad27b540da5a1517becda0c6e1",
       "size": 881
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/check_presentation.py",
-      "sha256": "3684644ecc2cd5f7f03e1c45da6a2b84d91b310e69b34644fbf7a969c35eeef6",
-      "size": 8069
+      "path": "skills/diagram-authoring/scripts/check_presentation.py",
+      "sha256": "4c1ff914b5ef7dbcce6d1eebf99a4375932423944d23838153e97905dd84bcaf",
+      "size": 8476
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/check_semantics.py",
+      "path": "skills/diagram-authoring/scripts/check_semantics.py",
       "sha256": "58fc8a7fc32b439c9ac0aa779f747ff7406e75b2ad7f1f9213ef373979c13c25",
       "size": 5861
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/color_design.py",
-      "sha256": "80d1f0d4058e45362b9ba1790db56a30401e7fd654dded03c502a77d62c2d653",
-      "size": 10848
+      "path": "skills/diagram-authoring/scripts/color_design.py",
+      "sha256": "32b24e7a0c4a085564d520f7a67621ae88b58018eed52b1d8ef442a4c5bbd98c",
+      "size": 12742
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/compose_panels.py",
+      "path": "skills/diagram-authoring/scripts/compose_panels.py",
       "sha256": "2a240bc6dcdef911f21fc73530e39104693dc5487d25187687a798e3091ee473",
       "size": 12810
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/direction_preview.py",
+      "path": "skills/diagram-authoring/scripts/direction_preview.py",
       "sha256": "e4e8c398439ef67a0a03182101e8efc60f060e83f0747692b4640e899fae67b2",
       "size": 10093
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/drawio_xml.py",
+      "path": "skills/diagram-authoring/scripts/drawio_xml.py",
       "sha256": "2e95f1fb11456954cd37c6bd9129c6d77ca3ee7a7b299d84f5c013998587a00c",
       "size": 2025
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/emit_drawio.py",
-      "sha256": "9ab0e953577729cb8577062114db27fdeb0b7f6a8e4bfd1f917dc6871b4cfd2e",
-      "size": 42282
+      "path": "skills/diagram-authoring/scripts/emit_drawio.py",
+      "sha256": "fceba7f48cc5cffda24b4e834c8ccc1465804acd99c867a0d760d5a195399eb0",
+      "size": 47051
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/emit_excalidraw.py",
-      "sha256": "4b9b50871b2a98ed6ea76bd49c409f7426d99ef92c53fc8280d9982c7960ee5e",
-      "size": 78103
+      "path": "skills/diagram-authoring/scripts/emit_excalidraw.py",
+      "sha256": "acdee1a0131c513314ae015411779ef6c7befb3c8ffec943c80fd4d8fd455f4c",
+      "size": 75260
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/emit_mermaid.py",
-      "sha256": "fe21f4e2fed41e0bba5bf2250fe7c98a5252fa24b97761d9853b1ecd1d4cb164",
-      "size": 9348
+      "path": "skills/diagram-authoring/scripts/emit_mermaid.py",
+      "sha256": "caed26bb462df9902b7cfb16576de802971c5df7f48e95a556302d7e50e7541f",
+      "size": 9902
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/guide.py",
+      "path": "skills/diagram-authoring/scripts/guide.py",
       "sha256": "efa9f2bcbf0c5aca4631694237d6d0d2087b67ee394ab9375a690debbccdfb55",
       "size": 12526
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/icons_fetch.py",
-      "sha256": "7abe17725c6dccf67e9f080fc9aec2082b24b5dd5096d51dee4da11de38f9af3",
-      "size": 16705
+      "path": "skills/diagram-authoring/scripts/icons_fetch.py",
+      "sha256": "34a5a4607ec7602e3a3801f2c51580f21759749caa45cc95c098c4b654f1f4e3",
+      "size": 19538
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/icons.py",
-      "sha256": "d42208c774446dc73454de0b146e45f234c55767b9f3b949aec15e1029b4bd33",
-      "size": 23981
+      "path": "skills/diagram-authoring/scripts/icons.py",
+      "sha256": "8e7e38872bd1368fb03a77b88bdd7038479f78fe984dcbe1e51bf3c36ccf8232",
+      "size": 35662
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/layout.py",
-      "sha256": "3753fbe5f8a5b9fe90d404d7886d50f6fd14b469fcfa0c27eca0c6687a75c3ef",
-      "size": 194036
+      "path": "skills/diagram-authoring/scripts/layout.py",
+      "sha256": "24ff42182bcefb903df35444d5a4c48b7ae21aab02328be1216b046cd9b64ee5",
+      "size": 214028
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/open_excalidraw_com.py",
+      "path": "skills/diagram-authoring/scripts/open_excalidraw_com.py",
       "sha256": "66c0e5a2d7a6ad5eadce10643100a1294d4d47cfd4b583e3ed9db2855db977d9",
       "size": 6572
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/output_paths.py",
+      "path": "skills/diagram-authoring/scripts/output_paths.py",
       "sha256": "a0bc1cdd9894cb45d9c3a67368983a057bf01a85fa3f416d3a07882073e1a7cf",
       "size": 650
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/palette.py",
-      "sha256": "15018f7b3ec657d5d836dfa5769e8ca7ac777f1609713bcf5f2b0cbb9d8f23a7",
-      "size": 48803
+      "path": "skills/diagram-authoring/scripts/palette.py",
+      "sha256": "30963361e7c0635757a3cf2ccc4ea43a407e12d460a58406ca2a17ebcbf34528",
+      "size": 50873
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/presentation.py",
+      "path": "skills/diagram-authoring/scripts/presentation.py",
       "sha256": "b6cdf52c3fea89096f636375bb7f534a0a999c77624fce12b3cd0a8130b8286e",
       "size": 2668
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/readable_routing.py",
-      "sha256": "60af816f6c4a8e405f4e4a8e5cb56a0a7e04f62686740f2a87255b5e6345499d",
-      "size": 18871
+      "path": "skills/diagram-authoring/scripts/readable_routing.py",
+      "sha256": "1ed6f71415dfc39063d5e75cbe57b0a979ba529081bb1c1c2278cc5a466c645a",
+      "size": 19107
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/scheme_preview.py",
+      "path": "skills/diagram-authoring/scripts/scheme_preview.py",
       "sha256": "0c0652b393e5f27067c52c103da59d87d3bff3affee07e12f9739d61a30265af",
       "size": 4606
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/shapes.py",
-      "sha256": "5f5a61a857aca9f51bf6f52dc14052ab825ede507beb2475d72e937d66cbec42",
-      "size": 8634
+      "path": "skills/diagram-authoring/scripts/shapes.py",
+      "sha256": "4b425b377409caa9c99206c1f90f7e88876f400a3fef88ceb002b1e33cc33f46",
+      "size": 8774
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/sigils.py",
+      "path": "skills/diagram-authoring/scripts/sigils.py",
       "sha256": "832690e8d363c97cbc148bdf7bf24581faa098f5913642773b8c476b052cb117",
       "size": 7210
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/split_views.py",
+      "path": "skills/diagram-authoring/scripts/split_views.py",
       "sha256": "1176cc1010efa87d9eb85fb031296bbc3c3db7f3e525d69120ce5a3f482d74fe",
       "size": 8141
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/text_metrics.py",
+      "path": "skills/diagram-authoring/scripts/text_metrics.py",
       "sha256": "07d1baab776da301b02598b5c2f15985774f13c2be862ae4db8bb3348c2ac4d2",
       "size": 17662
     },
     {
-      "path": "skills/excalidraw-live-canvas/scripts/validate_spec.py",
+      "path": "skills/diagram-authoring/scripts/validate_spec.py",
       "sha256": "50fbed05aedcd9a336d631ffc49e10eba773c1f5652889b6305babd3ce3e7f8e",
       "size": 18370
     },
     {
-      "path": "skills/excalidraw-live-canvas/SKILL.md",
-      "sha256": "12470a3077909030ff66127bf053619a16da3b284e30d0d8929ff91ac1f8ebbc",
-      "size": 14700
+      "path": "skills/diagram-authoring/SKILL.md",
+      "sha256": "15e677563bcafbfe6f9833daafaf5c661c350c259677c2d29ecde5c9db2a41e2",
+      "size": 16056
+    },
+    {
+      "path": "ui/assets/abnfDiagram-VCTEODGH-BwQmqwdC.js",
+      "sha256": "e893808ebbc6f1f3daf31b2a999d73f1fbb83fde3b8a339fa73163a8e7fbc132",
+      "size": 1802
+    },
+    {
+      "path": "ui/assets/ar-SA-G6X2FPQ2-eW4_SIu7.js",
+      "sha256": "acfefa48a5c49e248504d01dbe68f3912a418612977f853d6e8a678d25353257",
+      "size": 25664
+    },
+    {
+      "path": "ui/assets/architectureDiagram-5GKGNRK7-CaK9qgS7.js",
+      "sha256": "7e8a3c4f57f8104bf29d3f1c75adab713b68d10d72750b206107850a296d074a",
+      "size": 151819
+    },
+    {
+      "path": "ui/assets/Assistant-Bold-gm-uSS1B.woff2",
+      "sha256": "e0cdd332ce039770e93ec44336b6db65f931940f42b0342aad35a06e7f991d29",
+      "size": 20380
+    },
+    {
+      "path": "ui/assets/Assistant-Medium-DrcxCXg3.woff2",
+      "sha256": "81a9f280ce6a790f20ca8cd521183caa430f1f7fdc0752c36ef1cc6dc828ac57",
+      "size": 20320
+    },
+    {
+      "path": "ui/assets/Assistant-Regular-DVxZuzxb.woff2",
+      "sha256": "76945f09225aae65bdbd204cb4ac40d4caa4ff67150e5074bab1a04d1b778fc3",
+      "size": 20232
+    },
+    {
+      "path": "ui/assets/Assistant-SemiBold-SCI4bEL9.woff2",
+      "sha256": "bba47a7d1b185a4a2e0d265ec82aeac5dbc2dc9cb0f482a2ff57cbdfe4e5045d",
+      "size": 20212
+    },
+    {
+      "path": "ui/assets/az-AZ-76LH7QW2-cYg2B3dx.js",
+      "sha256": "81364d10f9463ab9d6553f676a9c7328c4a4770a1ff7dea24618a351f6224b91",
+      "size": 8603
+    },
+    {
+      "path": "ui/assets/bg-BG-XCXSNQG7-COOCPEvv.js",
+      "sha256": "410814a17a6d09a5b0bcffc21a8620702f1f9161967054b501217884835ed135",
+      "size": 20760
+    },
+    {
+      "path": "ui/assets/blockDiagram-I7D4REHJ-DQfWdeU8.js",
+      "sha256": "484de1fbc49bdd796269e700818e15c6fdc8448a37e813d36d85b44f12de1fa9",
+      "size": 41750
+    },
+    {
+      "path": "ui/assets/bn-BD-2XOGV67Q-BCWoeKJ_.js",
+      "sha256": "a38df4ffef5c52920f20afbfc74e664019cac3f19705e75eaaf32f0cb22bce15",
+      "size": 23596
+    },
+    {
+      "path": "ui/assets/c4Diagram-7LVT6UL2-NkKny9yI.js",
+      "sha256": "fd3ce5592afc09c9e936b51442904427aa5d4ebd4f687951093cd9ea920c63ea",
+      "size": 65462
+    },
+    {
+      "path": "ui/assets/ca-ES-6MX7JW3Y-CUIDbeFF.js",
+      "sha256": "7a91fd1b97c2c20c39c840fffe013122e1dc10820865d343f26bb1ef3d469ee9",
+      "size": 19785
+    },
+    {
+      "path": "ui/assets/channel-CKTyDYnN.js",
+      "sha256": "4ad3a9cd80020404945697d67ab3b38abd7a28e60743ef4366e0a79295d695b4",
+      "size": 106
+    },
+    {
+      "path": "ui/assets/chunk-2Q5K7J3B-BDtgw_kB.js",
+      "sha256": "7965908d741f2143dc7a1ac09a3003d6e793ddb7a7484d37bae9eb07198233c4",
+      "size": 188
+    },
+    {
+      "path": "ui/assets/chunk-5VM5RSS4-2cLRsvcc.js",
+      "sha256": "ecf61be19de6a9e7ab3f3ecc84266fe1092d53f7cac8ea876f2950cce5b0ba18",
+      "size": 359
+    },
+    {
+      "path": "ui/assets/chunk-F27PBJKO-D191487e.js",
+      "sha256": "a032a4a502146e926a24873c823ac6c2f2d76e03571f1c325d0ec591a1878da7",
+      "size": 1871
+    },
+    {
+      "path": "ui/assets/chunk-IMKFNOWR-B83C5exo.js",
+      "sha256": "07e163ddd696b59643ec8bb902643c3ff75021e275d5c56ef8fd8c7fcce03bd9",
+      "size": 38075
+    },
+    {
+      "path": "ui/assets/chunk-JWPE2WC7-WNfLYzxQ.js",
+      "sha256": "e2bb84bf765f285db4adbfdb5b95a6d7719ba7ad8acb1e7c83f8a54d0f209b92",
+      "size": 220
+    },
+    {
+      "path": "ui/assets/chunk-POPQ4Y6H-CupTpcBa.js",
+      "sha256": "e42fd291b6317ddce5097a9b34263532163826e984995915bf5a2bcbd5c2184a",
+      "size": 499
+    },
+    {
+      "path": "ui/assets/chunk-SVP7TREG-ZO6iXgPp.js",
+      "sha256": "5ad6722850c8ba8b34ad28f08694fdc8cbbc92e71b3e7bc177f5aa01cb3599fa",
+      "size": 15726
+    },
+    {
+      "path": "ui/assets/chunk-TICWLB2K-DMMVdbh8.js",
+      "sha256": "248166a9bb4ae4ebd4f756c783f1985941f43b6717433e38459f0db4c71273fa",
+      "size": 49170
+    },
+    {
+      "path": "ui/assets/chunk-XXDRQBXY-BwRVs7qB.js",
+      "sha256": "5647d41381da6a321a41f5caf6c949cd50e3fdadbc885312e75342f3684c2177",
+      "size": 223
+    },
+    {
+      "path": "ui/assets/classDiagram-v2-VYDZK3BY-S1J1tMOk.js",
+      "sha256": "b726c62f8ab99989bb5ea0c46e29dde8648c3360ae07365815869cc7170457d9",
+      "size": 460
+    },
+    {
+      "path": "ui/assets/classDiagram-ZZMXUADV-S1J1tMOk.js",
+      "sha256": "b726c62f8ab99989bb5ea0c46e29dde8648c3360ae07365815869cc7170457d9",
+      "size": 460
+    },
+    {
+      "path": "ui/assets/cose-bilkent-JH36ORCC-BA8hEkAN.js",
+      "sha256": "15c21e3d3a447bc750b952a6acdeb3f959e26a74510480222962eb42ed22a1b6",
+      "size": 81694
+    },
+    {
+      "path": "ui/assets/cs-CZ-2BRQDIVT-CiyDB40q.js",
+      "sha256": "f991bfadd0f5a161dd4365ce8667c68f9a63cf9033bc50a45b0e002512a67207",
+      "size": 19521
+    },
+    {
+      "path": "ui/assets/cynefin-OW5HDTMX-DQkPjWuX.js",
+      "sha256": "85fe4ac96ea76fc2ec5273569e41586650d5d08044c38f7c62a04ed09881d9f6",
+      "size": 688260
+    },
+    {
+      "path": "ui/assets/cynefinDiagram-5FMLGOSQ-XXbItzh-.js",
+      "sha256": "70e5c575843cdccc3d1a5a1b9d4381d03fd6a56c832e423c3bd7afeac4cf2c1a",
+      "size": 10090
+    },
+    {
+      "path": "ui/assets/cytoscape.esm-Cm0uQArZ.js",
+      "sha256": "b6bc68a1b5559a7a8221c45ffd977b52f0599c8f432c869818bca8148fff9b41",
+      "size": 451131
+    },
+    {
+      "path": "ui/assets/d3-scale-4DPf7zan.js",
+      "sha256": "3733d034710d9ae21ce8fec8765cbc71a47b1335f5d16b2dac68fea04a493c24",
+      "size": 41334
+    },
+    {
+      "path": "ui/assets/da-DK-5WZEPLOC-CzoC9szc.js",
+      "sha256": "bfb0791163f04c069373df8e00e2d180aa67e993cb8d39e5a20d40337d9b73a3",
+      "size": 14406
+    },
+    {
+      "path": "ui/assets/dagre-GXQ25YYZ-BYQpxwEq.js",
+      "sha256": "e400843890324e03db14deeed7dae42b1690ec8a00a02bf2ce8d5f6988c51f87",
+      "size": 10698
+    },
+    {
+      "path": "ui/assets/de-DE-XR44H4JA-DFYFgYMn.js",
+      "sha256": "a0aa003aa02e01749a56fc3bbe70aa6d803e76452f8ed4e49907b4de8000f084",
+      "size": 23336
+    },
+    {
+      "path": "ui/assets/diagram-S7CK7UJ4-0iPEHu3h.js",
+      "sha256": "ba99a66ec57fa921724fc12fa99b1779b1c7d945ca1b684bb39352b3def97f42",
+      "size": 8210
+    },
+    {
+      "path": "ui/assets/diagram-UQ7AKVKN-2Zh1vGCy.js",
+      "sha256": "8f531a6c901fbe462a9242fcfab889462ed1687f74a282e7e4341f416f702023",
+      "size": 6072
+    },
+    {
+      "path": "ui/assets/diagram-VSXAHHWV-fzQfv4bC.js",
+      "sha256": "2c16f113e2b98d59aadf29f1e8e626bf7508c9b1d521251a93418a549eebb6d5",
+      "size": 10731
+    },
+    {
+      "path": "ui/assets/diagram-VX7I27RA-CSeizY1i.js",
+      "sha256": "c16184117e4f06a9dad595e260f8ba621b5060e9ed8a8c07a4df8ca98da020bd",
+      "size": 16294
+    },
+    {
+      "path": "ui/assets/diagram-Z3DM3KII-cYYSmmxj.js",
+      "sha256": "ccd6ae6eab330dd5045745d28e014e62bdf8e4abac8a8814b568e5c8929f7396",
+      "size": 4201
+    },
+    {
+      "path": "ui/assets/directory-open-01563666-DWU9wJ6I.js",
+      "sha256": "968285b95dadf87ac5f4a9690d6b7a60d45d7e1587a5f36bd470dfc6a9748cc5",
+      "size": 588
+    },
+    {
+      "path": "ui/assets/directory-open-4ed118d0-CunoC1EB.js",
+      "sha256": "29fb7f4b70a38cb36ac0e6956b474b4dd12822dcc6e47fb7b89a4f4c238c2f4d",
+      "size": 1553
+    },
+    {
+      "path": "ui/assets/ebnfDiagram-PWID7BFC-CgimAxA1.js",
+      "sha256": "64338c0d236615617ede443b3e424b4bc4f94997a534fb9cfa7fb075264266a5",
+      "size": 1998
+    },
+    {
+      "path": "ui/assets/el-GR-BZB4AONW-B_-P9bSg.js",
+      "sha256": "ba636eedaaa811368af1c883504e6c475859bac74e36b7c6dc503de0b9d10077",
+      "size": 29667
+    },
+    {
+      "path": "ui/assets/erDiagram-RLTQ6QDP-DCFgS-9x.js",
+      "sha256": "b0250e9d1858da58e2a6123280cdce2779b68fbb12d4c02929f1bd9b606516a4",
+      "size": 30779
+    },
+    {
+      "path": "ui/assets/es-ES-U4NZUMDT-D4y-Kq2f.js",
+      "sha256": "ff7521bf0be92bc4c796f38bec3e021c3699d100c797790f38ef899abf98e3fa",
+      "size": 21348
+    },
+    {
+      "path": "ui/assets/eu-ES-A7QVB2H4-BuxdE7MJ.js",
+      "sha256": "9d6b1334abc465ed8b7b90676f31503ef86d1867dcb7ce0ea745d6380dbb5125",
+      "size": 21197
+    },
+    {
+      "path": "ui/assets/fa-IR-HGAKTJCU-C4B_buyk.js",
+      "sha256": "99ab9312b2f9d9e98ba65078f4bb11a4bd36b98745a700ea052b4a380089d7fa",
+      "size": 24238
+    },
+    {
+      "path": "ui/assets/fi-FI-Z5N7JZ37-Bj0AXREy.js",
+      "sha256": "b33f32ef4ce5a58d16f9aba06d83707861db9aeab08263fde7ef2ce19da954aa",
+      "size": 18401
+    },
+    {
+      "path": "ui/assets/file-open-002ab408-DIuFHtCF.js",
+      "sha256": "5f6e37729707b2414d48289f30ba5470e0632a99b0b14322cee97b958a85a3bd",
+      "size": 539
+    },
+    {
+      "path": "ui/assets/file-open-7c801643-684qeFg4.js",
+      "sha256": "0861cb89ded530588a30f6d99f21226748c4aee45253f6bae705bf2ddb9919b4",
+      "size": 452
+    },
+    {
+      "path": "ui/assets/file-save-3189631c-C1wFhQhH.js",
+      "sha256": "5e2a49a1ae8ca0d22e25ce8c06d26b7a7e840b4898c1232b87d79dbe98c8b316",
+      "size": 710
+    },
+    {
+      "path": "ui/assets/file-save-745eba88-Bb9F9Kg7.js",
+      "sha256": "c7b54920d662e13b2e3f1584937af89b8a87eabd5544cad6ee8fa5967802d487",
+      "size": 867
+    },
+    {
+      "path": "ui/assets/flowDiagram-HODETNUW-CZiIde6f.js",
+      "sha256": "e4e263920b12b50884abae391e89db570b3351bea0f09422a3a1f1bfef4e5c25",
+      "size": 61834
+    },
+    {
+      "path": "ui/assets/fr-FR-RHASNOE6-C2ADIvES.js",
+      "sha256": "224bb15f8676e10ba42333da6f78a779514bbb59a9800d0c7dd6d482528230c6",
+      "size": 23437
+    },
+    {
+      "path": "ui/assets/ganttDiagram-EL5Y4UJY-DX5kN-hc.js",
+      "sha256": "ec769b51102b4620cbbac6908ef42a050b055516915679cd448857ea6431ae4b",
+      "size": 52447
+    },
+    {
+      "path": "ui/assets/gitGraphDiagram-WWUBYQGX-y6mRUza0.js",
+      "sha256": "a760ef71098028f4ccd083dc8b84d188b29dd813b16597f317c32341909c9130",
+      "size": 29410
+    },
+    {
+      "path": "ui/assets/gl-ES-HMX3MZ6V-CJt7PlOk.js",
+      "sha256": "394b373b12ee44604343e03549953da365b928beede8b23a62b8ec3fad6f8dee",
+      "size": 19382
+    },
+    {
+      "path": "ui/assets/he-IL-6SHJWFNN-CfTbH_55.js",
+      "sha256": "2b0b3cb43807cd975746777c9211b9a7904308934c2a35b8cb9b10c836d2b812",
+      "size": 20319
+    },
+    {
+      "path": "ui/assets/hi-IN-IWLTKZ5I-pPmevivP.js",
+      "sha256": "a09b9a331c1aea3b86fab9e5a7b5682d4493a313a2a78eb8e688350b17157fc8",
+      "size": 32348
+    },
+    {
+      "path": "ui/assets/hu-HU-A5ZG7DT2-Dq_TXIh5.js",
+      "sha256": "6a773013ec26df00b1fb1cd78c2b0af0a92486aa1fc157b6ea8e8088459c527d",
+      "size": 18080
+    },
+    {
+      "path": "ui/assets/id-ID-SAP4L64H-DGKCM3sy.js",
+      "sha256": "361a973b875aa93e7564a7430723cf384eaa60521b7651aef2c6ce325f7c9460",
+      "size": 19675
+    },
+    {
+      "path": "ui/assets/image-blob-reduce.esm-HwCm7IZ0.js",
+      "sha256": "b1fc9db1d1904e62c486b6abad2d9a193f372b332c28a348f0416fc5e6e19c30",
+      "size": 45933
+    },
+    {
+      "path": "ui/assets/index-D1sgwdEV.js",
+      "sha256": "f5936d689f469a198e0697d8039915392f142b69343199365d7154a87b205c52",
+      "size": 1296554
+    },
+    {
+      "path": "ui/assets/index-DrOiXeud.js",
+      "sha256": "e1497fbdd1eba9d6de531b266bee31928ee8176652c6291a8ab08b7dfd96ec1d",
+      "size": 718999
+    },
+    {
+      "path": "ui/assets/index-fTeoNaDJ.css",
+      "sha256": "a7928693f00026a32b4a15d83734f55c14fe34e2878e401672863481534db49d",
+      "size": 150175
+    },
+    {
+      "path": "ui/assets/infoDiagram-27XIBGKW-Beead_JH.js",
+      "sha256": "8995518936f3b86e9f29303391ba2bf59f35abf1e81aade22e8536d05c35d60a",
+      "size": 580
+    },
+    {
+      "path": "ui/assets/ishikawaDiagram-5VMMS53U-CeCBNLk1.js",
+      "sha256": "7677bb883ac22c18bf653fbb29e0da676d8388aa2bcf39db37dc4e43e505b781",
+      "size": 17461
+    },
+    {
+      "path": "ui/assets/it-IT-JPQ66NNP-Dewb9BWl.js",
+      "sha256": "979b30cc5fc18a7c99e5483a04396e1ceebc7c1fc16ed40748fc92b00108f369",
+      "size": 22056
+    },
+    {
+      "path": "ui/assets/ja-JP-DBVTYXUO-Ba4GuZai.js",
+      "sha256": "78bd38eed1806c6379885734ae7e52a09dd1405e5e5ac1f81987c1dc6a5efae1",
+      "size": 23400
+    },
+    {
+      "path": "ui/assets/journeyDiagram-3NMN7TZE-BBM2pvtV.js",
+      "sha256": "e945536b344d6ce058ee514dd4fa885faa70a016146d30f9438a8b422d1aa631",
+      "size": 23533
+    },
+    {
+      "path": "ui/assets/kaa-6HZHGXH3-B20xJxhf.js",
+      "sha256": "d4cb2bfcf2fbf7abcb65de48b2081412a33c5bec28bf456c743dd40a6646c5d4",
+      "size": 10162
+    },
+    {
+      "path": "ui/assets/kab-KAB-ZGHBKWFO-BGSPHnN-.js",
+      "sha256": "7037d5f310f9a0574b27e050ef120273d3ec43217eabbb9f2dc62bcfad0556ec",
+      "size": 18779
+    },
+    {
+      "path": "ui/assets/kanban-definition-UXKFOSKX-BZc9xCoZ.js",
+      "sha256": "aac5106c3c77d67f74d4a62c4dad52825b086f6b474bf54f5861f6dfcb2d09f5",
+      "size": 20288
+    },
+    {
+      "path": "ui/assets/katex-HP8lGamR.js",
+      "sha256": "0b89c21cb463fd8180e300cb79a3e9e538accb78df5bdec67f0cbba4bdb7949e",
+      "size": 261313
+    },
+    {
+      "path": "ui/assets/kk-KZ-P5N5QNE5-A-4scLBE.js",
+      "sha256": "98a17f73c1df4455f004b1a18525bf670ca5325ce722a740880e703a196532e7",
+      "size": 10119
+    },
+    {
+      "path": "ui/assets/km-KH-HSX4SM5Z-DG_C2CYl.js",
+      "sha256": "927e79b03519477f4ed8fc8a9d21155196391b0443cc4568094d2d9355e9a319",
+      "size": 36642
+    },
+    {
+      "path": "ui/assets/ko-KR-MTYHY66A-DCbvBNXN.js",
+      "sha256": "2f0bb4d17fb1341cc86cc78b102e73abe1cd908f8eaffbaa82e44d0e4e74a99d",
+      "size": 23879
+    },
+    {
+      "path": "ui/assets/ku-TR-6OUDTVRD-DN54U0KW.js",
+      "sha256": "25d5179c20a0a9fd2e943eec4c3e6f40c130db2b3146d9039972f51e1b001628",
+      "size": 29321
+    },
+    {
+      "path": "ui/assets/layout-BnLzNW48.js",
+      "sha256": "e539c2a69d093f99204bf7c0d9554e0c90f7fee4813bb7ead10b048672ac4adc",
+      "size": 35429
+    },
+    {
+      "path": "ui/assets/lt-LT-XHIRWOB4-inAeN0FF.js",
+      "sha256": "412499a9d71d7cb32e52a8908eeb9e85256ab5eb39edd52acda238b2044dceea",
+      "size": 12499
+    },
+    {
+      "path": "ui/assets/lv-LV-5QDEKY6T-BbOLehSf.js",
+      "sha256": "d7b5c5e4dde67b24829c64708ef6ae647135f2f79a6b8e3f9ce7ede2addddecd",
+      "size": 19134
+    },
+    {
+      "path": "ui/assets/mindmap-definition-YA3MSWOX-Crs_uI0f.js",
+      "sha256": "fda796c993fe8c6736fb37039713dd554de34c0942041c248c471129a4238aef",
+      "size": 23170
+    },
+    {
+      "path": "ui/assets/mr-IN-CRQNXWMA-BPUSO1rv.js",
+      "sha256": "b88292e02fca744e7ead7913196024adb1d5210f9753818359ee430c06ba0110",
+      "size": 42242
+    },
+    {
+      "path": "ui/assets/my-MM-5M5IBNSE-BuUXsKZF.js",
+      "sha256": "dce36a1c32a8ea7107a71404e0e1f52efa7e4dbec4bd18e541c483242fc744bb",
+      "size": 17570
+    },
+    {
+      "path": "ui/assets/nb-NO-T6EIAALU-DxcMFZNP.js",
+      "sha256": "30026b4df11834504023816d6a583347d4fd6fe950ce8e25670daa79f6b15590",
+      "size": 20100
+    },
+    {
+      "path": "ui/assets/nl-NL-IS3SIHDZ-BDAJLOfD.js",
+      "sha256": "00a350ea783fb70ff8afcc5191764f0c2754022692050f30400d5335c23faffb",
+      "size": 16723
+    },
+    {
+      "path": "ui/assets/nn-NO-6E72VCQL-LcdK2wgw.js",
+      "sha256": "99635755023908832756f7effe074039cb1f85b7d6c86a6f368f807ee4adbfa0",
+      "size": 15949
+    },
+    {
+      "path": "ui/assets/oc-FR-POXYY2M6-1Hz4FFOa.js",
+      "sha256": "d60cceab00fe9a44a9bc4290c1bdef4ada235ab6221f1b70e8665b4ddaf74f39",
+      "size": 19835
+    },
+    {
+      "path": "ui/assets/pa-IN-N4M65BXN-CAScoCim.js",
+      "sha256": "40c9656bca50820b072d8edab0d48d0e5e2b37d1269a7a48e66c2f0e7852b662",
+      "size": 27972
+    },
+    {
+      "path": "ui/assets/pegDiagram-XKGWAZYB-BH2Dpsae.js",
+      "sha256": "af530557c5bdee02e20f07eafc8da6218ec3bfbc7b0d52e4b9e9039736f1d255",
+      "size": 1949
+    },
+    {
+      "path": "ui/assets/pica-BsFrCZBt.js",
+      "sha256": "8397ce044cd5de07f2be21e067fc76ef590d8ffecb0ab158ef30c786856f35bf",
+      "size": 32635
+    },
+    {
+      "path": "ui/assets/pieDiagram-E7YTZNPT-DEVotdtp.js",
+      "sha256": "94460c1b5a0d6781b1c75eb95be0c9ea4db4701a3867e039a62f0d970d0055e9",
+      "size": 5090
+    },
+    {
+      "path": "ui/assets/pl-PL-T2D74RX3-CZ-xfs4n.js",
+      "sha256": "26316585479accc94bc5b4e0bb1bf37fea42aa8c0a431332f756e48d03b23345",
+      "size": 22472
+    },
+    {
+      "path": "ui/assets/pt-BR-5N22H2LF-Dj-7ZT95.js",
+      "sha256": "72a7e11f70a5d2876b77ca90c993659018dfd9fb9b7fbc0481eaa414165de5c0",
+      "size": 21035
+    },
+    {
+      "path": "ui/assets/pt-PT-UZXXM6DQ-CuytSaAi.js",
+      "sha256": "4a823914cd2e8c9e9c0c6be2c11bbe379b40c4f311eb53a82fa13682f5aa92f7",
+      "size": 19647
+    },
+    {
+      "path": "ui/assets/quadrantDiagram-AXDQQJYC-BOMB0PPQ.js",
+      "sha256": "3af9288c87de82f26d78e09a55a5d4b12364e44fe7b0a806e08227fcf53c3a52",
+      "size": 33942
+    },
+    {
+      "path": "ui/assets/railroadDiagram-O6MQD6OU-Dpvxg8Wx.js",
+      "sha256": "cfbb86ad0eccdde6b48605e89bf7d468dd0197726e84b1e0fa108f6004f1cef0",
+      "size": 1599
+    },
+    {
+      "path": "ui/assets/requirementDiagram-BXWQKSXE-PdVID6u-.js",
+      "sha256": "1606385fbb8ce7b231bc86a6c5175819ec9c7d28f1b4f4670216b68977d540bf",
+      "size": 30989
+    },
+    {
+      "path": "ui/assets/ro-RO-JPDTUUEW-BaRxndrT.js",
+      "sha256": "22bd5bef41c3ee7e2cd40d73e2abd24b0d03f4206756bb8db9e41b840a079c71",
+      "size": 23142
+    },
+    {
+      "path": "ui/assets/roundRect-mAH3dD0p.js",
+      "sha256": "5af26e9bebb775d4bcab82e005eb5bd47a4a1527c5dc8a42bf776c86dfc121d6",
+      "size": 2901
+    },
+    {
+      "path": "ui/assets/ru-RU-B4JR7IUQ-DmdT1QGT.js",
+      "sha256": "98d853f8971e1ea89b8258f7257078f10749f0b617fd1e5f1f0e0b0bbf578851",
+      "size": 30740
+    },
+    {
+      "path": "ui/assets/sankeyDiagram-P5KCCOFB-BFdKRktI.js",
+      "sha256": "c90b7351d65b3721aaa6616ce542ea9ed8039b1847e2aa5fa6fe33b6cf0d63eb",
+      "size": 39912
+    },
+    {
+      "path": "ui/assets/sequenceDiagram-WJ2MYXX4-Bj2qwLnt.js",
+      "sha256": "e4177750f3e2e64c8e2ca7820e11a02b7002095489de08bf4d374740d3f6f432",
+      "size": 116948
+    },
+    {
+      "path": "ui/assets/si-LK-N5RQ5JYF-DEOY5vHX.js",
+      "sha256": "bfb73afbf89fe4c4818e7ef1bfccb6af4ba901d58f600cdfc8748e34b2d0a059",
+      "size": 8577
+    },
+    {
+      "path": "ui/assets/sizeCapture-INFHLROL-CmnVNWs4.js",
+      "sha256": "4b089a1d85289401048f7ae66b3461c764977202e9da4552b29c367028a517c0",
+      "size": 929
+    },
+    {
+      "path": "ui/assets/sk-SK-C5VTKIMK-Bo_MXay6.js",
+      "sha256": "b48110a8b4d9339511f43ae4393eaa9153dcd8d7205cb3224bc4d621c67753f2",
+      "size": 22310
+    },
+    {
+      "path": "ui/assets/sl-SI-NN7IZMDC-CU5hK7ZU.js",
+      "sha256": "722889a33368c509c8ba79a21043957e399f50724a781df3f46add05bd38c092",
+      "size": 21359
+    },
+    {
+      "path": "ui/assets/stateDiagram-D77RDMKH-CxM0CeTv.js",
+      "sha256": "74a5c02fcaf433c03e6bfea83109a282eaa6c82168847436f3a844bac334c0a7",
+      "size": 10354
+    },
+    {
+      "path": "ui/assets/stateDiagram-v2-MP3YSRHH-DJdvLJL4.js",
+      "sha256": "a5d60a4f2e9f5cce7db202bbc2fe8fe2c36ec5707db620fb33f7736bcd59e671",
+      "size": 421
+    },
+    {
+      "path": "ui/assets/subset-shared.chunk-DzC4ZFbT.js",
+      "sha256": "ddbe8ea610e7a1ceeff588e311a8b8244e49d122bd9ae301e5b2e82603f5a2ec",
+      "size": 1823500
+    },
+    {
+      "path": "ui/assets/subset-worker.chunk-D4Ow8HhS.js",
+      "sha256": "b0905acde0242fba2187b19aeb206500075a941580d3b240b84ec18579b76065",
+      "size": 382
+    },
+    {
+      "path": "ui/assets/sv-SE-XGPEYMSR-hW93Jfqk.js",
+      "sha256": "8ca6d58ad49863305f5126e272e96211d831512441b6f2fcbbcef8c74ec62763",
+      "size": 21511
+    },
+    {
+      "path": "ui/assets/swimlanes-42K2YHIH-Bkuagzu0.js",
+      "sha256": "14cb69d99320bac3479d0a4e82cc8a048eb297ddf08e4a093210e2ff20c7ac76",
+      "size": 115784
+    },
+    {
+      "path": "ui/assets/swimlanesDiagram-VR7AAH4N-DHsKz5Tp.js",
+      "sha256": "f84e1d06f895b5ccf3a152255fcc328c2e025ae83731edeb290b522e3a76f7af",
+      "size": 541
+    },
+    {
+      "path": "ui/assets/ta-IN-2NMHFXQM-T1WtbnL-.js",
+      "sha256": "1547958e132738bf1dc9da212adc37c0a319f9239da83bec77352854c22a91dd",
+      "size": 35262
+    },
+    {
+      "path": "ui/assets/th-TH-HPSO5L25-C2EfjJMZ.js",
+      "sha256": "060eb8d6b06ade848b07d34949d63118fba7bb4f3871c1f535fe1dafd055d173",
+      "size": 15516
+    },
+    {
+      "path": "ui/assets/timeline-definition-24CTP7MA-CkK-_d_p.js",
+      "sha256": "e6cdcb335e537081520a61efc133b1ab3fd6d5a9ec458ef292d2fb434436208d",
+      "size": 30796
+    },
+    {
+      "path": "ui/assets/tr-TR-DEFEU3FU-CCzLfq9E.js",
+      "sha256": "ece6ea19d9c32bb80eeb014d56f2a42deff91624be3cd4dda5b1419bb53d3320",
+      "size": 19502
+    },
+    {
+      "path": "ui/assets/uk-UA-QMV73CPH-DSRtiIBi.js",
+      "sha256": "9619b039ce37615e5befcb2629a0e055b94108c70d49e87b21e36dd86e773356",
+      "size": 31639
+    },
+    {
+      "path": "ui/assets/vennDiagram-4TSXK5OY-OB9-WOit.js",
+      "sha256": "1031c3d539903c54708a6988339688a096da46f2386e613f11afc8ef086fd3ef",
+      "size": 41957
+    },
+    {
+      "path": "ui/assets/vi-VN-M7AON7JQ-D_ijSS2a.js",
+      "sha256": "fb520e13522fc95ab0d5a69818ba36946eb0ad61307187277490638bac367473",
+      "size": 13855
+    },
+    {
+      "path": "ui/assets/wardleyDiagram-VM6X3IG4-Y34xgK3y.js",
+      "sha256": "302b33cde18d0abeb6929f482b9fb0a2bfd5fd0eeead39649d532a56d47fd8b5",
+      "size": 25494
+    },
+    {
+      "path": "ui/assets/xychartDiagram-S5SC5T6Z-Dws4q6Bt.js",
+      "sha256": "9fe97e2de87b881fe0fa5c6a49726b1f087888df0644cf3430025d13e6702f57",
+      "size": 43122
+    },
+    {
+      "path": "ui/assets/zh-CN-LNUGB5OW-CFyPG-Yg.js",
+      "sha256": "2de34d46b3495c34b5470404ae48e59d6b1cc5fb2be633663b3b26010867baf0",
+      "size": 19050
+    },
+    {
+      "path": "ui/assets/zh-HK-E62DVLB3-HfSe4oSe.js",
+      "sha256": "8dd32d9e7524dc960c505c2025c3877f1390b8c615e48e4fb11a0e21b86bc261",
+      "size": 9077
+    },
+    {
+      "path": "ui/assets/zh-TW-RAJ6MFWO-DKYmeKwf.js",
+      "sha256": "fe5109190ab6d579c80dc73744224c8f273b8bc4d6fa8779b4c72f5e65e2bc2c",
+      "size": 18986
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Assistant/Assistant-Bold.woff2",
+      "sha256": "e0cdd332ce039770e93ec44336b6db65f931940f42b0342aad35a06e7f991d29",
+      "size": 20380
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Assistant/Assistant-Medium.woff2",
+      "sha256": "81a9f280ce6a790f20ca8cd521183caa430f1f7fdc0752c36ef1cc6dc828ac57",
+      "size": 20320
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Assistant/Assistant-Regular.woff2",
+      "sha256": "76945f09225aae65bdbd204cb4ac40d4caa4ff67150e5074bab1a04d1b778fc3",
+      "size": 20232
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Assistant/Assistant-SemiBold.woff2",
+      "sha256": "bba47a7d1b185a4a2e0d265ec82aeac5dbc2dc9cb0f482a2ff57cbdfe4e5045d",
+      "size": 20212
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Cascadia/CascadiaCode-Regular.woff2",
+      "sha256": "5bce041e0fcce617e35efbc335b1372d27a84acb65fb464c65ff80ab3424a885",
+      "size": 65732
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/ComicShanns/ComicShanns-Regular-279a7b317d12eb88de06167bd672b4b4.woff2",
+      "sha256": "fa930fceb529a4b51ba3055d590302722c27704f6a6357495873950136b1e2ea",
+      "size": 17488
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/ComicShanns/ComicShanns-Regular-6e066e8de2ac57ea9283adb9c24d7f0c.woff2",
+      "sha256": "782f24081b810b8de9f04da055007ce4f1445c18abbf096c831f8888d65935c1",
+      "size": 1292
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/ComicShanns/ComicShanns-Regular-dc6a8806fa96795d7b3be5026f989a17.woff2",
+      "sha256": "61c376d32e1773588f6163599aed24fe0387b5a5cb622bd200455f20c2b36a87",
+      "size": 2816
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/ComicShanns/ComicShanns-Regular-fcb0fc02dcbee4c9846b3e2508668039.woff2",
+      "sha256": "ee641c2e35730c3e6e3826855f1b6cc3b343a017c3e216e4e4a2e47010c53ad1",
+      "size": 9856
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Excalifont/Excalifont-Regular-349fac6ca4700ffec595a7150a0d1e1d.woff2",
+      "sha256": "a0637cff365c7344d2f7a15905a1f74dceaf56b5ac2ff913d150358bed6921f0",
+      "size": 2656
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Excalifont/Excalifont-Regular-3f2c5db56cc93c5a6873b1361d730c16.woff2",
+      "sha256": "18ea9be1dd6b5a67b057f44eba8e34cb290f88308c272bcf35c79c1a220d0d7b",
+      "size": 2104
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Excalifont/Excalifont-Regular-41b173a47b57366892116a575a43e2b6.woff2",
+      "sha256": "c96649a5f96e2faa9143ee94e5b590b5afb08092f8d67c67f09cef332d66e4a7",
+      "size": 8712
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Excalifont/Excalifont-Regular-623ccf21b21ef6b3a0d87738f77eb071.woff2",
+      "sha256": "b004007be100261e58188cf8a0f7e850e997702f35d57110915995cd880e49f1",
+      "size": 824
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2",
+      "sha256": "e4423b318e11432aff2e6e865e300b7ca270f92321a3f56632268fede01c1b48",
+      "size": 24956
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Excalifont/Excalifont-Regular-b9dcf9d2e50a1eaf42fc664b50a3fd0d.woff2",
+      "sha256": "b424d16da4398be3e9852857a54ff70e043c8e2ec5c4444dbf7f88d7469b9859",
+      "size": 13296
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Excalifont/Excalifont-Regular-be310b9bcd4f1a43f571c46df7809174.woff2",
+      "sha256": "4fb8ad69be9aeac5664d99e5aa3a68a27ea40c98943b80387f7cd55c034fcc93",
+      "size": 12220
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Liberation/LiberationSans-Regular.woff2",
+      "sha256": "006a2b28cbbeeaec937d1b367d0949f5f48ef4b2e7b4e1d8dc7a799d2d639be8",
+      "size": 70668
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Lilita/Lilita-Regular-i7dPIFZ9Zz-WBtRtedDbYE98RXi4EwSsbg.woff2",
+      "sha256": "2b6568c7a0f16300bc6c8d292bd426c361fcdb40699c2cbfab2bd3e9e6993dea",
+      "size": 1416
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Lilita/Lilita-Regular-i7dPIFZ9Zz-WBtRtedDbYEF8RXi4EwQ.woff2",
+      "sha256": "8d6cd0f298738a92ca9bf6e13f54a9191afd06ce04ea00ebbf24499c017191b7",
+      "size": 10676
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTA3j6zbXWjgevT5.woff2",
+      "sha256": "e512f2d7c9fe062b1acf8f6ea64d4bfd89a77d26728150977627e445c7b6e937",
+      "size": 8392
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTk3j6zbXWjgevT5.woff2",
+      "sha256": "3e7f76fcc8798b8bba4d6bcc06bdb0d788f6e89706c1d6e64ac81d65ca683c14",
+      "size": 11104
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTo3j6zbXWjgevT5.woff2",
+      "sha256": "7928f47b21192cb6fdb2f46b71a474a3bd2fd608945c5ad7d7ed6bde8b0ae24c",
+      "size": 15476
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTQ3j6zbXWjgeg.woff2",
+      "sha256": "6d1626aac658786e37e78e0adce3ffffddbd75abc923d72e45a7168bd80053da",
+      "size": 16476
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTs3j6zbXWjgevT5.woff2",
+      "sha256": "5117398298dd0dba3c95a406ff12fbeb88289fa4e913e3a5cf482cafe7f7071a",
+      "size": 6116
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Virgil/Virgil-Regular.woff2",
+      "sha256": "2279cf7daf1c42a3a53b2c1437ad72f0050efb67ac263e0245f67612fd766714",
+      "size": 56156
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-019d66dcad46dc156b162d267f981c20.woff2",
+      "sha256": "7404ad8086cf238269c6f6aa3ecb754dac903c7b28be88d1f683b9eab7c463e6",
+      "size": 58580
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-04b718e5623574919c8b0dea5f301444.woff2",
+      "sha256": "cfdf67b97d5eee43f06d4fd6c8d8a1136d66e3391c3500341cef41bf39672559",
+      "size": 65928
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-069e77aac84590e2e991d0a0176d34f2.woff2",
+      "sha256": "9a8e521a24e531cbeadfbd2750108c48aef9c0f13b0c0840e2cc9fae3257aed4",
+      "size": 63964
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-06c77b8c66e51ed6c63ccb502dd8b8af.woff2",
+      "sha256": "cc2e553954218cc43f5f6f7cf54136d4d0a4317b88d670ae1940797545bdec61",
+      "size": 55108
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-08e0dc436ad0ad61ba5558db0674d762.woff2",
+      "sha256": "101960c709c4a146a181f002808861249fe13ede28fc2d9cff24175715191abc",
+      "size": 49736
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-093b9ef39a46ceae95a1df18a0a3a326.woff2",
+      "sha256": "819bbcac2468e1b44363442bca0a7a894883c32ce5cf9b28f707d94304a8a3ed",
+      "size": 55712
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-095c169f3314805276f603a362766abd.woff2",
+      "sha256": "7f05badb0edb31118c69aa6f9bd20b13e737b5719f816617d342a50dc51c9506",
+      "size": 69968
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-09850c4077f3fffe707905872e0e2460.woff2",
+      "sha256": "4cd090f380a82950208e5ff0b83b63f82d9a998881dfa12a8b8a8e6c7fd298bf",
+      "size": 65048
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-0986d134c05864f5025962eef9f994a0.woff2",
+      "sha256": "76cdc801e75369e01fe0907f0e603a699dccf1fa0d880a717b8dceb0c8751806",
+      "size": 53764
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-0b5d723fdc4e249c140f0909e87d03b4.woff2",
+      "sha256": "4a5ab634a6839e983344645d82d31d85a1786fd4e81d344f8544181158a86c45",
+      "size": 53672
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-0f626226ba1272e832aea87bafd9720e.woff2",
+      "sha256": "c261de5643a0b6fdfeb3fa6c43548dc6270f19756532c2953a4c8f74a1bb670d",
+      "size": 62820
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-0f7fb1e0d5015bb1371343153ecf7ce3.woff2",
+      "sha256": "7d92022e9005636c778ebccb89ca8ab3a17c7d99e17201c422ce833e4d4e0e04",
+      "size": 75564
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-0fa55a080fcd0f9dc2e0b0058b793df8.woff2",
+      "sha256": "a3531eb15218eca282196405dca5e502a0b0ce14d82824ee5c3104e241f12c56",
+      "size": 65884
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-0facdf1ea213ba40261022f5d5ed4493.woff2",
+      "sha256": "4692019d3f011ff2b8c012ef4d5bcb9d649259bb3e68b8d5eded06fd5f6948ff",
+      "size": 50660
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-10a7ae9a371830a80c3d844acf1c02d7.woff2",
+      "sha256": "343e81a0225cf0848a0c5c3df11589aba1386a8ea954fa549dd8749384e54c15",
+      "size": 68908
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-112c051027b2d766c19a519f6ee1f4f7.woff2",
+      "sha256": "64d5521ca4b191e41422c2a1e775aae43a831a720a96c64b42d70a2229e1bec7",
+      "size": 61160
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-11c345711937f0ba4b8f7b6b919c8440.woff2",
+      "sha256": "cb5cc5380aa885e6ea2d9502f15673ffe1e96d08a8e240cadc8a9a9e727a85d2",
+      "size": 62792
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-12b52b58eb3df36804b9a654ec9ee194.woff2",
+      "sha256": "d10137e035185e36212a9ec70ea8c2b0b10f30b175f9543f57412a6f48abfddf",
+      "size": 57152
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-13ae07ed2e272d26d59bc0691cd7117a.woff2",
+      "sha256": "4f0db89e7086b5eef3a83dc41d81ee3d46f9d7ae761e150e5689684e95ceb022",
+      "size": 56140
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-13d2887ec8ee73c43acdabc52a05af7b.woff2",
+      "sha256": "b8a3f1ac2323db2a1ef228f021be3d13b1190ed7c1f4af6b0d50d0c4d454adbc",
+      "size": 64436
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-145aa02cdd91946e67dc934e1acffe75.woff2",
+      "sha256": "96f696dd01f2534ceca68a6c9795f927c7c1dd276f7e97069cc7d76d85c9156c",
+      "size": 37412
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-15dc6d811c9cd078f9086a740d5a1038.woff2",
+      "sha256": "b62e88759e83e6898a7c7588f8587d064aba185b9e6b9b79c15c22c7b195225f",
+      "size": 53168
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-173945821411c09f70c95f98d590e697.woff2",
+      "sha256": "ef5693cd230dcc67a120cf627d59d9b66acab7b8f356f9a36c3a1e2edf479f0a",
+      "size": 73576
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-1b611157cd46bb184d4fa4dae2d6a2b8.woff2",
+      "sha256": "5b79154058f247d013a6561ba070b044911b3206e872ce8a2476392245f9de27",
+      "size": 64828
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-1e6fd68f1f3902ce48ce8c69df385622.woff2",
+      "sha256": "7a1db91b8de7dee60467eafa390af5aa6e8ad313e6b6fb62c31e7a03ea26f385",
+      "size": 57384
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-1ee544f0f1dac422545c505baa788992.woff2",
+      "sha256": "4c478c0638b0ede25838805d6f99badcc57fbf022e44562c9194c0c75118f1c1",
+      "size": 51728
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-1fdc0c67ed57263a80fd108c1f6ccf24.woff2",
+      "sha256": "cdc443c022e8300966f91ec8b3185953579979dd5bffbcc66b498fe6b71e6c39",
+      "size": 56004
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-203b0e569e3b14aac86a003dc3fa523e.woff2",
+      "sha256": "ddfc3cd617e83e271190a01fcfeb8625cd5ff9c105ca362c8804b7f762e595b2",
+      "size": 75216
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-20cc1bbf50e7efb442756cb605672c1f.woff2",
+      "sha256": "27dce6f37362f4ad1495da86e9aa9ec808237d41d69d3f2f13d54ccbfe504c83",
+      "size": 56932
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-20e7bf72fa05de9adf7dbcc7bf51dde6.woff2",
+      "sha256": "d9742a018d17fea1da72556502ef20d02b5cb80ddd571e539b60ce26cd19d4df",
+      "size": 72224
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-21430ee05a1248901da8d0de08744d47.woff2",
+      "sha256": "d7d7130ac4a5ce5cf5f0a01f408267133cde16ef2966dfb35a9fc5a37f762cf8",
+      "size": 56656
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-23686f7f29da6e8008c36dd3a80c83d6.woff2",
+      "sha256": "ab60b69500468e81eb3a6796b8e23560699e2de1be596956bd1832256fae9d44",
+      "size": 68952
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-23ad2d71b280f00b1363b95b7bea94eb.woff2",
+      "sha256": "e8dec71d8ede1b9b9f3d7325e1ea31432474a83095719bd2149852fef4794ed5",
+      "size": 68324
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-23f228f3999c01983860012330e4be08.woff2",
+      "sha256": "20a7232989878afcad6de84b68872facaf96fb85c6827f0457d532c1cbf6bbcc",
+      "size": 54732
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-24476a126f129212beb33f66853ea151.woff2",
+      "sha256": "c0c147e916a32a86306f2f9864982d87fdf41b6a0c3d1ed77c2aabd2ed772a94",
+      "size": 62844
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-24a21c1e4449222e8d1898d69ff3a404.woff2",
+      "sha256": "e49f1063fddb7928f50c6490912df4bce1042795bd372ce0673cc0d87beec559",
+      "size": 66072
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-25b7f38e18f035f96cb5e547bd2bd08c.woff2",
+      "sha256": "a6ec4baa25d737b49526c152b69a98e66373e3ab2a337ca1c7a895d7a6d8b45b",
+      "size": 65836
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-29cec36cd205b211da97acabaa62f055.woff2",
+      "sha256": "9ab470df6c456a0a376521f52fc8a857849ad15c640b6c8fae020fbdeb0cde0b",
+      "size": 66504
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-2a26d20a23b00898ce82f09d2ee47c3f.woff2",
+      "sha256": "d85471a49823e8757af9c1c7d920fbfb4ccdb9660e06f7b43ea2b2325b438d0f",
+      "size": 63388
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-2adbc89c11e65905393d3dfc468b9d5b.woff2",
+      "sha256": "896a9145f32c6db6eb6ccdff9986859f08e349f505628dd9eeff2139def675cc",
+      "size": 58256
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-2b7441d46298788ac94e610ffcc709b6.woff2",
+      "sha256": "d0493edd4b70aab6e7c4d78be1d5976d2fb0113c486f20bc2114d8d0f8256f5d",
+      "size": 46548
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-2b77e8ebfb2367ab2662396a60e7d320.woff2",
+      "sha256": "6cba567589067e182dd06054fa24e52ce5e8ac8d07278861125e3b6f6d2d2a31",
+      "size": 52492
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-2cf96d082d35ea3d8106851223ad0d16.woff2",
+      "sha256": "714626f97e78b4ee72f935408a48508e9f9855399429ba23dc0c9ef0f4074368",
+      "size": 59524
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-2d43040e86ff03ba677f6f9c04cd0805.woff2",
+      "sha256": "cb1ac8f87c3e4c2e3dd925480e2b6c659100acd59266e957065708c5c46d7385",
+      "size": 58088
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-2e33e8dc771ef5e1d9127d60a6b73679.woff2",
+      "sha256": "13941783dc59754f2bcdcd3c54e7bb665e433fc1ffe1cafa0e273ddcd4f62dbe",
+      "size": 69776
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-33432927cd87d40cfe393c7482bf221f.woff2",
+      "sha256": "9b2a6cb479d1b3d2966a5beb93ba63f30d6b05e83c2985b3f9aab447d802a4b5",
+      "size": 53216
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-353f33792a8f60dc69323ddf635a269e.woff2",
+      "sha256": "aee4567e54a8428067774cbcc9ca8faf2d9bbb10d0a780a374c950d286e1d8d3",
+      "size": 54160
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-36925dfe329a45086cbb7fc5c20d45ac.woff2",
+      "sha256": "542fd6f0fb2eabcd2cfd79b0cecafb376691aa74afcfbf718c8d26160d0cd9ab",
+      "size": 60896
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-3717077e38f98d89eae729b6c14e56dc.woff2",
+      "sha256": "34718d3ab2e153ea66994f9b20475c76bcbe61c73dcef6b7d4096f0eec2eef6b",
+      "size": 54628
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-3756e81d3e149cf6099163ee79944fec.woff2",
+      "sha256": "9db5961935f12cad41726aa81c08c9783b6c71ecaaf7dfea1e4b8f5768defb4d",
+      "size": 51596
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-395c35dd584b56b0789f58a0559beaf1.woff2",
+      "sha256": "8d6bb509725a27cd4cde2daaf743be8ec74114ad3719add4c805cd1c2fdd0f13",
+      "size": 73932
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-3c9de2ae0ea4bc91a510942dfa4be8d2.woff2",
+      "sha256": "9c4e535e741d6a13ec36bb2909058db1321919cb14561e661c62be8f0ffda7f9",
+      "size": 58040
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-3cc70dbb64df5b21f1326cc24dee2195.woff2",
+      "sha256": "71a3287e8998e47016b5159ae03f636939516b4f5b251ee71f0c5a5212e4df6b",
+      "size": 64936
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-3e1f8f654357353bf0e04ba5c34b5f7f.woff2",
+      "sha256": "8c3887fce9435759019e1ecba3ee315164d0f8a598ce24b94c8bfecebbb724a4",
+      "size": 69020
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-3e63ed8162808a9e425ed80a8bc79114.woff2",
+      "sha256": "cfafe77006c4bbd7ece2231a735f8c219a3faa6831d4d5733ab14bd91779157a",
+      "size": 73700
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-3eaa538115d76932653c21d8dc28f207.woff2",
+      "sha256": "04a7b1244c272a46ca740937e1a3e790e8ff142d6fcf53934be0e4a167eacdc9",
+      "size": 70944
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-4095eb84ef3874e2600247bee0b04026.woff2",
+      "sha256": "6ab6ac356c313d98d26c9a23e9b1d5239330974b090d8aba8184ce99c24fcf16",
+      "size": 76200
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-41521fade99856108931b4768b1b2648.woff2",
+      "sha256": "2c096e4a843896d2d735c8f19b8e2e8e1293202d2e0a41adfab16995e32ae07e",
+      "size": 68208
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-450da755d5bcb70906e1295e559b9602.woff2",
+      "sha256": "e07fdcb886eb2f90a49b22e3d369eb1f480fdef7c509249d0437ba95af3aedc6",
+      "size": 51332
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-452225341522a7942f0f6aab1a5c91a3.woff2",
+      "sha256": "a432715f6fed8499a420cb44acfe8f71e600afe0aa340ff2e63b741fa05f6fae",
+      "size": 71640
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-4535823663ad81405188a528d8f2b1a2.woff2",
+      "sha256": "f3c72f094659af2e6fbdbb0e5dba91089c4f5990d479dd9bbe5fa5ae4f95ab41",
+      "size": 68592
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-4806e761d750087c2d734fc64596eaff.woff2",
+      "sha256": "29aa32e6f5a6f5cee931aed56aaedb8d974b2913c71591c605ce5729842497ba",
+      "size": 50704
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-4a0fdb40036e87b40aa08dd30584cb85.woff2",
+      "sha256": "9be1f8a2fd341f5058d483304063535b6ac5be04294846c89a0a946f7fb33f9d",
+      "size": 59276
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-4a38cc3e9cf104e69ba246d37f8cf135.woff2",
+      "sha256": "b3aebf243c2be02360a1452ba3b0090d223faf7a76fde5f7495bf25cedfda5a1",
+      "size": 67888
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-4aca6a43e59aceee2166b0c7e4e85ef1.woff2",
+      "sha256": "cdf1f8c3ff1154762aa390d8babe5ee12450d7ad5cdc3a0b8e58a66dcb75b8ea",
+      "size": 62672
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-4bfaa8ffa64c5ee560aa2daba7c9cbd3.woff2",
+      "sha256": "0405baa428ee4175650f5ea85196d2e2950c3749da32c902f94381ee69b3b72c",
+      "size": 59832
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-4dc6d5f188d5c96d44815cd1e81aa885.woff2",
+      "sha256": "a206f427ff843dbdeaddc1509a92d7b69faebc24871c3138d94baf9b1922b335",
+      "size": 68580
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-4ddc14ed3eb0c3e46364317dfc0144a3.woff2",
+      "sha256": "033809b0d9848a6161681c8e9c5e7ee2bf10e0b639feb800eba43f87dd32a5c2",
+      "size": 66140
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-4ee10ae43505e2e0bc62656ced49c0fa.woff2",
+      "sha256": "a70dd8aa91b85b3a92f4edec64307dbeba67a3e829300abf38bb9ca206c318c5",
+      "size": 68764
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-4f50e5136e136527280bc902c5817561.woff2",
+      "sha256": "59f4770cf5df29b54036ca5f42e6eafdd70d2dd28acbdcea6e8275c30d2208f0",
+      "size": 56576
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-51502f1206be09c565f1547c406e9558.woff2",
+      "sha256": "27f0dd9bee1139710abf7ab0f51c0e37df058bef7f2e41a5f8f919dc0ce54fa7",
+      "size": 57744
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-51a0e808bbc8361236ac521a119758a3.woff2",
+      "sha256": "6f7d20f47fee620a9b6cfac10202ee7350a21667bacd5398084d6781841e9d4c",
+      "size": 81560
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-52a84a22fd1369bffeaf21da2d6158dc.woff2",
+      "sha256": "bb00bece144c8b55b92445e0bcf013c64eb7250588ebcd8d33d4e972feceba1d",
+      "size": 72436
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-5330a2119a716e4e7224ed108b085dac.woff2",
+      "sha256": "c3d926f24f41fa042951f940854f7094b394929ba2b393c1ad0f69b8ac1e18d7",
+      "size": 54600
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-543fa46ace099a7099dad69123399400.woff2",
+      "sha256": "dc52bcf986f21c5ecf4f95614edc3fb086008bc4589a606a5545d7be83c6aae7",
+      "size": 66364
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-544fc28abe2c5c30e62383fd4dac255f.woff2",
+      "sha256": "1822913d0e7128a0d6b8affd019c551f06023368ef8608aa3a9718320d16011c",
+      "size": 59884
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-54acdfc2166ad7fcbd074f75fd4a56ba.woff2",
+      "sha256": "7c5ee14e16e509b359baef1bc7aed848475cf6286bd449a56e9afaaa0b5d8c5d",
+      "size": 55292
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-5572b3513ba8df57a3d5d7303ee6b11b.woff2",
+      "sha256": "3faaa516fc74d539ca46940b392648c9e3cc4c031e9ad52242aa8b54f7d9e2f8",
+      "size": 57016
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-56467a5c8840c4d23a60b2f935114848.woff2",
+      "sha256": "0535fd40943797bebaab03292f269eeb09b9844e28ee0a9b20bafcfe6d6f253c",
+      "size": 62452
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-56a32a7689abd0326e57c10c6c069bb4.woff2",
+      "sha256": "0861a51a85640834a936afe816dc9262712a3b5fceb9d268c3ef013131b7f1c9",
+      "size": 57704
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-57862b464a55b18c7bf234ce22907d73.woff2",
+      "sha256": "2ab06e5e9dc995faad6240b1b1f6edee7e8865ecfd24aa041dad0bf71aab94f9",
+      "size": 63264
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-583d166e56ba0de4b77eabb47ef67839.woff2",
+      "sha256": "fbc085efd02787634c45076cfcd3f9a943919b1fd491953bd3199338d3655681",
+      "size": 70356
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-5882ffa04f32584d26109137e2da4352.woff2",
+      "sha256": "0bca2dd7bf9c581d3b9aa2485571f919272790e346a37ead6522d169b9af2d4a",
+      "size": 73288
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-58fd02350d0bc52cf1ca3bb32ce9766e.woff2",
+      "sha256": "3f843a854c82af7042965ae7f00b6f8698a05e87bbce715cbe087a3ec47899ff",
+      "size": 58968
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-5935a5775af3d5c6307ac667bd9ae74e.woff2",
+      "sha256": "c54f2d93aa1b89e19903c4abc3008742613dcc52b45055a058ec13de99d3a91f",
+      "size": 69344
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-59e9ff77b0efaf684bc09274fb6908c9.woff2",
+      "sha256": "57426b72fb5d6a406df24e2b60c9b3f8d09c095aade40ae55c23972e5b7d9e1c",
+      "size": 26052
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-5a1ce3117cfe90c48e8fb4a9a00f694d.woff2",
+      "sha256": "164d468fbdee79c04b3898c7e62959de3ff43729c407ba60f0f8f27974352292",
+      "size": 50220
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-5a45d991244d4c7140217e1e5f5ca4f4.woff2",
+      "sha256": "b7bc4c809953df9d0ed98cf11a9542ba959ed3c66a94d3090bb466395f945184",
+      "size": 73116
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-5a7fac4b8b23a6e4e5ba0c9bf1756c91.woff2",
+      "sha256": "2802ab8038ff5266fe6303d79665f0b6cf370361aa67b22639e10e1f4634726b",
+      "size": 58396
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-5b0ed6971aaab9c8ad563230bd5471a7.woff2",
+      "sha256": "ec7e47923ed16e54d1a25bf22ad0638846be78be6e8f46009649d9cf7727e58b",
+      "size": 58980
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-5d2898fbc097a7e24c6f38d80587621e.woff2",
+      "sha256": "9473d9ba649a6a614fb877bc6051590cb19da98e54ef6104d25f31f1ff52ed55",
+      "size": 56348
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-603aefd23e350ba7eb124273e3c9bcf1.woff2",
+      "sha256": "cdd0e13364c932bb3cb2c9ae58369716ce47c8d55cbabe86585bf742e710fb5e",
+      "size": 61512
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-60a3089806700d379f11827ee9843b6b.woff2",
+      "sha256": "d964d94147e46e90fd06f0e271a19aacde808acfffb23e66b896be7fcb359544",
+      "size": 73984
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-60a41c7e1c68f22424e6d22df544bc82.woff2",
+      "sha256": "0534b52a8dbb84d43b13773bba5cd15bb6d256aa4fb96c58a435ebe391904f66",
+      "size": 59584
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-642b26e2e5f5fb780b51b593dbc8c851.woff2",
+      "sha256": "961bf60030e7c8b4f5395cd8b748c6979d967b7629e6c582d68e5c11b5d2dfc8",
+      "size": 54540
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-66493ba5a8367f2928812f446f47b56a.woff2",
+      "sha256": "3b759c89aca9110eddc48220362b6e1113bf8e390f40ddeaccade9bec603028e",
+      "size": 64588
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-670ba603758d94268e8606f240a42e12.woff2",
+      "sha256": "1c0d75c27b530030e64e77d99967230f71d4ea9db40ecdc2e10a6f1eaf1f150d",
+      "size": 53524
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-671a2c20b1eb9e4ef8a192833940e319.woff2",
+      "sha256": "3dd77c6fa69a4f80de93433e2868e457b7d04d68662d8d042e6348e7b6ffaf15",
+      "size": 64872
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-684d65f1793cac449dde5d59cb3c47fb.woff2",
+      "sha256": "079d03e554628ed20a18018875b1bb5681ae892dd56604074969619ebd9f36f2",
+      "size": 56992
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-69c09cc5fa3e55c74fc4821f76909cc3.woff2",
+      "sha256": "dde445e5fe69c7ab363f034df157c89750b421f31e52757f7a642be3c5644f2a",
+      "size": 65168
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-6ae5b42180ad70b971c91e7eefb8eba2.woff2",
+      "sha256": "dc1eea8f0592ee505adb539566a9cebefa81ece39c3e70624afd06af0e323729",
+      "size": 64304
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-6e092f71c1e634059ada0e52abadce67.woff2",
+      "sha256": "9b771d7ec93aab9efc47096f33c16c724d57a462b99d54735080759cc56e749d",
+      "size": 72236
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-6f3256af8454371776bc46670d33cc65.woff2",
+      "sha256": "4d1cd583547d080c6b94552d1473685c60e6a96340c74a659616e16cdde6bbae",
+      "size": 56504
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-6fe5c5973cc06f74b2387a631ea36b88.woff2",
+      "sha256": "7142a02b00a992b9a57b75c05ddfaa28956c11f554fb9f1e3fe0333285dd6791",
+      "size": 55696
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-70c2eb8d64e71a42a834eb857ea9df51.woff2",
+      "sha256": "89474028dcdfc03b27f45d5adc112d9d53a4d810c7e8f0ebf95f599b50ae84ed",
+      "size": 63524
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-70e811fd7994e61f408c923de6ddd078.woff2",
+      "sha256": "e6818bb44f7d47d16cd8935ed9f5b29b8f10ac0e80043f85957b80501f85bcd9",
+      "size": 57028
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-7197d6fda6cba7c3874c53d6381ca239.woff2",
+      "sha256": "66b77ead39e2479ee3bf4911920fb5cf39217c6b60e3cd84080c7fe429432430",
+      "size": 59464
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-72252d73220fa3cd856677888cee1635.woff2",
+      "sha256": "1e34a49b238d61c6a723e79c2957f309687bcca89eeaebe99221883f302b80a2",
+      "size": 49972
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-72536a3d71b694a0d53dd90ddceae41e.woff2",
+      "sha256": "4058683136a7bf8ebaadc59aaba8644044eff3b91776f6b0206954bf805a3132",
+      "size": 67268
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-726303e0774b4e678bff8c2deb6ca603.woff2",
+      "sha256": "1ad344f682254b66d56187f673f817fe1ac8117d59cb26614796ebba9f2494aa",
+      "size": 62376
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-733171b4ffcd17ea1fe1c0ba627173bf.woff2",
+      "sha256": "af32f1c4a193d9866655c866d4067b190b121fdc538b380cd45e99f172b4355b",
+      "size": 52596
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-739bc1a567439c7cffcd1614644593d2.woff2",
+      "sha256": "9bbdcb718fa1010f13c0a6058cca89d75774371e766eb1edf319ac25dc057f0b",
+      "size": 49492
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-73e309718fd16cea44b4d54a33581811.woff2",
+      "sha256": "6507fb8092efc309d9fdcc301fab6c90330b89931e7007fe7ed7fd1e722a738b",
+      "size": 61808
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-7494dc504ae00ee9cd0505f990f88c5d.woff2",
+      "sha256": "df7f6131e265282b00981c86f4c8d0fbae08c8fa3b3464909609abdafebe5d03",
+      "size": 65456
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-74e2263a91439c25b91d5132ce9f4d62.woff2",
+      "sha256": "322645e0e2737aed64e43e45e97276930f67ce5aa1bfe845eb6090b27b0acc29",
+      "size": 47540
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-761d05e3cd968cf574166867998ef06a.woff2",
+      "sha256": "5da4dd830dbcb73f6228469f49b12a1cc3db1edf00e5875e3f530ba62c907538",
+      "size": 57276
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-7718fe60986d8b42b1be9c5ace5ccf25.woff2",
+      "sha256": "ed029431ebadd93a1ffae89347ced2b6835ed92703613d10f3dcd3d37c3ce19b",
+      "size": 54872
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-774d4f764a1299da5d28ec2f2ffe0d69.woff2",
+      "sha256": "6238cf7ea6f5e88177688f281f55c8d427f0110ca56a0786d8577ab748fb5f8e",
+      "size": 57500
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-79d494361ae093b69e74ee9dbe65bfd4.woff2",
+      "sha256": "6f78f52b32b85a686bae2602b6f4bd9197e508140a87c23eb38ced0fa501808e",
+      "size": 48736
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-79f007c1c6d07557120982951ea67998.woff2",
+      "sha256": "ecd5160dfe937d1e8271e2c7efe45569c2d3f53c94f5d7acaf600434c758a423",
+      "size": 64324
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-7a07ddc0f0c0f5f4a9bad6ee3dda66b5.woff2",
+      "sha256": "e1443444d7865b4650e51da424a02e2b58a75ce1d3b5d125b9d4424c0cc5cff7",
+      "size": 54716
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-7ab2bed91166a9dca83a5ebfbe2a7f38.woff2",
+      "sha256": "3d692c33792626f84eaf48e73fb2c9dfd237ffd3a5b8a882d0f1e4a7301949c7",
+      "size": 56228
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-7ccce86603f80a099ddb0cb21d4ae3e3.woff2",
+      "sha256": "ba4c2f8e126245571624eb841623e3a13a394fba39fc215c60786e786d4e4f35",
+      "size": 54436
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-7e4bde7e9c7f84cd34d8a845e384c746.woff2",
+      "sha256": "934ad4e8abe120c1dba1ff0427a04bfa431ecf61e8402d93965fdfc000198e66",
+      "size": 65004
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-7e929f262f30c8ee78bf398150b1a7cd.woff2",
+      "sha256": "03de58036f102830f522035221d660524c01ff4ad4240d6273d6cb0aa8ccbccc",
+      "size": 59984
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-7eb9fffd1aa890d07d0f88cc82e6cfe4.woff2",
+      "sha256": "ccf132ae51caa20dd14896b26c829b3e45f676d933bcf91f8068bf658a4f2860",
+      "size": 17252
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-7f855356ab893b0d2b9c1c83b8116f0e.woff2",
+      "sha256": "1060f535a62ceaa15c3709cc71d5ba65aa7b25ca9f175b039b692a2f36427c3a",
+      "size": 77420
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-829615148e6357d826b9242eb7fbbd1e.woff2",
+      "sha256": "4252a1dcca7da24ba065620e30429e9a2de3ee8b5ec7cbfb672c8a008779fefc",
+      "size": 80184
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-866fa7613df6b3fd272bcfd4530c0bb9.woff2",
+      "sha256": "a4a710432761544ce376c443375cd3c30212a7eac28fe3e02c38fb6a51b30808",
+      "size": 72996
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-87599f94b6cc129d505b375798d0d751.woff2",
+      "sha256": "3cb8e87a420ef7412eac2b1e7acd90557e3133f5926ab23b307cdd35d3293f7c",
+      "size": 56752
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-8c2f33cee3993174f7e87c28e4bf42ee.woff2",
+      "sha256": "6b01fcbbd25e0588b009efee8aa02c56315c13b071e42f27b3a1b9ded83b9f4b",
+      "size": 64164
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-8d3bcabb847b56243b16afe62adaaf21.woff2",
+      "sha256": "5a27b08a7634da4e22ef40981ff0b4376a5c667fe6d315013c8283660bb3c175",
+      "size": 50356
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-8de5b863cb50dfefdd07cb11c774d579.woff2",
+      "sha256": "8dc7c9aa8d7932d8a62b0d7e556cb7a94c1bb1728a84d50a7952d75b9f159ae0",
+      "size": 70716
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-8e9f97f01034820170065b2921b4fb5e.woff2",
+      "sha256": "e053872045b6e69fa2b374386a30985985700925ea09831eb411299d61cc48a5",
+      "size": 67728
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-8f476c4c99813d57cbe6eca4727388ad.woff2",
+      "sha256": "018d866b5eef3c096a75a56f53df14e4f3ed2b69fc546178b61095736a0cf92e",
+      "size": 65080
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-903bb6865f3452e2fda42e3a25547bc5.woff2",
+      "sha256": "4f9d77b306f63f69dc23f187858c688f20590a582f4d614f8934b8fcb31cc01b",
+      "size": 61532
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-91ddb2969bf2d31ba02ad82998d1314c.woff2",
+      "sha256": "b1c7f6ba934a56bb9ef3c85602de346d594654798004ebfed86cb68fdec23a9f",
+      "size": 56276
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-938d90c10ff8c20386af7f242c05d6b0.woff2",
+      "sha256": "3d4cb06a72e43dcee4114ca345cfbb93c3a037cc27164cad3ecd979b0affc62c",
+      "size": 52636
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-93fc8f28a33234bcadf1527cafabd502.woff2",
+      "sha256": "950ff7a9d636ca4b7684833ff898ca7b4c3d21072c322dd6ca482825aaf6f06d",
+      "size": 64544
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-95429962233afd82db1c27df1500a28c.woff2",
+      "sha256": "63474c129283d98a4426f2af09ce89e7e0fc0a8bf897a5423c3230d513a2816d",
+      "size": 58352
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-9544732d2e62d1a429674f8ee41b5d3a.woff2",
+      "sha256": "b67f74ffa8e1b8ea3b4617c3fa4c68408ec54e34cc532ec71031adc8b15c3343",
+      "size": 55048
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-9592bfc861f07bcb8d75c196b370e548.woff2",
+      "sha256": "aae1aaab500a71b28d1ec96380b49ccaf7550d06b57db71e75737d17715f5261",
+      "size": 51572
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-95bfd249da4902577b4b7d76ebdd0b44.woff2",
+      "sha256": "ce77aebaeee894d03a85f1d9ccecdb3447ab27f77eb8e3f685c961464119c5ef",
+      "size": 70936
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-968cffdc8ee679da094e77ebf50f58ef.woff2",
+      "sha256": "7af27211f5491341d85b051445a7ddbc9e28bec438b8124a18783708fef68667",
+      "size": 54956
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-97f7f48ce90c9429bf32ae51469db74d.woff2",
+      "sha256": "b61251e62c3ecd8d556201f75e5d46e48f1e7619e67ecad2c36690e8d5a9ed4f",
+      "size": 65024
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-982b630266d87db93d2539affb1275c6.woff2",
+      "sha256": "64ffc06d05e0eb263f161fc3ab45747bc09c916c92195450600576b0867a43cf",
+      "size": 62288
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-98f2ad84457de7f3740d9920b8fa8667.woff2",
+      "sha256": "20e0422c76332e759d6daabb96bfa9ccdc02be80b17e9928e3873683ae5b9995",
+      "size": 57784
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-99a16ef6a64934d5781933dbd9c46b2e.woff2",
+      "sha256": "8bdc8f9731f8730a61043729f403e06e6b9bcfed2fb65e71f7fc421ae51b37b7",
+      "size": 56296
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-9cfb2a77a4e45025105ad29a1748b90d.woff2",
+      "sha256": "8a83a1c27c1dc42db2653f37bb39fb95e3bb8180e99ea372766366c995248cee",
+      "size": 54720
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-9d81066dd2b337c938df6e90380a00dc.woff2",
+      "sha256": "3e7444c5704402da829c61e1cdeee82c1867939590d9b25290793c58de548867",
+      "size": 50168
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-9eb5a99df4e76ac3363453ac9ca288b1.woff2",
+      "sha256": "c464198e0903b1025c20e23e6df719933adbcea5f5e3b68fa67bd388e66dc738",
+      "size": 60796
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-a004ddfcb26e67bd6e678c8ed19e25ce.woff2",
+      "sha256": "429f417980fd11df51d1b7c6e2481e65e2f1a2bf3f16531b3d189556b22be20d",
+      "size": 66012
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-a0ca5df4258213d7fc9fce80f65ce760.woff2",
+      "sha256": "4577ce8d2f2161ddcbb02f1154a9899bc55a77d3a715a3650261c56839153ee6",
+      "size": 56840
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-a1f916d6039285c4ffb900cd654e418f.woff2",
+      "sha256": "355bbd7b9ccfe3501325f51a8b14fcbac0a784b72b5629f7e54d28ab00060ea9",
+      "size": 52880
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-a203b91dad570bf05a58c3c3ddb529bf.woff2",
+      "sha256": "664f032ffd3d67ac08c988cb9df5ed9e14ef1bd29b599085aae5ce019535b8f4",
+      "size": 65680
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-a365e82ed54697a52f27adcea1315fe8.woff2",
+      "sha256": "7431d7c929b66ddef73132026c17ba2bdd1c749a2733b12b15a2bd53da10cee9",
+      "size": 62772
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-a4c34be6d42152e64b0df90bc4607f64.woff2",
+      "sha256": "85c4fb4d97312f0260a0db861ddcd8e1f14cc031db4c0fa8bfff098114eed1a1",
+      "size": 62916
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-a7accba310e821da5505f71c03b76bdb.woff2",
+      "sha256": "a630539dbb8b53eeef26d3c14c65e8aa65056e6ee70ed55d02bad8c6e2cc34b1",
+      "size": 66148
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-aa0d470430e6391eca720c7cfa44446f.woff2",
+      "sha256": "9e7d4e67d3026e623581bbb8ffb9767e5cc8ae4208ea1ad9589e1c877a396ae0",
+      "size": 56532
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-aa5c9ca6cf4fba00433b7aa3fa10671a.woff2",
+      "sha256": "a612a4deee08c188d304a75acfaa1a5f606ec0e959ee36572585a21d63a05767",
+      "size": 54892
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-ac9ceb44437becc3e9c4dbfebab7fc2d.woff2",
+      "sha256": "88cdb98b8b47719cb34de6d927db93102845979729309ed7c9d81c2eca267d18",
+      "size": 55988
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-b1220a3c61f85cc0408deedb4c5f57a2.woff2",
+      "sha256": "0c5b4365bec5a439a325347b8e373ce2d733e69a31227d9be1a6bfb1a81f8339",
+      "size": 58924
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-b358f7a51ece39a3247942b1feabdb29.woff2",
+      "sha256": "da427d935e5286ddb7bc67bbddb53f19f21b1b22a08eb18b81202d6a0d7104ff",
+      "size": 67924
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-b57aaedfd8ebdf3931f25119dc6a5eb2.woff2",
+      "sha256": "489368f841681abe8c4a10d8c04eb1f3dd7ca0431866ee6d998738cb5d953e94",
+      "size": 71976
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-b5c1596551c256e0e9cf02028595b092.woff2",
+      "sha256": "53ddc8aec903cc6923e7bea4290f8c22748d8a9d3fef9310c8db45144b8602f5",
+      "size": 60132
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-b6d128682ee29e471486354d486a1b90.woff2",
+      "sha256": "6fec9175d81ae947476b6e3d23d8a952b3f6f2abf3a236a16d3b2030aec8ee2f",
+      "size": 61376
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-b6fd38ca30869792244804b04bc058da.woff2",
+      "sha256": "729394216762fa8e54dcf7d8a6623812c68ee868fa423cb150eb730fa142d5fe",
+      "size": 77468
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-b7d203b051eff504ff59ddca7576b6a9.woff2",
+      "sha256": "012348fc81bad86733c10d93edc49b31fa98d161162a7b9c7cbe2d02f184e684",
+      "size": 48148
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-b96d9226ce77ec94ceca043d712182e6.woff2",
+      "sha256": "55f3829b501cf10b929c86d8703be025941489012ae3a237a0f7d4bde532e316",
+      "size": 66240
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-ba3de316d63c7e339987b16f41a0b879.woff2",
+      "sha256": "204c98c6d957da9076afe9318003ced09bd3b44a4ce8365b555337fdd574a04b",
+      "size": 58728
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-bafff7a14c27403dcc6cf1432e8ea836.woff2",
+      "sha256": "16a0b6a3f5462fc87a5043bb89dfaeab6070f9b15bf7bb33d74c6f1f0e945d7e",
+      "size": 64204
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-bd77e3c7f9e0b072d96af37f73d1aa32.woff2",
+      "sha256": "762f6b930564a70639a89c41e38b55e4fe93753fe30063aee0577ee6a57b14ed",
+      "size": 71260
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-be549ab72f0719d606a5c01e2c0219b6.woff2",
+      "sha256": "51f88e333f2a5b2ed3b6670c7b7ff122d16e6b0a09d0297ae4dec70de721bcf3",
+      "size": 54436
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-c16ed9740b85badf16e86ea782a3062f.woff2",
+      "sha256": "2650a650f03c1d5736cc0f1d774f778639d4df2eee805766ec69410108996344",
+      "size": 56800
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-c1f94158256bb1f3bf665b053d895af9.woff2",
+      "sha256": "0d5a4da13c00111ae6e921de8a5d3e7e407773ceb415771997a9e08d490fc603",
+      "size": 62244
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-c40533fdf4cc57177b12803598af7e59.woff2",
+      "sha256": "bf57ac6c74823d2193e4fd637e0fef9f3cf65867dc573bf287cab541eee2862e",
+      "size": 56692
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-c4a687ac4f0c2766eefc9f77ed99cddf.woff2",
+      "sha256": "fbd978baf163d2cf637804b525e7df206e0657d217d3d4339aa204ec584460a0",
+      "size": 38416
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-c69f61a4ab18d0488c8d1fc12e7028e8.woff2",
+      "sha256": "1d7f8daeee505d3f7830d0c0c74af7af68abc2a0b01b2e92147a85239b72249f",
+      "size": 64316
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-c8b71798409ccc126ee264a00aadcf21.woff2",
+      "sha256": "5e78c653a12851d95e2754fd01052e65c952fa2cc603e6e40a7c1a104fe366e8",
+      "size": 63208
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-c99eda15fc26a2941579560f76c3a5cf.woff2",
+      "sha256": "234ca0a3ee22640185863709a91ed8574ee10cdc97103c74913ef9e7aae8b399",
+      "size": 76564
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-cb17fc3db95f6d139afc9d31a8e93293.woff2",
+      "sha256": "366d1d64220e84149380d851590fa86decac06ab04af7b5d6b84b1593fbc03a7",
+      "size": 74180
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-cbaaefaaf326668277aa24dfa93c4d28.woff2",
+      "sha256": "d912c56af1eb36e3cf58ee3fd05a54cfaa2474d721bf6ebbeafde0163c10d6b3",
+      "size": 63468
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-cd145ce4a0ea18469358df53c207bc1b.woff2",
+      "sha256": "3ef057732d62da9572e373f78d282b218e0f5cb8e003d275adaef15abd2d2cbf",
+      "size": 55960
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-cdbce89e82cc1ab53a2decbf5819278f.woff2",
+      "sha256": "fc2ac910be82739b996e39063360efcccc5b82f4c99a048d8655885afc3ef933",
+      "size": 51420
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-ce4884f96f11589608b76b726a755803.woff2",
+      "sha256": "ea1d4e3f3fa68c9193a72d5df249986350e892091e3edac9025baf7e1759cdee",
+      "size": 65548
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-cf2cc71752631e579e35b0e423bf2638.woff2",
+      "sha256": "ce5a8058ed21535db620e89a942f8d4fe33968cbb4557c26c4521c536d5e8c66",
+      "size": 57424
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-cf6ff4e0f491ca0cf3038187a997b9b4.woff2",
+      "sha256": "996fd1d3fe4f0783b30ffec0912ea858cadf71a077eef41bcbb6f488aa1853ed",
+      "size": 50608
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-cfb211578629b7e8153b37240de6a9d5.woff2",
+      "sha256": "d07bdf1bc149ae52b05fff010bf5a5c97da67d7bd612cd7975939102446da207",
+      "size": 44464
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-d0cf73942fea1c74edbdf0b3011f4656.woff2",
+      "sha256": "e802ce5eb6306d4272a9188ba65c41423894ccaa71e679d1b8f53df3acf7298f",
+      "size": 73392
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-d2666cbed13462c5dc36fa2f15c202ca.woff2",
+      "sha256": "6d157af83341041b1110824b12bcad95a1267c6088aadb7cfebc1fee77c81a27",
+      "size": 56820
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-d3716376641d615e2995605b29bca7b6.woff2",
+      "sha256": "9b9fa9f96d1ed9160912efab73c4883324225fe1096e6aa6c6f5a534fcac292b",
+      "size": 61636
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-dac48066b5883d8b4551fc584f0c2a3e.woff2",
+      "sha256": "50fd052c2e0b0ebf8f304eae64965486d1721da85fbbce115683055f05785bf0",
+      "size": 50232
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-dbea1af6dcd9860be40c3d18254338f5.woff2",
+      "sha256": "4bb0a8345e803f659aca813aadca25703c16bfddf5d89b82ddcec2a50e338471",
+      "size": 54472
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-e11567fd2accf9957cd0d3c2be937d87.woff2",
+      "sha256": "dc6a09381a42ce3aa802d029bc61ed01b4302f0303a1defa8234f130dafa5428",
+      "size": 56440
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-e2ead7ea7da0437f085f42ffc05f8d13.woff2",
+      "sha256": "b4648f5ae511c1d0d4b2aa75a72a547e8436aaa5f1ca15c042e722a9fa8c77f4",
+      "size": 58972
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-e3fcf5180fd466c8915c4e8069491054.woff2",
+      "sha256": "29a56eb3d183f71ddb753f000c8bd902d1b9a35ca08ff2d403c6af19934661fa",
+      "size": 60612
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-e480d9c614742d05f0e78f274f1e69e6.woff2",
+      "sha256": "0ceef1123d1f46d7c9434f5d7f1d3896ba4d1f1b0fe0076383d920ea8da94ec5",
+      "size": 58960
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-e4bca6cfa53e499cae0a6be4894a90e9.woff2",
+      "sha256": "3cc764666e9c2c6483c73c911b3823d74ee680bae209fb3ddee6b976c599f9f1",
+      "size": 59352
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-e51ef413167c6e14e0c0fdcc585f2fc9.woff2",
+      "sha256": "931c27e602508ea6d712803d5647dabb164438140e309fd0be4f15917943f480",
+      "size": 73904
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-e5f453bb04da18eed01675eeebd88bf8.woff2",
+      "sha256": "ab6c969a6b7c481d03f26f68e77eec932b55232608c9b86d710c48f5c200f259",
+      "size": 55832
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-e656f091b9dc4709722c9f4b84d3c797.woff2",
+      "sha256": "b90cfb35e64c7f9f5b7e1fb48d0c396c44f757349e5669e64a25d98806d642fc",
+      "size": 53564
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-ec181b795ac1fb5a50d700b6e996d745.woff2",
+      "sha256": "6b18e2adafaad34cf0544c53915d65af94806ab621f5de6a60f718ef60c9cb1e",
+      "size": 39516
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-ee8bae97908d5147b423f77ad0d3c1bb.woff2",
+      "sha256": "6ccb9581b563074b1e101d2f5ed1efe5c1c53e2406f23139543a139f81a4ae5f",
+      "size": 61720
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-f0f13b5c60e0af5553bd359f5513be1b.woff2",
+      "sha256": "75eac42c2d875a86029c0a684b728abb0dc8baa56e503aaaacb1c457f0a01aa6",
+      "size": 58780
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-f2b54d4e7be0eaefe1c2c56836fa5368.woff2",
+      "sha256": "da1a8fde33ea6a56d70b5c87b1a4030c3fe663772effcbe45019fde0b336d3dc",
+      "size": 55180
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-f56414bf9bced67990def8660e306759.woff2",
+      "sha256": "ffb6a7253b90f6f82b90619935ab41e063db09686921f6dace943f5ec183b16b",
+      "size": 69364
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-f5d079153c99a25b9be5b8583c4cc8a7.woff2",
+      "sha256": "b8ec5b4516ddc269a99f306b9d63ff0bdecd37a800736cd0eab28f254291b15e",
+      "size": 67660
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-f6032fc06eb20480f096199713f70885.woff2",
+      "sha256": "937b4d5222bb42c0e190a3f40a1aa9f984edcaa9e8d275e9d4bf1d88ef74754c",
+      "size": 84024
+    },
+    {
+      "path": "ui/excalidraw-assets/fonts/Xiaolai/Xiaolai-Regular-f8ee5d36068a42b51d0e4a1116cfcec1.woff2",
+      "sha256": "ae083037bfb691cf96205e109a287255f87a45a90848fe2a63cb0b3e7af3e904",
+      "size": 47276
+    },
+    {
+      "path": "ui/index.html",
+      "sha256": "1c8c162e553b2685ec60f0be5b7741cb30b2b8ab004d38ed9557e7c9b940130d",
+      "size": 400
     }
   ]
 }

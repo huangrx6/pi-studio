@@ -241,7 +241,7 @@ export function ExtensionInstallDialog({
             title="目录必须包含 pi-studio.extension.json"
             onClick={() => { setInputError(null); void session.pick('directory'); }}
           >
-            <span className="extension-picker-icon" aria-hidden="true"><FolderOpen /></span>
+            <span className="extension-source-picker-icon" aria-hidden="true"><FolderOpen /></span>
             <span><strong>开发目录</strong><small>含 pi-studio.extension.json</small></span>
           </button>
           <button
@@ -251,7 +251,7 @@ export function ExtensionInstallDialog({
             title="选择 .pi-extension.zip"
             onClick={() => { setInputError(null); void session.pick('package'); }}
           >
-            <span className="extension-picker-icon" aria-hidden="true"><FileArchive /></span>
+            <span className="extension-source-picker-icon" aria-hidden="true"><FileArchive /></span>
             <span><strong>安装包</strong><small>.pi-extension.zip 归档</small></span>
           </button>
           {source && <div className="extension-selected-source">

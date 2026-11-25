@@ -10,10 +10,10 @@ export type ComposerEnterInput = {
   busy: boolean;
 };
 
-export type ComposerKeyAction = ComposerSubmitAction | 'previous' | 'next' | 'select' | 'close' | 'wait';
+export type ComposerKeyAction = ComposerSubmitAction | 'previous' | 'next' | 'select' | 'methods' | 'close' | 'wait';
 
 /** Candidate navigation must not steal IME keys or modified text-entry shortcuts. */
-export function composerKeyAction(input: ComposerEnterInput & { menuOpen: boolean; optionCount: number; pending?: boolean }): ComposerKeyAction {
+export function composerKeyAction(input: ComposerEnterInput & { menuOpen: boolean; optionCount: number; pending?: boolean; canOpenMethods?: boolean }): ComposerKeyAction {
   if (input.isComposing) return 'none';
   const modified = input.metaKey || input.ctrlKey || input.altKey || input.shiftKey;
   if (input.menuOpen && !modified) {
@@ -21,6 +21,7 @@ export function composerKeyAction(input: ComposerEnterInput & { menuOpen: boolea
     if (input.optionCount > 0) {
       if (input.key === 'ArrowUp') return 'previous';
       if (input.key === 'ArrowDown') return 'next';
+      if (input.key === 'ArrowRight' && input.canOpenMethods) return 'methods';
       if (input.key === 'Enter' || input.key === 'Tab') return 'select';
     }
     if (input.key === 'Enter' && input.pending) return 'wait';

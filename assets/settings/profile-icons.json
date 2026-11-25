@@ -1,0 +1,43 @@
+{
+  "shapes": {
+    "baseline": {
+      "tools": { "title": "工具箱", "asset": "toolbox" },
+      "permissions": { "title": "锁定", "asset": "lock" },
+      "harness": { "title": "提示卡", "asset": "prompt-cards" }
+    },
+    "inset": {
+      "tools": { "title": "对话", "asset": "chat" },
+      "permissions": { "title": "守护", "asset": "shield" },
+      "harness": { "title": "导航", "asset": "compass" }
+    },
+    "stagger": {
+      "tools": { "title": "检索", "asset": "search" },
+      "permissions": { "title": "授权", "asset": "key" },
+      "harness": { "title": "流程图", "asset": "flowchart" }
+    },
+    "ascending": {
+      "tools": { "title": "终端", "asset": "terminal" },
+      "permissions": { "title": "审核", "asset": "scales" },
+      "harness": { "title": "指令册", "asset": "instruction-book" }
+    },
+    "descending": {
+      "tools": { "title": "扩展", "asset": "modules" },
+      "permissions": { "title": "拦截", "asset": "stop" },
+      "harness": { "title": "运行", "asset": "gear" }
+    },
+    "foundation": {
+      "tools": { "title": "连接", "asset": "plug" },
+      "permissions": { "title": "批准", "asset": "stamp" },
+      "harness": { "title": "执行", "asset": "chip" }
+    }
+  },
+  "inks": {
+    "transparent": { "label": "透明", "color": "transparent" },
+    "teal": { "label": "薄荷", "color": "#bfe0d4" },
+    "ocean": { "label": "雾蓝", "color": "#c9daf0" },
+    "berry": { "label": "藤紫", "color": "#ddd0f3" },
+    "amber": { "label": "珊瑚", "color": "#efc4bc" },
+    "sand": { "label": "暖沙", "color": "#ebd5af" },
+    "slate": { "label": "石墨", "color": "#394354" }
+  }
+}

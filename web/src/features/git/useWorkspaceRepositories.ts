@@ -25,6 +25,13 @@ export function useWorkspaceRepositories(cwd = '', name?: string) {
     void discover();
     return () => { active = false; };
   }, [cwd, revision]);
+  useEffect(() => (
+    window.piApi.onWorkbenchRefresh?.(event => {
+      if (event.scope !== 'all' && event.scope !== 'git') return;
+      refresh();
+      window.dispatchEvent(new Event('pi-studio:git-changed'));
+    })
+  ), [refresh]);
   const storageKey = 'pi-studio:git-repository:' + cwd;
   const select = (id: string) => {
     sessionStorage.setItem(storageKey, id);

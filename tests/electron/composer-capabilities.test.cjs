@@ -5,20 +5,21 @@ const { readableCapabilityReferences, resolveCapabilityReferences } = require('.
 test('explicit resource references bind by type and ID, reload on send and expand each resource once', () => {
   const skill = { type: 'skill', id: 'duplicate#abc', name: 'echo' };
   const mcp = { type: 'mcp', id: 'duplicate#abc', name: 'echo', server: 'manuals' };
+  const server = { type: 'mcp-server', id: 'duplicate#abc', name: 'manuals' };
   const plugin = { type: 'plugin', id: 'studio.excalidraw', name: 'Excalidraw' };
   const token = option => '$[' + option.type + ':' + encodeURIComponent(option.id) + '|stale]';
   const filename = '@' + JSON.stringify('draft/' + token(skill) + '.md');
-  const text = [token(plugin), token(skill), token(mcp), token(skill), filename].join(' ');
+  const text = [token(plugin), token(skill), token(mcp), token(server), token(skill), filename].join(' ');
   let catalogReads = 0, skillReads = 0;
   const catalog = () => {
     catalogReads++;
     const skillRow = { option: skill, context: () => { skillReads++; return 'trusted skill body'; } };
-    return [skillRow, { option: mcp, context: () => 'enabled method' },
+    return [skillRow, { option: mcp, context: () => 'enabled method' }, { option: server, context: () => 'available service' },
       { option: plugin, context: () => 'available plugin', related: [skillRow] }];
   };
   const resolved = resolveCapabilityReferences(text, catalog);
-  assert.equal(resolved.context, 'available plugin\n\ntrusted skill body\n\nenabled method');
-  assert.equal(readableCapabilityReferences(resolved.display), '$Excalidraw $echo $manuals/echo $echo ' + filename);
+  assert.equal(resolved.context, 'available plugin\n\ntrusted skill body\n\nenabled method\n\navailable service');
+  assert.equal(readableCapabilityReferences(resolved.display), '$Excalidraw $echo $manuals/echo $manuals $echo ' + filename);
   assert.equal(skillReads, 1);
   assert.equal(catalogReads, 1);
   assert.throws(() => resolveCapabilityReferences(token(skill), () => []), /技能当前不可用/);

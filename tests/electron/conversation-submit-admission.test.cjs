@@ -317,7 +317,7 @@ test('reopening a submitted file attachment projects metadata instead of raw pat
     if (previous === undefined) delete process.env.PI_STUDIO_USER_DATA; else process.env.PI_STUDIO_USER_DATA = previous;
     fs.rmSync(root, { recursive: true, force: true });
   });
-  const draft = path.join(root, 'attachments', 'draft');
+  const draft = path.join(root, 'data', 'attachments', 'draft');
   fs.mkdirSync(draft, { recursive: true });
   const attachmentPath = path.join(draft, '6b4d7e18-a8dd-483d-bdbf-21ceab252303-context.txt');
   fs.writeFileSync(attachmentPath, 'test attachment');

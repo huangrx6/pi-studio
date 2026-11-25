@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Copy, HardDrive, RotateCw } from 'lucide-react';
+import { useActionConfirmation } from '../../shared/ConfirmDialog';
 import { PreferenceGroup, PreferenceRow } from '../../shared/PreferenceGroup';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { LoadingState } from '../../shared/LoadingState';
@@ -71,9 +72,12 @@ function LocationRow({ location }: { location: StorageLocation }) {
 }
 
 export function DeviceStorageSettings({ onOpenArchives, onOpenWorktrees }: { onOpenArchives: () => void; onOpenWorktrees: () => void }) {
+  const toast = useSettingsToast();
+  const confirmation = useActionConfirmation();
   const [revision, setRevision] = useState(0);
   const [snapshot, setSnapshot] = useState<DeviceStorageSnapshot>();
   const [busy, setBusy] = useState(true);
+  const [cleaning, setCleaning] = useState(false);
   const [error, setError] = useState('');
   useEffect(() => {
     let active = true;
@@ -86,10 +90,51 @@ export function DeviceStorageSettings({ onOpenArchives, onOpenWorktrees }: { onO
     return () => { active = false; };
   }, [revision]);
 
+  const maintenance = snapshot?.maintenance;
+  const cleanable = maintenance?.totalCleanableBytes || 0;
+  const maintenanceParts = [
+    maintenance?.oldBackupCount ? `旧备份 ${maintenance.oldBackupCount} 份（${formatFileSize(maintenance.oldBackupBytes)}）` : '',
+    maintenance?.reclaimableDatabaseBytes ? `数据库空闲页 ${formatFileSize(maintenance.reclaimableDatabaseBytes)}` : '',
+    maintenance?.cacheBytes ? `临时缓存 ${formatFileSize(maintenance.cacheBytes)}` : '',
+  ].filter(Boolean);
+  const cleanupDescription = cleanable > 0
+    ? `应用会自动轮转备份并回收空闲页；当前还可立即释放 ${formatFileSize(cleanable)}（${maintenanceParts.join('、')}）。`
+    : '应用会自动轮转迁移备份并回收数据库空闲页；当前空间紧凑，可随时手动整理兜底。';
+
+  async function runCleanup() {
+    if (cleaning || busy) return;
+    const details = [
+      maintenance?.oldBackupCount ? `旧迁移备份 ${maintenance.oldBackupCount} 份（${formatFileSize(maintenance.oldBackupBytes)}）` : '',
+      maintenance?.reclaimableDatabaseBytes ? `数据库空闲页（${formatFileSize(maintenance.reclaimableDatabaseBytes)}）` : '',
+      maintenance?.cacheBytes ? `模型目录与临时缓存（${formatFileSize(maintenance.cacheBytes)}）` : '',
+    ].filter(Boolean);
+    const accepted = await confirmation.confirm({
+      title: '清理并优化存储空间？',
+      description: `${details.length ? `将处理：${details.join('、')}，并保留最新一份数据库迁移快照。` : '将清理过期备份、临时缓存和空目录，并压缩数据库空间。'}不会删除任何会话记录、设置、插件、技能或扩展。`,
+      confirmLabel: '开始整理',
+    });
+    if (!accepted) return;
+    setCleaning(true);
+    try {
+      const result = await window.piApi.deviceStorageCleanup();
+      setSnapshot(result.snapshot);
+      const freed = result.summary.freedBytes;
+      toast(freed > 0
+        ? `存储整理完成，已释放 ${formatFileSize(freed)}。`
+        : result.summary.removedEmptyDirs > 0
+          ? `存储整理完成，已清理 ${result.summary.removedEmptyDirs} 个空目录。`
+          : '存储空间已处于紧凑状态。');
+    } catch (cause) {
+      toast(errorText(cause), 'error');
+    } finally {
+      setCleaning(false);
+    }
+  }
+
   return <div className="settings-preference-page device-storage-settings">
     <SettingsPageHeader title="设备存储" icon={<HardDrive />} iconPosition="end" meta="查看 Pi Studio 在这台设备上的数据占用和存储位置。" />
     <div className="settings-preference-groups">
-      <PreferenceGroup title="已用空间" actions={<button type="button" className="settings-outline" disabled={busy}
+      <PreferenceGroup title="已用空间" actions={<button type="button" className="settings-outline" disabled={busy || cleaning}
         onClick={() => setRevision(value => value + 1)}><RotateCw className={busy ? 'spin' : ''} aria-hidden="true" />{busy ? '统计中' : '刷新'}</button>}>
         {!snapshot && busy && <LoadingState variant="section">正在统计文件大小…</LoadingState>}
         {error && <p className="storage-error" role="alert">{error}{snapshot ? ' 当前显示上次统计结果。' : ''}</p>}
@@ -103,7 +148,11 @@ export function DeviceStorageSettings({ onOpenArchives, onOpenWorktrees }: { onO
           control={<button type="button" className="settings-outline storage-management-action" onClick={onOpenArchives}>查看归档会话</button>} />
         <PreferenceRow title="隔离工作树" description="查看子智能体的工作副本和待处理的改动。"
           control={<button type="button" className="settings-outline storage-management-action" onClick={onOpenWorktrees}>管理工作树</button>} />
+        <PreferenceRow title="空间整理" description={cleanupDescription}
+          control={<button type="button" className="settings-outline storage-management-action" disabled={busy || cleaning}
+            onClick={() => void runCleanup()}>{cleaning ? '整理中…' : '清理与优化'}</button>} />
       </PreferenceGroup>
     </div>
+    {confirmation.dialog}
   </div>;
 }

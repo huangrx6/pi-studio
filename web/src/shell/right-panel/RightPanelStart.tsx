@@ -13,7 +13,6 @@ import {
   GitBranch,
   Globe,
   GripVertical,
-  LayoutGrid,
   ListOrdered,
   ListChecks,
   MessageCirclePlus,
@@ -27,6 +26,7 @@ export type RightPanelToolAction = {
   label: string;
   description?: string;
   disabled?: boolean;
+  needsWorkspace?: boolean;
   group?: 'conversation';
   onSelect: () => void;
 };
@@ -56,7 +56,7 @@ function LauncherIcon({ action, serviceCount }: { action: LauncherAction; servic
 /** Compact list for the tab-bar menu and launcher grid for the start page. */
 export function RightPanelToolList(props: (
   { actions: RightPanelToolAction[]; menu: true }
-  | { actions: LauncherAction[]; menu?: false }
+  | { actions: LauncherAction[]; menu?: false; onNeedWorkspace?: () => void }
 ) & { serviceCount?: number }) {
   const { serviceCount } = props;
   if (props.menu) {
@@ -85,22 +85,32 @@ export function RightPanelToolList(props: (
   }
 
   return <ul className="panel-launcher-grid">
-    {props.actions.map(action => <li key={action.id}>
-      <button
-        type="button"
-        className="panel-launcher-tile"
-        aria-label={action.label}
-        title={action.description ? `${action.label} · ${action.description}` : action.label}
-        disabled={action.disabled}
-        onClick={action.onSelect}
-      >
-        <LauncherIcon action={action} serviceCount={serviceCount} />
-        <span className="panel-launcher-copy">
-          <span className="panel-launcher-label">{action.label}</span>
-          {action.description && <span className="panel-launcher-description">{action.description}</span>}
-        </span>
-      </button>
-    </li>)}
+    {props.actions.map(action => {
+      const needsWorkspace = !('panel' in action) && Boolean(action.needsWorkspace);
+      const interactiveDisabled = Boolean(action.disabled) && !(needsWorkspace && props.onNeedWorkspace);
+      const handleSelect = needsWorkspace && props.onNeedWorkspace ? props.onNeedWorkspace : action.onSelect;
+      const hint = needsWorkspace
+        ? `先选择工作区以使用「${action.label}」`
+        : action.description
+          ? `${action.label} · ${action.description}`
+          : action.label;
+      return <li key={action.id}>
+        <button
+          type="button"
+          className={`panel-launcher-tile${needsWorkspace ? ' is-needs-workspace' : ''}`}
+          aria-label={action.label}
+          title={hint}
+          disabled={interactiveDisabled}
+          onClick={handleSelect}
+        >
+          <LauncherIcon action={action} serviceCount={serviceCount} />
+          <span className="panel-launcher-copy">
+            <span className="panel-launcher-label">{action.label}</span>
+            {action.description && <span className="panel-launcher-description">{action.description}</span>}
+          </span>
+        </button>
+      </li>;
+    })}
   </ul>;
 }
 
@@ -150,27 +160,32 @@ function LauncherOrderEditor({ actions, label, onMove }: {
 
 export function RightPanelStart({
   workspace,
+  workspaces = [],
   cwd,
   actions,
   extensionPanels,
   onOpenExtension,
   order,
   onOrderChange,
+  onSelectWorkspace,
   onChooseWorkspace,
 }: {
   workspace?: string;
+  workspaces?: Array<{ cwd: string; name: string }>;
   cwd?: string;
   actions: RightPanelToolAction[];
   extensionPanels: ExtensionUiItem[];
   onOpenExtension: (panelId: string) => void;
   order: string[];
   onOrderChange: (order: string[]) => void;
+  onSelectWorkspace?: (cwd: string) => void;
   onChooseWorkspace: () => void;
 }) {
   const [serviceCount, setServiceCount] = useState(0);
   const [sorting, setSorting] = useState(false);
   const sortButton = useRef<HTMLButtonElement>(null);
   const hasWorkspace = Boolean(workspace || cwd);
+  const quickWorkspaces = onSelectWorkspace ? workspaces.slice(0, 4) : [];
   const launcherActions: LauncherAction[] = [
     ...orderLauncherEntries(actions, launcherToolOrder),
     ...extensionPanels.map(panel => ({
@@ -211,21 +226,30 @@ export function RightPanelStart({
   }, [cwd, workspace]);
 
   return <div className="panel-start">
-    <header className="panel-start-intro">
-      <span className="panel-start-mark"><LayoutGrid aria-hidden /></span>
-      <div>
-        <strong>启动台</strong>
-        <span>{hasWorkspace ? '打开工具，继续当前工作区的事' : '先选择工作区，再启动工具'}</span>
+    {!hasWorkspace && <div className="panel-workspace-card">
+      <div className="panel-workspace-card-head">
+        <span className="panel-workspace-prompt-icon" aria-hidden="true"><FolderOpen /></span>
+        <span className="panel-workspace-prompt-copy">
+          <strong>选择工作区</strong>
+          <span>文件、终端和服务将绑定到所选目录</span>
+        </span>
+        <button type="button" className="panel-workspace-browse" onClick={onChooseWorkspace}>打开目录…</button>
       </div>
-    </header>
-
-    {!hasWorkspace && <button type="button" className="panel-workspace-prompt" onClick={onChooseWorkspace}>
-      <span className="panel-workspace-prompt-icon" aria-hidden><FolderOpen /></span>
-      <span className="panel-workspace-prompt-copy">
-        <strong>选择工作区</strong>
-        <span>文件、终端和服务需要工作区后才能使用</span>
-      </span>
-    </button>}
+      {quickWorkspaces.length > 0 && <div className="panel-workspace-chips" role="list" aria-label="快速选择工作区">
+        {quickWorkspaces.map((item) => (
+          <button
+            key={item.cwd}
+            type="button"
+            className="panel-workspace-chip"
+            title={item.cwd}
+            onClick={() => onSelectWorkspace?.(item.cwd)}
+          >
+            <Folder aria-hidden="true" />
+            <span>{item.name}</span>
+          </button>
+        ))}
+      </div>}
+    </div>}
 
     <section className="panel-launcher" aria-label="工作台应用" onKeyDown={event => {
       if (!sorting || event.key !== 'Escape' || event.nativeEvent.isComposing) return;
@@ -247,7 +271,7 @@ export function RightPanelStart({
           </div>
           {sorting ? <LauncherOrderEditor label={label} actions={ordered}
             onMove={(source, target) => onOrderChange(moveLauncherEntry(order, ordered.map(action => action.id), source, target))} />
-            : <RightPanelToolList actions={ordered} serviceCount={serviceCount} />}
+            : <RightPanelToolList actions={ordered} serviceCount={serviceCount} onNeedWorkspace={onChooseWorkspace} />}
         </section>;
       })}
     </section>

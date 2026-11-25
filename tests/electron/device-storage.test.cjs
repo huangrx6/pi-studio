@@ -176,3 +176,67 @@ test('uses the packaged updater cache name and counts only that application cach
   assert.equal(result.categories.client, 43);
   assert.equal(result.locations.find(row => row.kind === 'updates').bytes, 43);
 });
+
+test('reports maintenance estimates and cleans old backups, caches, empty dirs and database space safely', async t => {
+  const { sources, file } = await fixture(t);
+  await file(sources.studio, path.basename(sources.database), 200);
+  await file(sources.studio, 'backups/sqlite/studio.sqlite.migration-backup-v18-to-v19.sqlite', 500);
+  await file(sources.studio, 'backups/sqlite/studio.sqlite.migration-backup-v19-to-v20.sqlite', 600);
+  await file(sources.studio, 'model-catalogs/models.dev.json', 300);
+  await fs.mkdir(path.join(sources.studio, 'extension-state', 'project-deadbeef0000000000000000'), { recursive: true });
+  await file(sources.studio, 'attachments/keep.txt', 100);
+
+  let compacted = false;
+  const service = createDeviceStorageService({
+    getSources: () => sources,
+    clipboard: { writeText() {} },
+    shell: { openPath: async () => '', showItemInFolder() {} },
+    getDatabaseStats: () => ({ reclaimableBytes: compacted ? 0 : 400 }),
+    compactDatabase: () => { compacted = true; return { freedBytes: 400, prunedTraces: 3 }; },
+  });
+
+  const before = await service.snapshot();
+  assert.equal(before.maintenance.oldBackupCount, 1);
+  assert.equal(before.maintenance.oldBackupBytes, 500);
+  assert.equal(before.maintenance.cacheBytes, 300);
+  assert.equal(before.maintenance.reclaimableDatabaseBytes, 400);
+  assert.equal(before.maintenance.totalCleanableBytes, 1200);
+
+  const cleaned = await service.cleanup();
+  assert.equal(cleaned.summary.removedBackups, 1);
+  assert.equal(cleaned.summary.removedEmptyDirs, 1);
+  assert.equal(cleaned.summary.prunedTraces, 3);
+  assert.equal(cleaned.summary.freedBytes, 1200);
+  assert.equal(cleaned.snapshot.maintenance.oldBackupCount, 0);
+  assert.equal(cleaned.snapshot.maintenance.cacheBytes, 0);
+  assert.equal(cleaned.snapshot.maintenance.reclaimableDatabaseBytes, 0);
+  assert.equal(await fs.stat(path.join(sources.studio, 'attachments/keep.txt')).then(s => s.size), 100);
+});
+
+test('categorizes v2 data/ and cache/ layout accurately and cleans v2 cache', async t => {
+  const { sources, file } = await fixture(t);
+  await file(sources.studio, 'data/attachments/file.bin', 210);
+  await file(sources.studio, 'data/background-media/wall.png', 310);
+  await file(sources.studio, 'data/worktrees/wt.txt', 110);
+  await file(sources.studio, 'data/plugin-data/demo/a.db', 410);
+  await file(sources.studio, 'downloads/report.pdf', 150);
+  await file(sources.studio, 'cache/model-catalogs/models.dev.json', 250);
+  await file(sources.studio, 'cache/quarantine/plugins/tmp.zip', 50);
+
+  const service = createDeviceStorageService({
+    getSources: () => sources,
+    clipboard: { writeText() {} },
+    shell: { openPath: async () => '', showItemInFolder() {} },
+  });
+  const before = await service.snapshot();
+  assert.equal(before.categories.attachments, 210);
+  assert.equal(before.categories.worktrees, 110);
+  assert.equal(before.categories.media, 460);
+  assert.equal(before.categories.resources, 710);
+  assert.equal(before.maintenance.cacheBytes, 300);
+
+  const cleaned = await service.cleanup();
+  assert.equal(cleaned.snapshot.maintenance.cacheBytes, 0);
+  assert.equal(await fs.stat(path.join(sources.studio, 'data/attachments/file.bin')).then(s => s.size), 210);
+  assert.equal(await fs.stat(path.join(sources.studio, 'downloads/report.pdf')).then(s => s.size), 150);
+});

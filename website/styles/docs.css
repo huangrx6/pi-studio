@@ -147,7 +147,7 @@ button {
 
 .brand {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 8px;
   flex: 0 0 auto;
   font-family: var(--font-display);
@@ -157,16 +157,13 @@ button {
 }
 
 .brand-mark {
-  display: inline-grid;
-  width: 21px;
-  height: 21px;
-  place-items: center;
-  border-radius: 2px;
-  background: var(--ink);
-  color: var(--paper);
-  font-family: Georgia, serif;
-  font-size: 12px;
-  transform: translateY(2px);
+  display: block;
+  flex: none;
+  filter: brightness(0);
+}
+
+html[data-theme="dark"] .brand-mark {
+  filter: brightness(0) invert(1);
 }
 
 .brand sup {

@@ -1,5 +1,5 @@
 import { memo, type ReactNode } from 'react';
-import { Bot, FileText, Globe, Image as ImageIcon, ListTree, Pencil, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
+import { Bot, FileText, Globe, Image as ImageIcon, ListTree, Pencil, RefreshCw, Search, Sparkles, Terminal, Wrench } from 'lucide-react';
 import type { ChatMessage, ToolCallBlock } from '../../types/chat-types';
 import { FileKindIcon } from '../../shared/FileKindIcon';
 import { toolResultDiff, writtenLineCount } from './file-changes';
@@ -64,15 +64,45 @@ const agentActions: Record<string, string> = {
   stop: '停止子智能体', wait: '等待子智能体', pending: '查看待答问题', reply: '回复子智能体',
 };
 
-function ActivitySummaryComponent({ entries, results, expanded = false, onOpenFile }: {
-  entries: ActivityEntry[]; results: Map<string, ChatMessage>; expanded?: boolean; onOpenFile?: (path: string) => void;
+const CATEGORY_LABELS: Record<string, string> = {
+  command: '命令',
+  explore: '读查',
+  write: '写入',
+  edit: '修改',
+  browser: '浏览器',
+  search: '搜索',
+  fetch: '网页',
+  agent: '子智能体',
+};
+
+export function summarizeMixedTools(calls: ToolCallBlock[]): string {
+  const counts = new Map<string, number>();
+  for (const call of calls) {
+    const kind = activityKind({ kind: 'tool', key: call.id, call, live: false });
+    const name = CATEGORY_LABELS[kind] || (call.name.includes('__') ? '扩展' : '工具');
+    counts.set(name, (counts.get(name) || 0) + 1);
+  }
+  const top = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([name, count]) => `${name} ${count}`);
+  return top.length >= 2 ? `（${top.join(' · ')}）` : '';
+}
+
+function ActivitySummaryComponent({ entries, results, expanded = false, imageCount = 0, onOpenFile }: {
+  entries: ActivityEntry[]; results: Map<string, ChatMessage>; expanded?: boolean; imageCount?: number; onOpenFile?: (path: string) => void;
 }) {
   const first = entries[0];
   const kind = activityKind(first);
   const calls = entries.flatMap(entry => entry.kind === 'tool' ? [entry.call] : []);
   if (entries.some(entry => activityKind(entry) !== kind)) {
     const thoughts = entries.length - calls.length;
-    return label(<ListTree />, '执行过程', [calls.length && calls.length + ' 次工具调用', thoughts && thoughts + ' 次思考'].filter(Boolean).join(' · '));
+    const base = calls.length >= 4
+      ? [calls.length + ' 工具', thoughts && thoughts + ' 思考'].filter(Boolean).join(' · ')
+      : [calls.length && calls.length + ' 次工具调用', thoughts && thoughts + ' 次思考'].filter(Boolean).join(' · ');
+    const breakdown = calls.length >= 4 ? summarizeMixedTools(calls) : '';
+    const media = imageCount > 0 ? ` · ${imageCount} 图` : '';
+    return label(<ListTree />, '执行过程', base + breakdown + media);
   }
   if (first.kind === 'thinking') {
     const preview = first.block.redacted ? '模型未提供内容' : short(first.block.thinking);
@@ -126,6 +156,11 @@ function ActivitySummaryComponent({ entries, results, expanded = false, onOpenFi
     const path = filePath(call);
     const target = call.name === 'read' && path ? <FileTarget path={path} onOpenFile={onOpenFile}>{path}</FileTarget> : short(args.pattern || path);
     return label(call.name === 'read' ? <FileText /> : <Search />, name || '探索', target, true);
+  }
+  if (call.name === 'workbench_refresh') {
+    const scope = typeof args.scope === 'string' && args.scope ? args.scope : 'all';
+    const scopeLabel = scope === 'all' ? '全部视图' : scope;
+    return label(<RefreshCw />, '刷新视图', scopeLabel, false, call.name);
   }
   return label(<Wrench />, call.name.split('__').at(-1) || call.name, short(args.name || args.description || args.path), false, call.name);
 }

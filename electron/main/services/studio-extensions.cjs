@@ -31,13 +31,16 @@ const {
 const {
   closeAllExtensionDataViewServices,
 } = require('./extension-data-view.cjs');
-const { normalizeCanvasScene } = require('./extension-canvas.cjs');
-const { taskBoardProtocol } = require('../core/task-board-contract.cjs');
+const { extensionViewUrl } = require('../core/extension-view.cjs');
 const {
   createOfficialExtensionService,
 } = require('./official-extensions.cjs');
 const { normalizeExternalHttpUrl } = require('../core/external-url.cjs');
-const { pluginDataDirectory, studioDataDirectory } = require('../core/studio-paths.cjs');
+const {
+  extensionDataDirectory: studioExtensionDataDirectory,
+  pluginDataDirectory,
+  studioDataDirectory,
+} = require('../core/studio-paths.cjs');
 const { readPluginIcon } = require('./plugin-icon.cjs');
 
 const MANIFEST_NAME = 'pi-studio.extension.json';
@@ -681,17 +684,11 @@ function normalizeDataSources(value, row) {
     if (provider.subscribe !== undefined && typeof provider.subscribe !== 'function') {
       throw new Error(`数据源 ${id} 的 subscribe 必须是函数`);
     }
-    if (provider.writeCanvas !== undefined && (
-      typeof provider.writeCanvas !== 'function'
-      || !row.manifest.contributes.panels.some(panel => panel.canvas?.sourceId === contributionId(row, row.scope, id))
+    if (provider.invoke !== undefined && (
+      typeof provider.invoke !== 'function'
+      || !row.manifest.contributes.panels.some(panel => panel.view?.sourceId === contributionId(row, row.scope, id))
     )) {
-      throw new Error(`数据源 ${id} 只能为已声明的 canvas 提供 writeCanvas`);
-    }
-    if (provider.writeTaskBoard !== undefined && (
-      typeof provider.writeTaskBoard !== 'function'
-      || !row.manifest.contributes.panels.some(panel => panel.taskBoard?.sourceId === contributionId(row, row.scope, id))
-    )) {
-      throw new Error(`数据源 ${id} 只能为已声明的 taskBoard 提供 writeTaskBoard`);
+      throw new Error(`数据源 ${id} 只能为已声明的 view 面板提供 invoke`);
     }
     providers.set(id, provider);
   }
@@ -712,8 +709,7 @@ function extensionDataDirectory(row, cwd, extensionRoot) {
     : installs.getInstalled(row.manifest.id, row.scope, cwd);
   const dataRoot = installed
     ? path.join(
-      studioDataDirectory(),
-      'extension-data',
+      studioExtensionDataDirectory(studioDataDirectory()),
       installs.scopeKey(row.scope, cwd),
     )
     : extensionRoot;
@@ -837,9 +833,6 @@ async function loadRuntimeExtension(row, cwd, options = {}) {
         dataDirectory,
         ...(hasPermission(row.manifest.permissions, 'ui.panels')
           ? { revealPanel: (panelId, conversationId) => revealExtensionPanel(row, panelId, conversationId) } : {}),
-        ...(row.manifest.contributes?.panels?.some(panel => panel.canvas)
-          ? { canvasVersion: 1, canvasPlaybackVersion: 1, normalizeCanvasScene } : {}),
-        ...(row.manifest.contributes?.panels?.some(panel => panel.taskBoard) ? { taskBoard: taskBoardProtocol } : {}),
         ...(providerCredentials ? { providerCredentials } : {}),
       });
     }
@@ -1326,6 +1319,40 @@ function extensionDataSource(sourceId) {
   return host?.dataSources?.get(sourceId);
 }
 
+function extensionViewDirectory(extensionId) {
+  const entry = extensionHostSnapshot().extensions.find((row) => row.id === extensionId && row.available);
+  if (!entry || !entry.source) return undefined;
+  const uiDir = path.join(path.dirname(entry.source), 'ui');
+  try {
+    return fs.statSync(uiDir).isDirectory() ? uiDir : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function temporarySafeExtensions() {
+  if (!host?.installed) return [];
+  const availableUserIds = new Set(
+    extensionHostSnapshot().extensions
+      .filter((row) => row.available && row.scope === 'user')
+      .map((row) => row.id),
+  );
+  const safe = [];
+  for (const [id, item] of host.installed.entries()) {
+    if (!availableUserIds.has(id) || !item?.extension?.tools?.length) continue;
+    const safeTools = item.extension.tools.filter((tool) => tool?.replay === 'safe');
+    if (!safeTools.length) continue;
+    safe.push({
+      extension: {
+        name: item.extension.name,
+        tools: safeTools,
+      },
+      toolNames: safeTools.map((tool) => tool.name),
+    });
+  }
+  return safe;
+}
+
 function managedRoot(scope, cwd) {
   if (scope === 'user') return userExtensionsDirectory();
   if (scope === 'project' && cwd) return projectExtensionsDirectory(cwd);
@@ -1612,8 +1639,12 @@ function extensionUiSnapshot() {
         ...(panel.color ? { color: panel.color } : {}),
         ...(plugin ? { ownerPluginId: plugin.id } : {}),
         ...(iconDataUrl && panel.slot === 'panel.side' ? { iconDataUrl } : {}),
-        ...(panel.canvas ? { canvas: panel.canvas } : {}),
-        ...(panel.taskBoard ? { taskBoard: panel.taskBoard } : {}),
+        ...(panel.view ? {
+          view: {
+            url: extensionViewUrl(row.id, panel.view.entry),
+            ...panel.view,
+          },
+        } : {}),
         size: panel.size || 'regular',
         priority: panel.priority || 0,
         sourceOrder,
@@ -1781,6 +1812,8 @@ module.exports = {
   executeStudioExtensionCommand,
   extensionComposerCommands,
   extensionDataSource,
+  extensionViewDirectory,
+  temporarySafeExtensions,
   extensionDistributionService,
   extensionHealthForRows,
   extensionHostSnapshot,

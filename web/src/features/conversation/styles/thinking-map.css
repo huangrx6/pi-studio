@@ -33,7 +33,33 @@
   white-space: nowrap;
 }
 .thinking-map-navigation:not(:disabled):hover { background: var(--surface-hover); color: var(--text); }
+.thinking-map-navigation.is-error { color: var(--error); }
 .thinking-map-navigation svg { width: var(--icon-sm); height: var(--icon-sm); }
+.thinking-map-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  margin-right: var(--space-1);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+}
+.thinking-map-mode-switch button {
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-tag);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+.thinking-map-mode-switch button.is-active {
+  background: var(--surface-hover);
+  color: var(--text-1);
+}
 
 .thinking-map-layout {
   flex: 1;
@@ -97,10 +123,42 @@
   box-shadow: var(--shadow-card);
 }
 
-:is(.thinking-map-node-card, .thinking-map-detail-head).is-thinking { --map-accent: color-mix(in srgb, var(--accent) 55%, var(--text)); }
+:is(.thinking-map-node-card, .thinking-map-detail-head):is(.is-thinking, .is-plan) { --map-accent: color-mix(in srgb, var(--accent) 55%, var(--text)); }
 :is(.thinking-map-node-card, .thinking-map-detail-head).is-command { --map-accent: var(--warning); }
 :is(.thinking-map-node-card, .thinking-map-detail-head):is(.is-write, .is-edit) { --map-accent: var(--success); }
+:is(.thinking-map-node-card, .thinking-map-detail-head).is-verify { --map-accent: var(--info); }
 :is(.thinking-map-node-card, .thinking-map-detail-head).is-error { --map-accent: var(--error); }
+
+.thinking-map-node-card.has-thumb {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+.thinking-map-node-thumb {
+  position: relative;
+  flex: none;
+  width: 44px;
+  height: 36px;
+  overflow: hidden;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-tag);
+  background: var(--surface-soft);
+}
+.thinking-map-node-thumb img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.thinking-map-node-thumb > span {
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  padding: 0 3px;
+  border-radius: var(--radius-tag);
+  background: var(--overlay-surface);
+  color: var(--text-1);
+  font-size: var(--text-xs);
+  line-height: 1.2;
+}
 
 .thinking-map-node-card:hover { background: var(--surface-hover); }
 .thinking-map-node-card.is-selected {
@@ -197,6 +255,73 @@
 }
 .thinking-map-detail-empty { margin: var(--space-4); color: var(--muted); font-size: var(--text-sm); }
 .thinking-map-detail-body .thinking-map-detail-empty { margin: 0; }
+
+.thinking-map-phase-detail {
+  display: grid;
+  gap: var(--space-3);
+}
+.thinking-map-phase-filters {
+  display: inline-flex;
+  width: fit-content;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+}
+.thinking-map-phase-filters button {
+  height: 24px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-tag);
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+.thinking-map-phase-filters button.is-active {
+  background: var(--surface-hover);
+  color: var(--text-1);
+}
+.thinking-map-phase-images .conversation-image-gallery { margin: 0; }
+.thinking-map-phase-steps {
+  display: grid;
+  gap: 6px;
+}
+.thinking-map-phase-step {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--divider);
+}
+.thinking-map-phase-step:last-child { border-bottom: 0; }
+.thinking-map-phase-step-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+  color: var(--text-2);
+  font-size: var(--text-13);
+}
+.thinking-map-phase-step-meta svg { width: 13px; height: 13px; }
+.thinking-map-phase-step-meta span { margin-left: auto; color: var(--text-3); font-size: var(--text-xs); }
+.thinking-map-phase-step-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
+  list-style: none;
+  cursor: pointer;
+  font-size: var(--text-13);
+}
+.thinking-map-phase-step-summary::-webkit-details-marker { display: none; }
+.thinking-map-step-badge {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--radius-round);
+  font-size: var(--text-xs);
+}
+.thinking-map-step-badge.is-error { background: var(--error-soft); color: var(--error); }
+.thinking-map-step-badge.is-running { background: var(--accent-soft); color: var(--accent-foreground); }
+.thinking-map-phase-step .activity-tool-body { padding: 6px 0 2px; }
 
 .thinking-map-spin { animation: thinking-map-spin 1s linear infinite; }
 @keyframes thinking-map-spin { to { transform: rotate(360deg); } }

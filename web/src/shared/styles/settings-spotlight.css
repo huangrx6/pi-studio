@@ -13,12 +13,34 @@
 
 .settings-content .settings-spotlight.is-compact { --art-size: var(--settings-art-size-compact); }
 
-.settings-spotlight img {
+.settings-spotlight-art {
+  position: relative;
+  isolation: isolate;
   display: block;
   width: var(--art-size);
   height: var(--art-size);
+}
+
+.settings-spotlight-art img {
+  display: block;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
 }
+
+/* Recolor the enamel, retaining highlights from the underlying studio render. */
+.settings-spotlight-art::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--theme-accent);
+  mask: var(--art-accent-mask) center / contain no-repeat;
+  mix-blend-mode: color;
+}
+
+.settings-spotlight-art[data-art="archives"] { --art-accent-mask: url('../../../../assets/settings/archive-folder-accent.webp'); }
+.settings-spotlight-art[data-art="mcp"] { --art-accent-mask: url('../../../../assets/settings/mcp-connection-accent.webp'); }
+.settings-spotlight-art[data-art="skills"] { --art-accent-mask: url('../../../../assets/settings/skill-guide-accent.webp'); }
 
 .settings-spotlight .settings-spotlight-copy {
   display: grid;

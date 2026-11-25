@@ -1,21 +1,18 @@
 /**
  * Bounded, renderer-scoped subscriptions for live extension UI data.
  *
- * Providers run in the trusted main process. Their output is normalized as the
- * same declarative content accepted from a manifest, throttled, and sent only
- * to the webContents that opened the view. Closing a window, switching
- * workspaces, disabling an extension, or reloading the extension host disposes
- * the provider subscription.
+ * Providers run in the trusted main process. Declarative data views are
+ * normalized as ExtensionContent; sandboxed `panel.view` iframes receive
+ * JSON-safe `viewData` snapshots and call generic `invoke(method, params)` RPCs
+ * without the host knowing any plugin-specific schema.
  */
 
 const crypto = require('node:crypto');
-const { normalizeCanvasScene, normalizeCanvasSnapshot } = require('./extension-canvas.cjs');
 const {
-  taskBoardProtocol,
-  normalizeTaskBoardMutation,
-  normalizeTaskBoardSnapshot,
-  normalizeTaskBoardTask,
-} = require('../core/task-board-contract.cjs');
+  MAX_VIEW_PAYLOAD_BYTES,
+  normalizeViewMethod,
+  sanitizeJsonPayload,
+} = require('../core/extension-view.cjs');
 
 const MAX_SUBSCRIPTIONS = 64;
 const MAX_PER_RENDERER = 12;
@@ -98,18 +95,14 @@ class ExtensionDataViewService {
   }
 
   normalize(record, value) {
-    if (record.canvas) {
+    if (record.view) {
+      const payload = value && typeof value === 'object' && Object.hasOwn(value, 'viewData')
+        ? value.viewData
+        : value;
       return {
         content: [],
-        canvas: normalizeCanvasSnapshot(value?.canvas),
-        canvasWritable: Boolean(record.context?.durableSessionId) && typeof record.provider.writeCanvas === 'function',
-      };
-    }
-    if (record.taskBoardQuery) {
-      return {
-        content: [],
-        taskBoard: normalizeTaskBoardSnapshot(value?.taskBoard),
-        taskBoardWritable: typeof record.provider.writeTaskBoard === 'function',
+        viewData: sanitizeJsonPayload(payload, '插件视图数据', MAX_VIEW_PAYLOAD_BYTES),
+        viewInvocable: typeof record.provider.invoke === 'function',
       };
     }
     const content = value?.content ?? value ?? [];
@@ -131,7 +124,7 @@ class ExtensionDataViewService {
       ...(typeof record.context?.sessionTitle === 'string' ? { sessionTitle: record.context.sessionTitle } : {}),
       webContentsId: record.targetId,
       signal: record.abortController.signal,
-      ...(record.taskBoardQuery ? { taskBoardQuery: record.taskBoardQuery } : {}),
+      ...(record.view ? { viewParams: record.viewParams } : {}),
       ...(record.context?.model
         ? { model: Object.freeze({ ...record.context.model }) }
         : {}),
@@ -204,24 +197,27 @@ class ExtensionDataViewService {
     }
     const id = crypto.randomUUID();
     const now = this.clock();
+    const isGlobalView = payload.view === true && payload.viewScope === 'global';
+    const viewParams = payload.view === true
+      ? Object.freeze(sanitizeJsonPayload(payload.viewParams ?? {}, '插件查询参数', 64 * 1024) ?? {})
+      : undefined;
     const record = {
       id,
       sourceId: payload.sourceId,
       extensionId: payload.extensionId || extensionFromContribution(payload.sourceId),
       target: payload.target,
       targetId: payload.target.id,
-      cwd: payload.taskBoard ? '' : payload.cwd || '',
-      sessionId: payload.taskBoard ? '' : payload.sessionId || '',
-      context: !payload.taskBoard && payload.context && typeof payload.context === 'object'
+      cwd: isGlobalView ? '' : payload.cwd || '',
+      sessionId: isGlobalView ? '' : payload.sessionId || '',
+      context: !isGlobalView && payload.context && typeof payload.context === 'object'
         ? payload.context
         : undefined,
       owner: payload.owner,
       normalizeAction: payload.normalizeAction,
       provider,
-      canvas: payload.canvas === true,
-      taskBoardQuery: payload.taskBoard
-        ? Object.freeze(taskBoardProtocol.normalizeQuery(payload.taskBoardQuery))
-        : undefined,
+      view: payload.view === true,
+      viewScope: payload.viewScope === 'global' ? 'global' : 'session',
+      viewParams,
       value: { content: [] },
       pendingValue: undefined,
       pendingError: undefined,
@@ -284,35 +280,18 @@ class ExtensionDataViewService {
     }
   }
 
-  async writeCanvas(id, target, payload) {
+  async invokeView(id, target, method, params) {
     const record = this.subscriptions.get(id);
-    if (!record || record.targetId !== target?.id || !record.canvas || !record.context?.durableSessionId
-      || typeof record.provider.writeCanvas !== 'function') {
-      throw fail('DATA_SOURCE_FORBIDDEN', '当前窗口无权保存这个画布');
+    if (!record?.view || record.targetId !== target?.id || typeof record.provider.invoke !== 'function') {
+      throw fail('DATA_SOURCE_FORBIDDEN', '当前窗口无权调用这个插件视图');
     }
-    const { revision } = payload;
-    if (!Number.isSafeInteger(revision) || revision < 0) {
-      throw fail('INVALID_DATA_VIEW', '画布版本无效');
-    }
-    const scene = normalizeCanvasScene(payload.scene);
-    const saved = await this.awaitProvider(() => {
+    const normalizedMethod = normalizeViewMethod(method);
+    const normalizedParams = sanitizeJsonPayload(params, '插件调用参数', MAX_VIEW_PAYLOAD_BYTES);
+    const result = await this.awaitProvider(() => {
       record.abortController.signal.throwIfAborted();
-      return record.provider.writeCanvas(this.providerContext(record), { revision, scene });
-    }, '保存');
-    return normalizeCanvasSnapshot(saved);
-  }
-
-  async writeTaskBoard(id, target, mutation) {
-    const record = this.subscriptions.get(id);
-    if (!record?.taskBoardQuery || record.targetId !== target?.id || typeof record.provider.writeTaskBoard !== 'function') {
-      throw fail('DATA_SOURCE_FORBIDDEN', '当前窗口无权修改这个任务看板');
-    }
-    const normalized = normalizeTaskBoardMutation(mutation);
-    const saved = await this.awaitProvider(() => {
-      record.abortController.signal.throwIfAborted();
-      return record.provider.writeTaskBoard(this.providerContext(record), normalized);
-    }, '保存');
-    return normalizeTaskBoardTask(saved);
+      return record.provider.invoke(this.providerContext(record), normalizedMethod, normalizedParams);
+    }, '调用');
+    return sanitizeJsonPayload(result, '插件调用结果', MAX_VIEW_PAYLOAD_BYTES);
   }
 
   async disposeProvider(record, pendingUnsubscribe) {
@@ -369,6 +348,42 @@ class ExtensionDataViewService {
     const records = [...this.subscriptions.values()];
     await Promise.all(records.map((record) => this.close(record.id, record.target)));
   }
+
+  async refresh(filter = {}) {
+    const sourceId = typeof filter?.sourceId === 'string' ? filter.sourceId.trim() : '';
+    const extensionId = typeof filter?.extensionId === 'string' ? filter.extensionId.trim() : '';
+    const targets = [...this.subscriptions.values()].filter((record) => {
+      if (record.closed) return false;
+      if (sourceId && record.sourceId !== sourceId) return false;
+      if (extensionId && record.extensionId !== extensionId && !record.sourceId.startsWith(`${extensionId}/`)) {
+        return false;
+      }
+      return true;
+    });
+    let refreshed = 0;
+    await Promise.all(targets.map(async (record) => {
+      try {
+        const raw = await this.awaitProvider(
+          () => record.provider.read(this.providerContext(record)),
+          '读取',
+        );
+        if (record.closed) return;
+        const normalized = this.normalize(record, raw);
+        record.revision += 1;
+        record.updatedAt = this.clock();
+        record.value = normalized;
+        record.pendingValue = normalized;
+        record.pendingError = undefined;
+        if (record.timer) clearTimeout(record.timer);
+        this.deliver(record);
+        refreshed += 1;
+      } catch (error) {
+        if (record.closed) return;
+        this.schedule(record, { content: [] }, error instanceof Error ? error.message : String(error));
+      }
+    }));
+    return refreshed;
+  }
 }
 
 function createExtensionDataViewService(options) {
@@ -400,6 +415,11 @@ async function closeConversationDataViewServices(ids) {
   ))));
 }
 
+async function refreshExtensionDataViews(filter = {}) {
+  const counts = await Promise.all([...registeredServices].map((service) => service.refresh(filter)));
+  return counts.reduce((sum, count) => sum + count, 0);
+}
+
 module.exports = {
   DEFAULT_THROTTLE_MS,
   DEFAULT_PROVIDER_TIMEOUT_MS,
@@ -409,5 +429,6 @@ module.exports = {
   closeConversationDataViewServices,
   closeExtensionDataViewServices,
   createExtensionDataViewService,
+  refreshExtensionDataViews,
   registerExtensionDataViewService,
 };

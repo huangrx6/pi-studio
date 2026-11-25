@@ -1,4 +1,5 @@
 const { getSubagentConfig } = require('../../core/app-settings.cjs');
+const { getToolProfilesSnapshot, matches } = require('../../core/tool-profiles.cjs');
 const { evaluateSubagentBudget } = require('../../core/subagent-budget.cjs');
 const { getStudioDatabase } = require('../../core/studio-db.cjs');
 const { roleHarness } = require('./profiles.cjs');
@@ -108,7 +109,10 @@ function childInstructions(name, parentId, supervisor, roleInstruction, taskInst
 
 function childToolsFor(agent, defaults, childSupervisorTool, profile) {
   const access = profile?.runtimeOverrides?.allowedTools;
-  const mcpServers = profile?.mcpServers;
+  const toolProfile = profile?.toolProfileId
+    ? getToolProfilesSnapshot().profiles.find(item => item.id === profile.toolProfileId)
+    : undefined;
+  const mcpServers = profile?.mcpServers ?? (toolProfile?.mcpMode === 'picked' ? toolProfile.mcpServers : null);
   const allowed = defaults.allowedTools.length > 0 || Array.isArray(access)
     ? new Set(defaults.allowedTools)
     : undefined;
@@ -123,14 +127,22 @@ function childToolsFor(agent, defaults, childSupervisorTool, profile) {
   }
   const fileOnly = isFileToolPreset(access);
   const mcpAllowed = name => {
-    if (!name.startsWith('mcp__') || (!mcpServers && access === undefined)) return true;
+    if (!name.startsWith('mcp__')) return true;
+    if (toolProfile && toolProfile.mcpMode === 'none' && !profile?.mcpServers) return false;
+    if (!mcpServers && access === undefined) return true;
     const owner = owners.get(name);
     return owner?.startsWith('studio-mcp:') && (!mcpServers || mcpServers.includes(owner.slice('studio-mcp:'.length)));
+  };
+  const toolProfileAllowed = (name) => {
+    if (!toolProfile || access !== undefined) return true;
+    if (name.startsWith('mcp__')) return true;
+    return toolProfile.enabled.some((pattern) => matches(pattern, name));
   };
   const canExpose = (tool) => (
     tool?.name
     && !SUBAGENT_TOOL_NAMES.has(tool.name)
     && mcpAllowed(tool.name)
+    && toolProfileAllowed(tool.name)
     && (!fileOnly || owners.get(tool.name) === (['ls', 'find', 'grep'].includes(tool.name) ? 'studio-filesystem-tools' : 'coding-tools'))
     && (!allowed || allowed.has(tool.name) || (Array.isArray(access) && tool.name.startsWith('mcp__')))
   );
@@ -197,6 +209,7 @@ async function refreshBackgroundRole(durable, runtime, child, parent, defaults, 
     });
     const stored = await tx.doc(ChildContext, child.id);
     stored.supervisorEnabled = defaults.supervisorEnabled;
+    stored.permissionProfileId = profile.permissionProfileId || '';
     stored.rolePrompt = rolePrompt;
   }, context);
 }

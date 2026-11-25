@@ -1,6 +1,7 @@
 const { randomUUID } = require('node:crypto');
 const { getStudioDatabase } = require('../../core/studio-db.cjs');
-const { getHarnessProfile, getHarnessStore, getSubagentConfig } = require('../../core/app-settings.cjs');
+const { getHarnessProfile, getHarnessStore, getPermissionProfilesSnapshot, getSubagentConfig } = require('../../core/app-settings.cjs');
+const { getToolProfilesSnapshot } = require('../../core/tool-profiles.cjs');
 const { normalizeRoleOverrides, resolveRoleDefaults, SUBAGENT_TOOL_NAMES } = require('../../core/subagent-config.cjs');
 const { discoverSkills, skillReferenceId } = require('../skills/index.cjs');
 const { avatarCatalog } = require('./avatars.cjs');
@@ -8,7 +9,7 @@ const { avatarCatalog } = require('./avatars.cjs');
 // This library belongs to the Studio user. Project resources are resolved again
 // in the invoking workspace, using the permissions effective for that request.
 const LIBRARY_KEY = 'studio.subagentProfiles.v1';
-const inherited = { model: '', mcpServers: null, skills: null, harnessId: '', revision: 1 };
+const inherited = { model: '', mcpServers: null, skills: null, harnessId: '', toolProfileId: '', permissionProfileId: '', revision: 1 };
 const starters = [
   { ...inherited, id: '81a1c938-91b8-4a09-9622-ae1b2ec32ef5', name: '代码审阅', avatarId: 'indigo-bob',
     description: '检查改动中的行为回归，给出可复现的验证步骤。',
@@ -20,7 +21,7 @@ const starters = [
 
 function listSubagentProfiles() {
   return getStudioDatabase().getSetting(LIBRARY_KEY, structuredClone(starters))
-    .map(row => ({ runtimeOverrides: {}, ...row }));
+    .map(row => ({ toolProfileId: '', permissionProfileId: '', runtimeOverrides: {}, ...row }));
 }
 
 function textField(value, label, limit, required = false) {
@@ -63,6 +64,8 @@ function saveSubagentProfile(input = {}) {
       mcpServers: resourceList(input.mcpServers, 'MCP 服务'),
       skills: resourceList(input.skills, '技能'),
       harnessId: textField(input.harnessId, 'Harness 配置', 128),
+      toolProfileId: textField(input.toolProfileId ?? '', '工具方案', 128),
+      permissionProfileId: textField(input.permissionProfileId ?? '', '权限策略方案', 128),
       runtimeOverrides: normalizeRoleOverrides(input.runtimeOverrides === undefined ? prior?.runtimeOverrides : input.runtimeOverrides),
     };
     if (profiles.some(row => row.id !== next.id && row.name.toLocaleLowerCase() === name.toLocaleLowerCase())) {
@@ -88,7 +91,7 @@ function removeSubagentProfile({ id, revision }) {
 async function roleResources(cwd) {
   const { availableModels } = require('../../services/models.cjs');
   const { runtimeSelection } = require('../../runtime/tool-selection.cjs');
-  const [{ models }, { tools }] = await Promise.all([availableModels(cwd), runtimeSelection()]);
+  const [{ models }, { tools }] = await Promise.all([availableModels(cwd), runtimeSelection({ cwd })]);
   const skills = discoverSkills(cwd).skills.filter(skill => skill.available && !skill.disableModelInvocation);
   return {
     models: models.map(model => ({ id: model.id, name: `${model.providerName} · ${model.name}`,
@@ -96,6 +99,8 @@ async function roleResources(cwd) {
     mcpServers: getStudioDatabase().listEnabledMcpServerNames(),
     skills: skills.map(skill => ({ id: skillReferenceId(skill), name: skill.name })),
     harnesses: Object.values(getHarnessStore().profiles).map(({ id, name }) => ({ id, name })),
+    toolProfiles: getToolProfilesSnapshot(cwd).profiles.map(({ id, name }) => ({ id, name })),
+    permissionProfiles: getPermissionProfilesSnapshot(cwd).profiles.map(({ id, name }) => ({ id, name })),
     defaults: resolveRoleDefaults(getSubagentConfig('user'), getSubagentConfig('project', cwd)),
     tools: [...new Set(tools.map(tool => tool.name))].filter(name => !SUBAGENT_TOOL_NAMES.has(name) && !name.startsWith('mcp__')).sort(),
   };

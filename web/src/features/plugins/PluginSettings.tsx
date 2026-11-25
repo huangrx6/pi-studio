@@ -28,6 +28,7 @@ export function PluginSettings({
   const showToast = useSettingsToast();
   const confirmation = useActionConfirmation();
   const [operation, setOperation] = useState<Operation>();
+  const [preparingId, setPreparingId] = useState('');
   const lock = useRef<Operation | undefined>(undefined);
   const active = useRef(false);
   const reviewToken = useRef('');
@@ -98,11 +99,15 @@ export function PluginSettings({
 
   function finish() {
     lock.current = undefined;
-    if (active.current) setOperation(undefined);
+    if (active.current) {
+      setOperation(undefined);
+      setPreparingId('');
+    }
   }
 
-  async function prepare(origin: HTMLButtonElement, load: () => Promise<PluginInstallPreview | undefined>, sourceId?: string) {
+  async function prepare(origin: HTMLButtonElement, load: () => Promise<PluginInstallPreview | undefined>, sourceId?: string, targetId = '') {
     if (!begin('prepare')) return;
+    setPreparingId(targetId);
     try {
       const preview = await load();
       if (!preview) return;
@@ -135,7 +140,7 @@ export function PluginSettings({
       id: item.id,
       sourceId: item.sourceId,
       version: item.latestVersion || undefined,
-    }), item.sourceId);
+    }), item.sourceId, item.id);
   }
 
   async function install(dismiss: ModalDismiss) {
@@ -200,13 +205,14 @@ export function PluginSettings({
         aria-haspopup="menu" aria-expanded={Boolean(localMenu)} onClick={event => setLocalMenu(localMenu ? undefined : event.currentTarget)} />
     </>, toolbar)}
     <PluginCatalog plugins={plugins} catalog={catalog} loading={catalogLoading} error={catalogError} busy={locked}
-      catalogUnavailable={catalogUnavailable} preparing={operation === 'prepare'} onToggle={toggle} onInstall={prepareMarket}
+      catalogUnavailable={catalogUnavailable} preparingId={operation === 'prepare' ? preparingId : ''} onToggle={toggle} onInstall={prepareMarket}
       onOpen={({ item }) => setDetail({ id: item.id, sourceId: 'sourceId' in item ? item.sourceId : undefined })} />
     {localMenu && <ActionMenu anchor={localMenu} placement="below" align="end" onClose={() => setLocalMenu(undefined)} items={[
       { label: '选择插件目录…', run: () => prepareLocal('directory', localMenu) },
       { label: '选择插件包…', run: () => prepareLocal('package', localMenu) },
     ]} />}
-    {detailItem && <PluginDetail key={detailItem.id} item={detailItem} installed={installed} busy={locked} catalogUnavailable={catalogUnavailable}
+    {detailItem && <PluginDetail key={detailItem.id} item={detailItem} installed={installed} busy={locked}
+      preparing={operation === 'prepare' && preparingId === detailItem.id} catalogUnavailable={catalogUnavailable}
       onClose={() => setDetail(undefined)} onOpenResource={onOpenResource} onInstall={prepareMarket} onUninstall={uninstall} />}
     {review && <PluginInstallReview preview={review} busy={operation === 'install'} error={installError}
       onClose={closeReview} onSubmit={dismiss => void install(dismiss)} />}

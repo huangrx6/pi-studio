@@ -60,8 +60,6 @@ try {
   await options.getByRole('option', { name: /keep-me/ }).waitFor();
   assert.equal(await options.getByRole('option', { name: /remove-me/ }).count(), 0);
   await app.evaluate(() => globalThis.releaseWorkspaceQaRead());
-  await page.getByRole('button', { name: /^通知/ }).click();
-  await page.getByRole('dialog', { name: '通知中心' }).getByText('工作区已从 Studio 删除', { exact: true }).waitFor();
   await page.reload();
   await workspace(other).waitFor();
   assert.equal(await workspace(target).count(), 0);

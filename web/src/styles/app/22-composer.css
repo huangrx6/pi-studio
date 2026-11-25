@@ -5,6 +5,7 @@
 
 .composer {
   border-radius: var(--radius-card);
+  transition: border-color var(--transition), box-shadow var(--transition), background var(--transition);
 }
 
 .composer-editor {
@@ -18,8 +19,8 @@
   outline: 0;
   color: var(--text);
   caret-color: var(--text);
-  font-size: var(--text-base);
-  line-height: 1.85;
+  font-size: var(--chat-font-size, 15px);
+  line-height: 1.8;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -31,113 +32,16 @@
   pointer-events: none;
 }
 
-.composer:has(.composer-editor:focus) {
+.composer:has(.composer-editor:focus),
+.composer.is-drag-over {
   border-color: var(--accent);
-  box-shadow: none;
+  box-shadow: inset 0 1px 0 var(--composer-highlight), var(--composer-focus-shadow);
+}
+
+.composer-mode.is-permission-full .pi-select-leading {
+  color: var(--warning);
 }
 
 .composer-bar {
-  padding: 2px 8px 6px;
+  padding: 2px 9px 6px;
 }
-
-/* 框内附件：一行小方块，不撑高输入框。 */
-.composer-attachments {
-  gap: 6px;
-  padding: 8px 10px 0;
-}
-
-.composer-attachment.is-image {
-  width: 40px;
-  height: 40px;
-  padding: 2px;
-}
-
-.composer-attachment.is-file {
-  min-height: 32px;
-  max-width: 210px;
-  padding: 3px 6px;
-}
-
-.composer-attachment > span strong { font-size: var(--text-sm); }
-.composer-attachment > span small { font-size: var(--text-xs); }
-
-/* ---- 已发送消息的附件条 ----------------------------------------------
- * 图片与文件收进用户气泡内部：上方横排滚动，下方正文。
- * 整卡右对齐；附件不再单独“飘”在深色背景上。
- */
-
-/* 用户消息整列贴右。 */
-.user-message { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; width: 100%; min-width: 0; max-width: 100%; }
-
-/* 右对齐后气泡宽度由内容决定；有附件时用列布局把附件条和正文叠在同一张卡里。
- * max-content：fit-content 会受 overflow-wrap 的 min-content 影响；
- * break-word：短句不再被 `anywhere` 随便拆开，长串（URL/路径）仍会在需要时断行。 */
-.user-message > .user-bubble {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  width: max-content;
-  max-width: min(85%, 640px);
-  min-width: 0;
-  overflow-wrap: break-word;
-  word-break: normal;
-  white-space: normal;
-}
-
-.user-message > .user-bubble.has-attachments {
-  min-width: min(100%, 280px);
-}
-
-.user-message > .user-bubble.has-attachments:not(.has-text) {
-  padding: 10px;
-}
-
-.user-attachments {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  max-width: 100%;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-inline: contain;
-  scrollbar-width: thin;
-}
-
-.user-attachments > * { flex: none; }
-
-.user-attachments .conversation-image-gallery,
-.user-attachments .message-images { width: auto; max-width: none; margin: 0; }
-.user-attachments .conversation-image-strip {
-  width: auto;
-  max-width: none;
-  padding: 0;
-  gap: 8px;
-}
-.user-attachments .conversation-image-tile {
-  flex: 0 0 112px;
-  width: 112px;
-  height: 80px;
-  padding: 4px;
-  box-shadow: none;
-}
-
-.user-attachments .attachment-card {
-  min-width: 0;
-  max-width: 220px;
-  height: 44px;
-  margin-top: 0;
-  padding: 6px 10px;
-  box-shadow: none;
-}
-
-.user-attachments .attachment-kind { display: none; }
-.user-attachments .attachment-icon { width: 22px; height: 22px; }
-.user-attachments .attachment-icon svg { width: var(--icon-sm); height: var(--icon-sm); }
-
-.user-message > .user-bubble .user-text-disclosure { min-width: 0; }
-.user-message > .user-bubble.has-attachments .user-text-toggle { margin-top: 6px; }

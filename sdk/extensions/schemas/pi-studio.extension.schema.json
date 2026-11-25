@@ -304,27 +304,30 @@
                   "while-active"
                 ]
               },
-              "canvas": {
+              "view": {
                 "type": "object",
                 "additionalProperties": false,
                 "required": [
+                  "entry",
                   "sourceId"
                 ],
                 "properties": {
+                  "entry": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
                   "sourceId": {
                     "$ref": "#/$defs/contributionRef"
-                  }
-                }
-              },
-              "taskBoard": {
-                "type": "object",
-                "additionalProperties": false,
-                "required": [
-                  "sourceId"
-                ],
-                "properties": {
-                  "sourceId": {
-                    "$ref": "#/$defs/contributionRef"
+                  },
+                  "scope": {
+                    "enum": [
+                      "session",
+                      "global"
+                    ]
+                  },
+                  "fullscreen": {
+                    "type": "boolean"
                   }
                 }
               }
@@ -341,24 +344,9 @@
                 ]
               }
             ],
-            "not": {
-              "required": [
-                "canvas",
-                "taskBoard"
-              ]
-            },
             "if": {
-              "anyOf": [
-                {
-                  "required": [
-                    "canvas"
-                  ]
-                },
-                {
-                  "required": [
-                    "taskBoard"
-                  ]
-                }
+              "required": [
+                "view"
               ]
             },
             "then": {

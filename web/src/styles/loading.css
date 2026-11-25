@@ -10,8 +10,11 @@
 
 /* Custom extension fallbacks and list skeletons use the same quiet entrance. */
 .loading-placeholder,
-.loading-state { animation: loading-appear var(--transition-fast) var(--loading-delay) backwards; }
-@keyframes loading-appear { from { opacity: 0; } to { opacity: 1; } }
+.loading-state { animation: loading-appear var(--motion-expand) var(--loading-delay) backwards; }
+@keyframes loading-appear {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 .loading-state {
   display: inline-flex;
@@ -49,14 +52,20 @@
   border-radius: 50%;
   background: var(--accent-tint);
   color: var(--text-1);
-  font: italic var(--weight-semibold) var(--text-lg)/1 var(--display-font);
 }
 .loading-pi::before {
   content: '';
   position: absolute;
   inset: 0;
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--divider);
   border-top-color: var(--accent);
+  border-right-color: var(--accent-border);
   border-radius: 50%;
-  animation: loading-spin var(--loading-skeleton-duration) linear infinite;
+  animation: loading-spin 1.25s cubic-bezier(.5, .15, .5, .85) infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spin,
+  .loading-placeholder,
+  .loading-state,
+  .loading-pi::before { animation: none; }
 }

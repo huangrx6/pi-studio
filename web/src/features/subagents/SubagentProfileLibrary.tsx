@@ -20,8 +20,8 @@ function resourceSummary(label: string, items: string[] | null) {
   return items.length ? label + ' ' + items.length : label + ' 关闭';
 }
 
-export function SubagentProfileLibrary({ cwd, models, canDelegate, onOpenAgentTools, defaultsAction }: {
-  cwd: string; models?: Pick<ModelOption, 'id' | 'name'>[]; canDelegate?: boolean; onOpenAgentTools?: () => void; defaultsAction: ReactNode;
+export function SubagentProfileLibrary({ cwd, models, canDelegate, embedded = false, onOpenAgentTools, defaultsAction }: {
+  cwd: string; models?: Pick<ModelOption, 'id' | 'name'>[]; canDelegate?: boolean; embedded?: boolean; onOpenAgentTools?: () => void; defaultsAction: ReactNode;
 }) {
   const { rows, ready, error } = useSubagentProfiles();
   const [editing, setEditing] = useState<{ profile: SubagentProfile; cwd: string } | null>(null);
@@ -44,10 +44,14 @@ export function SubagentProfileLibrary({ cwd, models, canDelegate, onOpenAgentTo
   const createButton = <button ref={createRef} type="button" className="settings-save" aria-haspopup="dialog"
     onClick={() => open(emptyProfile)} disabled={!ready}><Plus aria-hidden="true" />新建子智能体</button>;
   return <>
-    <SettingsPageHeader title="子智能体" iconPosition="end" icon={<Bot />} meta={canDelegate === false
+    {!embedded && <SettingsPageHeader title="子智能体" iconPosition="end" icon={<Bot />} meta={canDelegate === false
       ? <>在对话中使用 # 引用角色前，请启用子智能体工具。{onOpenAgentTools && <button type="button"
         className="settings-text-button role-enable" onClick={onOpenAgentTools}>去启用</button>}</>
-      : '为常用任务配置专属角色，在对话中输入 # 即可引用。'} />
+      : '为常用任务配置专属角色，在对话中输入 # 即可引用。'} />}
+    {embedded && canDelegate === false && <p className="agents-subagent-hint">
+      在对话中使用 <code>#</code> 引用角色前，请先在主对话工具方案中启用 <code>subagent</code> 工具。
+      {onOpenAgentTools && <button type="button" className="settings-text-button role-enable" onClick={onOpenAgentTools}>去启用</button>}
+    </p>}
     <SettingsProfileLibrary title="角色库" count={rows.length} actions={<>{defaultsAction}{rows.length > 0 && createButton}</>}>
       {error && <div role="alert" className="settings-error">{error}<button type="button" className="settings-outline" onClick={() => void refreshSubagentProfiles()}>重新加载角色</button></div>}
       {!ready && !error && <LoadingState variant="section">正在读取角色…</LoadingState>}

@@ -52,7 +52,7 @@
   overscroll-behavior: contain;
 }
 .git-branch-menu svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); }
-.git-branch-search, .git-branch-options button, .git-branch-create {
+.git-branch-search, .git-branch-options button, .git-branch-create, .git-branch-open-workbench {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -78,8 +78,8 @@
 .git-branch-options button > span, .git-branch-create > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .git-branch-options button > span, .git-branch-create b { font: var(--text-sm)/1.5 var(--mono); }
 .git-branch-options button[aria-current="true"] { opacity: 1; background: var(--accent-tint); color: var(--accent-foreground); }
-.git-branch-options button:hover:enabled, .git-branch-create:hover:enabled { background: var(--surface-hover); color: var(--text-1); }
-.git-branch-options button:focus-visible, .git-branch-create:focus-visible { outline-offset: -2px; }
+.git-branch-options button:hover:enabled, .git-branch-create:hover:enabled, .git-branch-open-workbench:hover:enabled { background: var(--surface-hover); color: var(--text-1); }
+.git-branch-options button:focus-visible, .git-branch-create:focus-visible, .git-branch-open-workbench:focus-visible { outline-offset: -2px; }
 .git-branch-options small { color: var(--text-3); font-size: var(--text-xs); }
 .git-branch-create { flex: none; margin-top: 5px; color: var(--accent-foreground); }
 .git-branch-empty, .git-branch-menu p[role="alert"] { margin: 9px 10px; font-size: var(--text-sm); }
@@ -97,3 +97,24 @@
   font-size: var(--text-xs);
 }
 .git-branch-dirty svg { width: var(--icon-xs); height: var(--icon-xs); color: var(--text-3); }
+.git-branch-open-workbench {
+  flex: none;
+  min-height: 32px;
+  margin-top: 4px;
+  font-size: var(--text-sm);
+}
+.git-branch-options + .git-branch-open-workbench,
+.git-branch-create + .git-branch-open-workbench {
+  position: relative;
+  margin-top: 11px;
+}
+.git-branch-options + .git-branch-open-workbench::before,
+.git-branch-create + .git-branch-open-workbench::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -6px;
+  border-top: 1px solid var(--divider);
+  pointer-events: none;
+}

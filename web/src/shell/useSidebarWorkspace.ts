@@ -62,7 +62,8 @@ export function useSidebarWorkspace({
     () => filterSidebarWorkspaces(workspaces, workspaceQuery, sidebarSessionFilter),
     [workspaces, workspaceQuery, sidebarSessionFilter],
   );
-  const allExpanded = visibleWorkspaces.length > 0 && visibleWorkspaces.every((item) => (
+  const expandableWorkspaces = visibleWorkspaces.filter((item) => item.sessions.length > 0);
+  const allExpanded = expandableWorkspaces.length > 0 && expandableWorkspaces.every((item) => (
     sidebarFiltering ? !searchCollapsed.has(item.cwd) : expanded.has(item.cwd)
   ));
 
@@ -88,10 +89,11 @@ export function useSidebarWorkspace({
   }
 
   function toggleAllExpanded() {
+    const withSessions = visibleWorkspaces.filter((item) => item.sessions.length > 0);
     if (sidebarFiltering) {
-      setSearchCollapsed(allExpanded ? new Set(visibleWorkspaces.map(item => item.cwd)) : new Set());
+      setSearchCollapsed(allExpanded ? new Set(withSessions.map(item => item.cwd)) : new Set());
     } else {
-      setExpanded(allExpanded ? new Set() : new Set(workspaces.map((item) => item.cwd)));
+      setExpanded(allExpanded ? new Set() : new Set(workspaces.filter((item) => item.sessions.length > 0).map((item) => item.cwd)));
     }
   }
 

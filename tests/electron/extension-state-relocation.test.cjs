@@ -25,10 +25,14 @@ function realpath(value) {
   return fs.realpathSync(value);
 }
 
-function seed(root, { withCode = true, withData = true } = {}) {
+function seed(root, { withCode = true, withData = true, legacyLayout = false } = {}) {
   const code = path.join(root, 'extensions', ID, '1.0.0');
-  const data = path.join(root, 'extension-data', 'user', ID);
-  const stateDirectory = path.join(root, 'extension-state', 'user');
+  const data = legacyLayout
+    ? path.join(root, 'extension-data', 'user', ID)
+    : path.join(root, 'data', 'extension-data', 'user', ID);
+  const stateDirectory = legacyLayout
+    ? path.join(root, 'extension-state', 'user')
+    : path.join(root, 'data', 'extension-state', 'user');
   const stateFile = path.join(stateDirectory, `${ID}.json`);
   fs.mkdirSync(code, { recursive: true });
   fs.mkdirSync(stateDirectory, { recursive: true });
@@ -56,7 +60,7 @@ test('旧数据根的绝对路径会自愈到当前受管目录并落盘', () =>
   const current = path.join(root, 'current-root');
   try {
     // 旧根里有完整安装；新根里代码与数据已复制，只是状态文件还指向旧根
-    const oldLayout = seed(legacy);
+    const oldLayout = seed(legacy, { legacyLayout: true });
     const newLayout = seed(current);
     writeState(newLayout.stateFile, { dataPath: oldLayout.data, codePath: oldLayout.code });
 
@@ -105,5 +109,5 @@ test('reading an unconfigured project leaves its extension state and data direct
   assert.deepEqual(service.listInstalled('project', cwd), []);
   assert.deepEqual(service.listInstalledDetailed('project', cwd), { installed: [], errors: [] });
   assert.equal(fs.existsSync(path.dirname(service.stateFile('project', cwd, 'demo.extension'))), false);
-  assert.equal(fs.existsSync(path.join(userDataPath, 'extension-data', service.scopeKey('project', cwd))), false);
+  assert.equal(fs.existsSync(path.join(userDataPath, 'data', 'extension-data', service.scopeKey('project', cwd))), false);
 });

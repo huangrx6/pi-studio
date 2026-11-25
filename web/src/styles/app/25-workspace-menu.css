@@ -100,9 +100,9 @@
   background: var(--conversation-hover-surface);
 }
 
-/* The header ends where the conversation canvas begins. Both popovers use
+/* The header ends where the conversation canvas begins. The header menu uses
  * that shared corner even when the workbench changes the column width. */
-.chat-header :is(.workspace-menu, .notification-panel) {
+.chat-header .workspace-menu {
   --popover-inset: var(--space-1);
   position: absolute;
   top: calc(100% + var(--popover-inset));
@@ -236,12 +236,12 @@
 }
 
 .app.is-wallpaper-inside .file-panel .panel-launcher-tile {
-  background: color-mix(in srgb, var(--conversation-reading-surface) 58%, transparent);
-  border-color: color-mix(in srgb, var(--border) 70%, transparent);
+  background: color-mix(in srgb, var(--launcher-card-bg) 74%, transparent);
+  border-color: color-mix(in srgb, var(--border) 78%, transparent);
 }
 
 .app.is-wallpaper-inside .file-panel .panel-launcher-tile:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--surface-hover) 70%, transparent);
+  background: color-mix(in srgb, var(--surface-hover) 82%, transparent);
 }
 
 .app.is-wallpaper-inside .file-panel .panel-launcher-icon {
@@ -254,8 +254,8 @@
   color: var(--accent-foreground);
 }
 
-.app.is-wallpaper-inside .file-panel .panel-workspace-prompt {
-  background: color-mix(in srgb, var(--conversation-reading-surface) 54%, transparent);
+.app.is-wallpaper-inside .file-panel :is(.panel-workspace-card, .panel-workspace-prompt) {
+  background: color-mix(in srgb, var(--launcher-card-bg) 72%, transparent);
 }
 
 .app.is-wallpaper-inside .file-panel :is(.browser-panel, .browser-toolbar, .browser-stage) {
@@ -272,9 +272,10 @@
 .workspace-menu {
   --popover-max-height: 620px;
   z-index: 50;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   width: 340px;
-  overflow-y: auto;
+  overflow: hidden;
   padding: 8px;
   border: 1px solid var(--border-strong);
   border-radius: var(--radius-panel);

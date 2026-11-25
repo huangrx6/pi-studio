@@ -46,9 +46,9 @@ const SkillHub = lazy(async () => {
   const module = await import('../features/skills/SkillHub');
   return { default: module.SkillHub };
 });
-const SubagentSettings = lazy(async () => {
-  const module = await import('../features/subagents/SubagentSettings');
-  return { default: module.SubagentSettings };
+const AgentsSettings = lazy(async () => {
+  const module = await import('../features/agents/AgentsSettings');
+  return { default: module.AgentsSettings };
 });
 const UsageSettings = lazy(async () => {
   const module = await import('../features/usage/UsageSettings');
@@ -187,6 +187,7 @@ export function SettingsOverlay({
     settingsAnchor,
     setSettingsAnchor,
     pluginSection,
+    agentSection,
     settingsData: data,
     settingsContentRef: contentRef,
     settingsBusy,
@@ -499,7 +500,7 @@ export function SettingsOverlay({
                 </button>
               </SettingsToast>
             )}
-            {!data && !error && tab !== 'general' && tab !== 'network' && tab !== 'browser' && tab !== 'desktop-control' && tab !== 'git' && tab !== 'usage' && tab !== 'archives' && tab !== 'storage' && tab !== 'permissions' && tab !== 'secrets' && tab !== 'subagents' && (
+            {!data && !error && tab !== 'general' && tab !== 'network' && tab !== 'browser' && tab !== 'desktop-control' && tab !== 'git' && tab !== 'usage' && tab !== 'archives' && tab !== 'storage' && tab !== 'permissions' && tab !== 'secrets' && tab !== 'agents' && (
               <LoadingState variant="section">正在加载设置…</LoadingState>
             )}
             {tab === 'shortcuts' && <ShortcutSettings preferences={appearance.preferences} onChange={appearance.onChange} />}
@@ -519,7 +520,9 @@ export function SettingsOverlay({
               <PermissionPolicySettings
                 cwd={permission.cwd}
                 sessionId={permission.sessionId}
+                initialProfiles={data?.permissionProfiles}
                 onPolicyChanged={permission.onPolicyChanged}
+                onProfilesUpdated={(permissionProfiles) => updateData((current) => ({ ...current, permissionProfiles }))}
               />
             )}
             {tab === 'archives' && <ArchivedConversationsSettings {...archives} />}
@@ -527,9 +530,15 @@ export function SettingsOverlay({
             {data && tab === 'tools' && (
               <AgentToolsSettings
                 cwd={skills.workspace}
-                initialSelection={data.agentTools}
+                initialProfiles={data.toolProfiles}
+                mcpServers={data.mcp}
                 onOpenMcp={() => selectPluginSection('mcp')}
-                onSaved={(snapshot) => updateData((current) => ({ ...current, agentTools: snapshot.agentTools }))}
+                onSaved={(snapshot) => updateData((current) => ({
+                  ...current,
+                  ...(snapshot.agentTools ? { agentTools: snapshot.agentTools } : {}),
+                  toolProfiles: snapshot.toolProfiles,
+                  ...(snapshot.temporaryCapabilities ? { temporaryCapabilities: snapshot.temporaryCapabilities } : {}),
+                }))}
               />
             )}
             {data && tab === 'harness' && (
@@ -543,14 +552,32 @@ export function SettingsOverlay({
                 onCompactionRevealed={settingsAnchor === 'harness-compaction' ? clearSettingsAnchor : undefined}
               />
             )}
-            {tab === 'subagents' && <SubagentSettings
-              cwd={skills.workspace}
-              workspaces={skills.workspaces}
-              models={models.models}
-              enabledAgentTools={data?.agentTools.enabled}
-              onOpenAgentTools={() => select('tools')}
-              onWorktreesRevealed={settingsAnchor === 'subagent-worktrees' ? clearSettingsAnchor : undefined}
-            />}
+            {tab === 'agents' && (
+              <AgentsSettings
+                section={agentSection || 'main'}
+                onSectionChange={(section) => void controller.selectAgentSection(section)}
+                cwd={skills.workspace}
+                workspaces={skills.workspaces}
+                models={models.models}
+                toolProfiles={data?.toolProfiles}
+                permissionProfiles={data?.permissionProfiles}
+                harness={data?.harness}
+                temporaryCapabilities={data?.temporaryCapabilities}
+                onToolProfilesChange={(toolProfiles, temporaryCapabilities) => updateData((current) => {
+                  const main = toolProfiles.profiles.find(p => p.id === toolProfiles.activeMainProfileId);
+                  return {
+                    ...current,
+                    toolProfiles,
+                    ...(main ? { agentTools: { enabled: main.enabled, sources: main.sources } } : {}),
+                    ...(temporaryCapabilities ? { temporaryCapabilities } : {}),
+                  };
+                })}
+                onPermissionProfilesChange={(permissionProfiles) => updateData((current) => ({ ...current, permissionProfiles }))}
+                onHarnessChange={(harness) => updateData((current) => ({ ...current, harness }))}
+                onOpenTab={(target) => select(target)}
+                onWorktreesRevealed={settingsAnchor === 'subagent-worktrees' ? clearSettingsAnchor : undefined}
+              />
+            )}
             {tab === 'usage' && <UsageSettings
               active={open}
               includeRemoved={appearance.preferences.usageIncludeRemovedProjects}

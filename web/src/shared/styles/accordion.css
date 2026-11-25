@@ -18,7 +18,10 @@
   list-style: none;
   cursor: pointer;
   user-select: none;
-  transition: background-color var(--transition-fast), color var(--transition-fast);
+  transition:
+    background-color var(--transition-fast),
+    color var(--transition-fast),
+    margin-bottom var(--motion-expand);
 }
 .pi-accordion > .pi-accordion-trigger::marker { content: ''; }
 .pi-accordion > .pi-accordion-trigger::-webkit-details-marker { display: none; }
@@ -42,11 +45,30 @@
 }
 .pi-accordion > .pi-accordion-trigger > .pi-accordion-chevron {
   flex: none; width: var(--icon-sm); height: var(--icon-sm); color: var(--muted);
-  transition: transform var(--transition);
+  transition: transform var(--motion-switch);
 }
 .pi-accordion[open] > .pi-accordion-trigger > .pi-accordion-chevron { transform: rotate(90deg); }
 .pi-accordion.is-compact > .pi-accordion-trigger { min-height: var(--control); padding-block: var(--space-1); font-size: var(--text-sm); }
 .pi-accordion.is-compact[open] > .pi-accordion-trigger { margin-bottom: var(--space-2); }
+
+@supports (interpolate-size: allow-keywords) {
+  @media (prefers-reduced-motion: no-preference) {
+    .pi-accordion { interpolate-size: allow-keywords; }
+    .pi-accordion::details-content {
+      block-size: 0;
+      opacity: 0;
+      overflow: clip;
+      transition:
+        block-size var(--motion-expand),
+        opacity var(--transition),
+        content-visibility var(--motion-expand) allow-discrete;
+    }
+    .pi-accordion[open]::details-content {
+      block-size: auto;
+      opacity: 1;
+    }
+  }
+}
 
 :where(.settings-overlay, .settings-dialog, .detail-overlay) .pi-accordion > .pi-accordion-trigger {
   min-height: var(--settings-row-height);

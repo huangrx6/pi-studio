@@ -17,6 +17,7 @@ const {
   closeStudioDatabase,
   getStudioDatabase,
 } = require('../../electron/main/core/studio-db.cjs');
+const { composerCapabilityCatalog, resolveCapabilityReferences } = require('../../electron/main/runtime/composer-capabilities.cjs');
 const {
   __test,
   closeMcpRuntime,
@@ -152,6 +153,14 @@ test('MCP tools/list_changed refreshes only the connected catalog and clears sta
   assert.deepEqual(deferredNames(), [
     toolName('reload', 'old_tool'),
   ]);
+  const catalog = () => composerCapabilityCatalog(temporary, {
+    tools: runtime.registry.snapshot().tools().map(entry => entry.tool),
+  }, { skills: [] });
+  const service = catalog().find(row => row.option.type === 'mcp-server').option;
+  assert.deepEqual(service, { type: 'mcp-server', id: JSON.stringify(['', 'reload']), name: 'reload',
+    server: 'reload', description: 'Runtime reload fixture', source: '个人配置', methodCount: 1 });
+  const serviceToken = '$[mcp-server:' + encodeURIComponent(service.id) + '|reload]';
+  assert.match(resolveCapabilityReferences(serviceToken, catalog).context, /mcp__reload__old_tool/);
   await waitFor(
     () => deferredNames().includes(toolName('reload', 'new_tool')),
     'the changed MCP tool catalog',
@@ -160,6 +169,16 @@ test('MCP tools/list_changed refreshes only the connected catalog and clears sta
     toolName('reload', 'new_tool'),
   ]);
   assert.deepEqual(mcpSnapshot().errors, []);
+  const refreshed = resolveCapabilityReferences(serviceToken, catalog);
+  assert.equal(refreshed.display, serviceToken);
+  assert.match(refreshed.context, /mcp__reload__new_tool/);
+  assert.match(refreshed.context, /tool_search/);
+  assert.doesNotMatch(refreshed.context, /old_tool/);
+  const methodOption = catalog().find(row => row.option.type === 'mcp').option;
+  assert.equal(methodOption.serverId, service.id);
+  assert.equal(methodOption.id, JSON.stringify(['', 'reload', 'new_tool']));
+  assert.throws(() => resolveCapabilityReferences(serviceToken, () =>
+    composerCapabilityCatalog(temporary, { tools: [] }, { skills: [] })), /MCP 服务当前不可用/);
 
   const server = mcpSnapshot().servers.find((item) => item.name === 'reload');
   assert.match(server.stderr, /fixture token/);
@@ -175,6 +194,7 @@ test('MCP tools/list_changed refreshes only the connected catalog and clears sta
   await reloadMcpServers(runtime);
   assert.equal(registered(), false);
   assert.equal(mcpSnapshot().tools.find(tool => tool.name === method).enabledOverride, false);
+  assert.throws(() => resolveCapabilityReferences(serviceToken, catalog), /MCP 服务当前不可用/);
   getStudioDatabase().setMcpMethodEnabled('reload', 'new_tool', true);
   await reloadMcpServers(runtime);
   assert.equal(registered(), true);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FileKindIcon } from '../../shared/FileKindIcon';
-import { ChevronDown, ChevronRight, ChevronsUpDown, Columns2, FileSearch, Files, MoreHorizontal, RefreshCw, SquareArrowOutUpRight, WrapText } from 'lucide-react';
+import { ChevronRight, ChevronsUpDown, Columns2, FileSearch, Files, MoreHorizontal, RefreshCw, SquareArrowOutUpRight, WrapText } from 'lucide-react';
 import { LoadingState } from '../../shared/LoadingState';
 import { revealFileLabel } from '../../shared/desktop-platform';
 import type { TurnDiff, TurnDiffFile } from '../../types/chat-types';
@@ -131,7 +131,7 @@ export function ChangesView({ sessionId, initial, turns, focusPath, onOpenFile, 
       <div className="changes-scroll" ref={list}>
         {turn.files.map(original => { const file = loaded[original.path] ?? original, open = expanded.has(file.path); return <article className="changes-file" key={file.path} data-diff-path={file.path}>
           <header className="changes-file-head">
-            <button className="changes-file-toggle" aria-expanded={open} onClick={() => toggle(file.path)} title={file.path}>{open ? <ChevronDown /> : <ChevronRight />}<FileKindIcon path={file.path} /><span><small>{file.label.includes('/') ? file.label.slice(0,file.label.lastIndexOf('/')+1) : ''}</small>{file.label.split('/').pop()}</span></button>
+            <button className="changes-file-toggle" aria-expanded={open} onClick={() => toggle(file.path)} title={file.path}><ChevronRight /><FileKindIcon path={file.path} /><span><small>{file.label.includes('/') ? file.label.slice(0,file.label.lastIndexOf('/')+1) : ''}</small>{file.label.split('/').pop()}</span></button>
             <span className="diff-view-counts"><span>+{file.added}</span><span>−{file.removed}</span></span>
             <button className="icon-button" title="在新标签页打开差异" aria-label={`在新标签页打开 ${file.label}`} onClick={() => onOpenDiff(file, turn.at)}><SquareArrowOutUpRight /></button>
             <button className="icon-button" title="文件操作" aria-label={`${file.label} 文件操作`} onClick={event => menuAt(event, [

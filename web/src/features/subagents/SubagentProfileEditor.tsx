@@ -22,7 +22,12 @@ function selectionMode(value: string[] | null): SelectionMode {
 
 function profileSignature(role: SubagentProfile) {
   const overrides = Object.entries(role.runtimeOverrides).sort(([a], [b]) => a.localeCompare(b));
-  return JSON.stringify({ ...role, runtimeOverrides: overrides });
+  return JSON.stringify({
+    ...role,
+    toolProfileId: role.toolProfileId || '',
+    permissionProfileId: role.permissionProfileId || '',
+    runtimeOverrides: overrides,
+  });
 }
 
 const avatarGroups = [
@@ -226,6 +231,10 @@ export function SubagentProfileEditor({ initial, cwd, onClose }: { initial: Suba
         harnessCustomized={Boolean(draft.harnessId)}>
         <div className="role-editor-row role-runtime-wide-field"><span>Harness 配置</span><Select label="角色 Harness 配置" value={draft.harnessId}
           options={selectOptions(resources.harnesses, draft.harnessId, '跟随当前工作区')} onChange={value => update('harnessId', value)} /></div>
+        {resources.toolProfiles && <div className="role-editor-row role-runtime-wide-field"><span>工具方案</span><Select label="角色工具方案" value={draft.toolProfileId || ''}
+          options={selectOptions(resources.toolProfiles, draft.toolProfileId || '', '跟随父智能体')} onChange={value => update('toolProfileId', value || undefined)} /></div>}
+        {resources.permissionProfiles && <div className="role-editor-row role-runtime-wide-field"><span>权限方案</span><Select label="角色权限方案" value={draft.permissionProfileId || ''}
+          options={selectOptions(resources.permissionProfiles, draft.permissionProfileId || '', '跟随当前工作区')} onChange={value => update('permissionProfileId', value || undefined)} /></div>}
       </RoleRuntimeFields>
     </div>}
   </SettingsDialog>{confirmation.dialog}</>;

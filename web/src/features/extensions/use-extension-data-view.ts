@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSurfaceActive } from '../../shared/surface-visibility';
 import type { ExtensionDataViewOpenRequest, ExtensionDataViewSnapshot } from '../../types/extension-types';
 import { acceptsExtensionDataViewSnapshot, type OwnedExtensionDataViewSnapshot } from './extension-data-view-state';
 
 export function useExtensionDataView(
-  { sourceId, cwd, sessionId, modelRef, taskBoardQuery }: ExtensionDataViewOpenRequest,
+  { sourceId, cwd, sessionId, modelRef, viewParams }: ExtensionDataViewOpenRequest,
   beforeClose?: (subscriptionId: string) => Promise<unknown> | undefined,
 ) {
   const surfaceActive = useSurfaceActive();
@@ -15,12 +15,14 @@ export function useExtensionDataView(
   const [attempt, setAttempt] = useState(0);
   const beforeCloseRef = useRef(beforeClose);
   beforeCloseRef.current = beforeClose;
+  const serializedParams = useMemo(() => (viewParams ? JSON.stringify(viewParams) : ''), [viewParams]);
 
   useEffect(() => {
     if (!surfaceActive) return;
     let disposed = false;
     let subscriptionId = '';
     const early = new Map<string, ExtensionDataViewSnapshot>();
+    const parsedParams = serializedParams ? JSON.parse(serializedParams) as Record<string, unknown> : undefined;
     setLoading(!current.current);
     setError('');
 
@@ -42,7 +44,7 @@ export function useExtensionDataView(
       await beforeCloseRef.current?.(id)?.catch(() => {});
       await window.piApi.closeExtensionDataView(id).catch(() => {});
     };
-    void window.piApi.openExtensionDataView({ sourceId, cwd, sessionId, modelRef, taskBoardQuery }).then(opened => {
+    void window.piApi.openExtensionDataView({ sourceId, cwd, sessionId, modelRef, viewParams: parsedParams }).then(opened => {
       subscriptionId = opened.subscriptionId;
       if (disposed) {
         void close(subscriptionId);
@@ -62,7 +64,7 @@ export function useExtensionDataView(
       off();
       if (subscriptionId) void close(subscriptionId);
     };
-  }, [attempt, cwd, modelRef, sessionId, sourceId, surfaceActive, taskBoardQuery]);
+  }, [attempt, cwd, modelRef, serializedParams, sessionId, sourceId, surfaceActive]);
 
   return { owned, loading, error, retry: () => setAttempt(current => current + 1) };
 }

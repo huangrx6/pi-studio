@@ -1,5 +1,6 @@
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import { ActionMenu } from './ActionMenu';
+import { useSettingsToast } from './SettingsToast';
 
 export type ImageCopyTarget = {
   src: string;
@@ -35,6 +36,7 @@ export function ImageContextMenu({
   menu: ImageContextMenuState;
   onClose: () => void;
 }) {
+  const showToast = useSettingsToast();
   return <ActionMenu
     x={menu.x}
     y={menu.y}
@@ -43,13 +45,7 @@ export function ImageContextMenu({
       label: '复制图片',
       run: () => {
         void window.piApi.copyImage({ src: menu.src }).catch((copyError) => {
-          window.dispatchEvent(new CustomEvent('pi-studio:notify', {
-            detail: {
-              tone: 'error',
-              title: '复制图片失败',
-              message: copyError instanceof Error ? copyError.message : String(copyError),
-            },
-          }));
+          showToast(copyError instanceof Error ? copyError.message : String(copyError), 'error');
         });
       },
     }]}

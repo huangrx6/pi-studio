@@ -38,7 +38,6 @@ function renderHeader(showTrace, isNewConversation = false, panelExpanded = fals
     react: React,
     'lucide-react': icons,
     '../shared/LoadingState': { LoadingIndicator: () => null },
-    './NotificationCenter': { NotificationCenter: () => null },
     './ShellLayout': shellLayout,
     '../features/git/GitBranchPicker': { GitBranchPicker: () => null },
     '../features/git/GitRepositoryPicker': { GitRepositoryPicker: () => null },
@@ -49,11 +48,6 @@ function renderHeader(showTrace, isNewConversation = false, panelExpanded = fals
     isNewConversation,
     title: '会话',
     extensionMenu: React.createElement('button', { 'aria-label': '扩展' }),
-    notifications: [],
-    onMarkAllRead() {},
-    onClearNotifications() {},
-    onOpenNotificationSession: async () => {},
-    onRunNotificationAction: async () => {},
     panelExpanded,
     onOpenPanel() {},
     onOpenProgress() {},
@@ -67,6 +61,7 @@ test('the trace entry follows the code work view setting independently of extens
   assert.doesNotMatch(renderHeader(false), /aria-label="轨迹"/);
   assert.match(renderHeader(true), /aria-label="轨迹"/);
   assert.match(renderHeader(false), /aria-label="扩展"/);
+  assert.doesNotMatch(renderHeader(true), /notification-trigger|aria-label="通知"/);
 });
 
 test('drafts retain extensions while progress and trace require a conversation', () => {

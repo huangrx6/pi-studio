@@ -32,9 +32,10 @@ export function ConversationImagePreview(props: Parameters<typeof LazyConversati
   </Suspense>;
 }
 
-export function ConversationImageGallery({ images, className = '' }: {
+export function ConversationImageGallery({ images, className = '', inAttachmentStrip = false }: {
   images: ConversationImage[];
   className?: string;
+  inAttachmentStrip?: boolean;
 }) {
   const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const [contextMenu, setContextMenu] = useState<ImageContextMenuState | null>(null);
@@ -47,7 +48,7 @@ export function ConversationImageGallery({ images, className = '' }: {
       className="conversation-image-strip"
       role="group"
       aria-label={`${images.length} 张图片`}
-      tabIndex={images.length > 1 ? 0 : undefined}
+      tabIndex={!inAttachmentStrip && images.length > 1 ? 0 : undefined}
     >
       {images.map((image, index) => <button
         key={`${index}-${image.src.slice(-32)}`}
@@ -68,8 +69,8 @@ export function ConversationImageGallery({ images, className = '' }: {
           draggable={false}
           onLoad={() => setReady((current) => (current[index] ? current : { ...current, [index]: true }))}
         />
-        {images.length > 1 && <span className="conversation-image-index" aria-hidden="true">{index + 1}</span>}
-        <span className="conversation-image-expand" aria-hidden="true"><Maximize2 /></span>
+        {!inAttachmentStrip && images.length > 1 && <span className="conversation-image-index" aria-hidden="true">{index + 1}</span>}
+        {!inAttachmentStrip && <span className="conversation-image-expand" aria-hidden="true"><Maximize2 /></span>}
       </button>)}
     </div>
 

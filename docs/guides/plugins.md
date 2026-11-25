@@ -6,14 +6,14 @@
 
 在聊天输入框输入 `$`，切到「插件」并选中 **Excalidraw**，再输入绘图需求。插件引用随消息发送。Studio 会在发送时根据当前启用的资源提供对应工具和技能，工具调用沿用聊天的权限设置。
 
-画布显示「已保存到当前聊天」后，重新打开同一聊天即可继续编辑。默认保存目录是 `~/.pi-studio/plugin-data/studio.excalidraw/studio.excalidraw/`，文件名为 `<内部会话 ID>.excalidraw.json`。Agent 可以通过 `excalidraw_read` 读取当前会话的画布。画布菜单中的「重置画布」会保存空白场景。要另存独立文件，点击画布工具栏的「导出 Excalidraw 文件」。
+画布显示「已保存到当前聊天」后，重新打开同一聊天即可继续编辑。默认保存目录是 `~/.pi-studio/data/plugin-data/studio.excalidraw/studio.excalidraw/sessions/`，文件名为 `<内部会话 ID>.excalidraw.json`（兼容读取旧版根目录文件）。Agent 可以通过 `excalidraw_read` 读取当前会话的画布。画布菜单中的「清除画布」会保存空白场景。要另存独立文件，点击画布工具栏的「导出 Excalidraw 文件」。
 
-归档会话保留画布。永久删除会话会清理该画布及其中嵌入的图片。应用会清理已停用或已卸载的 Excalidraw 留在 Studio 受管目录中的画布。文件删除遇到磁盘错误时，Studio 会在下次启动时重试。导出的文件由用户管理。
+归档会话保留画布。永久删除会话会按扩展数据目录下的 `sessions/<conversationId>.*` 通用约定清理会话文件与嵌入图片。前端编辑器、播放动画与场景校验已完全打包在插件自身的 `extension/ui/` 内，卸载后主应用零残留。导出的文件由用户管理。
 
 | 用途 | 入口 |
 | --- | --- |
-| 侧栏中实时绘图 | 插件的 `excalidraw-live-canvas` 技能和 Studio 绘图工具 |
-| 按规格制图、校验布局和交付源文件 | 插件内置的完整 `diagram-authoring` 技能，支持 Excalidraw、Draw.io 与 Mermaid |
+| 侧栏中实时绘图 | 插件的 `diagram-authoring` 技能和 Studio 绘图工具 |
+| 按规格制图、校验布局和交付源文件 | 同一份随包 `diagram-authoring` 技能，支持 Excalidraw、Draw.io 与 Mermaid |
 | 从 Mermaid 文本开始 | 画布工具栏的「从 Mermaid 导入」，转换为可编辑的 Excalidraw 元素 |
 | 编辑 Draw.io 原生文件 | 使用 Draw.io。如果需要在侧栏继续编辑同一张技术图，可用同一规格重新生成 Excalidraw 版本 |
 
@@ -23,9 +23,18 @@
 
 ## 全局任务看板
 
-从「设置 → 插件 → 官方精选」安装任务看板。在工作台的「插件」分组或通过 `/taskboard` 打开。可以新增和编辑任务、拖动卡片调整状态，并记录优先级、计划与实际起止时间。
+从「设置 → 插件 → 官方精选」安装任务看板。在工作台的「插件」分组或通过 `/taskboard` 打开。看板、归档视图与编辑弹窗均运行在插件自身的 `extension/ui/` 沙箱视图内，支持：
 
-各会话和工作区打开同一份看板，数据存入 `~/.pi-studio/plugin-data/studio.task-board/studio.task-board/tasks.sqlite`。Agent 可以用 `task_board_list` 按状态和日期查询，或用 `task_board_get` 读取完整详情。[任务看板使用说明](../../assets/official-plugins/packages/task-board/README.md)
+- **任务分类与多项目关联**：支持需求、Bug、优化、常规任务四种类型（新建仅填标题即可保存，默认常规任务）；支持单/多项目关联，便于跟踪跨项目对接任务。
+- **自动时间与进展记录**：拖入「进行中」自动记录实际开始时间，拖入「已完成」自动记录实际完成时间；详情弹窗内保留状态流转与随手记进展的时间线。
+- **归档与恢复**：已完成卡片先留在看板方便核对，支持单张归档或列标题「批量归档已完成」；「归档」页支持按标题、类型、关联项目和完成日期检索，并支持「恢复到看板」或「重新打开」。
+- **临时会话 AI 梳理日报/周报**：各会话和工作区共享同一份 `~/.pi-studio/data/plugin-data/studio.task-board/studio.task-board/tasks.sqlite`。插件提供只读工具 `task_board_list`、`task_board_get`、`task_board_summary` 以及 `task-board-reporting` 技能，在临时会话或任意会话中均可按指定周期与项目梳理日报或周报，不污染其他会话上下文。[任务看板使用说明](../../assets/official-plugins/packages/task-board/README.md)
+
+## 全局知识库
+
+在「设置 → 插件 → 官方精选」安装「知识库」。从右侧工作台的插件入口或通过 `/notes` 打开。首次选择已有的 notes 目录即可阅读、编辑和搜索。左侧是目录与搜索。主题应用于整个知识库，右侧大纲可以拖动调整宽度。已有目录可以同时作为普通工作区访问。
+
+文件和附件保存在所选目录。插件配置与待保存的草稿单独写在 `studio.notes-library` 的插件数据目录。补齐 PARA 目录和规范需要在面板内主动执行，沿用已有分类名。临时聊天可读取笔记，常规会话也可按工具权限写入。[使用说明](../../assets/official-plugins/packages/notes-library/README.md)
 
 ## 插件与基础资源
 
@@ -33,12 +42,12 @@
 
 ```text
 ~/.pi-studio/
-├── plugins/<plugin-id>/<version>/             # 安装包
-├── plugins/<plugin-id>/skills/                # 插件托管的技能
-└── plugin-data/<plugin-id>/<manifest-id>/      # 插件内扩展的运行数据
+├── plugins/<plugin-id>/<version>/                  # 安装包
+├── plugins/<plugin-id>/skills/                     # 插件托管的技能
+└── data/plugin-data/<plugin-id>/<manifest-id>/     # 插件内扩展的运行数据
 ```
 
-扩展从 `activate(context)` 获取 `context.dataDirectory`。升级和重装使用同一个数据目录，停用和卸载时保留已有数据。安装包里的代码按版本管理。会话归属由具体插件的数据格式决定，Studio 目前按已知存储规则清理 Excalidraw 的会话画布。独立安装的扩展使用[扩展目录约定](../extensions/README.md)。
+扩展从 `activate(context)` 获取 `context.dataDirectory`。升级和重装使用同一个数据目录，停用和卸载时保留已有数据。安装包里的代码按版本管理。插件若按会话存盘，可把会话文件放在 `<dataDirectory>/sessions/<conversationId>.*`，永久删除会话时 Studio 会按这一通用约定自动清理，无需在宿主硬编码任何插件 ID。独立安装的扩展使用[扩展目录约定](../extensions/README.md)。
 
 本文是 Pi Studio **可安装能力** 与 **界面落点** 的约定入口。它回答四件事：
 
@@ -104,7 +113,7 @@
 
 - 不替代 Durable 会话、权限策略、模型凭据。
 - 不执行 `postinstall`、不跑任意 shell 安装脚本（与扩展发行一致：先隔离再校验）。
-- 不把 HTML/JS/CSS 注入渲染进程（UI 仍只能是声明式 JSON）。
+- 不把未受控代码直接注入主渲染进程 DOM（独立交互界面必须通过 `panel.view` 声明并由 `pi-ext://` + `iframe sandbox` 隔离渲染，普通声明式面板走 JSON）。
 - 不把全网 MCP 目录镜像进官方源。
 
 ---

@@ -29,7 +29,7 @@ test('a restarted Studio archives exact parent and nested-agent inputs and deliv
     const record = { id, kind: role === 'user' ? 'studio.user' : 'pi.' + role, data, model: [{ role, content, ...other }] };
     studio.db.prepare('INSERT INTO durable_entries(id,conversation_id,commit_seq,record) VALUES(?,?,?,?)').run(id, owner, id, JSON.stringify(record));
   };
-  const draft = path.join(root, 'attachments', 'draft');
+  const draft = path.join(root, 'data', 'attachments', 'draft');
   fs.mkdirSync(draft, { recursive: true });
   const original = path.join(draft, '7a4ee083-316f-47eb-ac83-31e88b027c13-资料.pdf');
   fs.writeFileSync(original, 'original upload');
@@ -50,8 +50,8 @@ test('a restarted Studio archives exact parent and nested-agent inputs and deliv
   studio = createStudioDatabase(filename);
   prepareAssetArchive(studio);
   while (await archiveNextEntry(studio, root)) { /* drain persisted journal */ }
-  const [project] = fs.readdirSync(path.join(root, 'attachments', 'projects'));
-  const sessions = path.join(root, 'attachments', 'projects', project, 'sessions');
+  const [project] = fs.readdirSync(path.join(root, 'data', 'attachments', 'projects'));
+  const sessions = path.join(root, 'data', 'attachments', 'projects', project, 'sessions');
   const parentDir = path.join(sessions, parent.publicId), child = path.join(parentDir, 'agents', '13');
   const manifest = (dir, side, id) => JSON.parse(fs.readFileSync(path.join(dir, side, String(id), 'manifest.json'), 'utf8'));
   const inputs = manifest(parentDir, 'inputs', 501).files;

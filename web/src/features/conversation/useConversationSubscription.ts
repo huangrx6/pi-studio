@@ -5,7 +5,6 @@ import type { ChatMessage, RequestTrace, TurnDiff } from '../../types/chat-types
 import type { ConversationEvent, ConversationSnapshot } from '../../types/durable-types';
 import type { LongTaskState } from '../../types/durable-types';
 import type { ModelSelection } from '../../types/model-types';
-import type { NotificationTone } from '../../shell/NotificationCenter';
 import { errorText } from '../../shared/error-text';
 import { eventSaysConversationRunning } from './conversation-activity';
 import type { OutlineData, OutlineItem } from './outline-model';
@@ -44,7 +43,6 @@ type ConversationSubscriptionOptions = {
   loadState: () => Promise<void>;
   refreshSubagentChildren: (showSpinner?: boolean) => Promise<void>;
   refreshOutline: (sessionId: string, generation?: number) => Promise<OutlineData | undefined>;
-  pushNotification: (message: string, tone?: NotificationTone, title?: string, sessionId?: string) => void;
   setBusy: Dispatch<SetStateAction<boolean>>;
   setStoppingSessionIds: Dispatch<SetStateAction<string[]>>;
   setRequestTraces: Dispatch<SetStateAction<RequestTrace[]>>;
@@ -77,7 +75,6 @@ export function useConversationSubscription({
   loadState,
   refreshSubagentChildren,
   refreshOutline,
-  pushNotification,
   setBusy,
   setStoppingSessionIds,
   setRequestTraces,
@@ -286,7 +283,6 @@ export function useConversationSubscription({
           if (!streamRunActive) clearStopping();
           const message = failure || event.payload.message || '执行失败，请检查原因后继续';
           setError(message);
-          pushNotification(message, 'error', '会话执行失败', conversationId);
           if (event.payload.running) void loadState().catch(() => {});
           void refreshSubagentChildren(false);
           return;
@@ -305,7 +301,6 @@ export function useConversationSubscription({
           setCompaction({ active: false });
           if (typeof event.payload.error === 'string' && event.payload.error) {
             setError(event.payload.error);
-            pushNotification(event.payload.error, 'error', '上下文压缩未完成', conversationId);
           }
           return;
         case 'turn.diff':

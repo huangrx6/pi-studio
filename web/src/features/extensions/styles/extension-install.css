@@ -84,7 +84,7 @@
   background: var(--surface-hover);
   color: var(--text);
 }
-.extension-picker-icon {
+.extension-source-picker-icon {
   display: grid;
   place-items: center;
   flex: none;
@@ -94,7 +94,7 @@
   background: var(--surface-soft);
   color: var(--accent-foreground);
 }
-.extension-picker-icon svg { width: var(--icon-md); height: var(--icon-md); }
+.extension-source-picker-icon svg { width: var(--icon-md); height: var(--icon-md); }
 .extension-selected-source {
   grid-column: 1 / -1;
   display: flex;

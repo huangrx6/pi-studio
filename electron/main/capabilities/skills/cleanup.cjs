@@ -1,4 +1,5 @@
 const fs = require('node:fs');
+const path = require('node:path');
 const pending = new Map();
 
 // Only committed internal staging/backup paths enter this queue. Never discover
@@ -30,7 +31,14 @@ function retryCommittedSkillCleanup() {
 
 // rmdir succeeds only after every concurrently prepared preview has released its files.
 function removeEmptyQuarantine(directory) {
-  try { fs.rmdirSync(directory); } catch { /* a current preview may still own it */ }
+  try { fs.rmdirSync(directory); } catch { return; }
+  const quarantineParent = path.dirname(directory);
+  if (path.basename(quarantineParent) !== 'quarantine') return;
+  try { fs.rmdirSync(quarantineParent); } catch { return; }
+  const cacheParent = path.dirname(quarantineParent);
+  if (path.basename(cacheParent) === 'cache') {
+    try { fs.rmdirSync(cacheParent); } catch { /* cache may hold model-catalogs */ }
+  }
 }
 
 module.exports = { cleanupCommittedSkillDirectory, retryCommittedSkillCleanup, removeEmptyQuarantine };

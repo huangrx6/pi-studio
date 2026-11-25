@@ -885,7 +885,7 @@ test('project installs keep code in the workspace and state/data outside it', as
   });
   assert.ok(installed.activeCodePath.startsWith(path.join(fs.realpathSync(workspace), '.pi-studio', 'extensions')));
   assert.ok(installed.dataPath.startsWith(
-    path.join(fs.realpathSync(path.join(root, 'user-data')), 'extension-data'),
+    path.join(fs.realpathSync(path.join(root, 'user-data')), 'data', 'extension-data'),
   ));
   assert.equal(installed.workspace, fs.realpathSync(workspace));
   assert.equal(distribution.listInstalled('project', workspace).length, 1);
@@ -916,9 +916,9 @@ test('project installs reject a managed extension root symlink that escapes the 
 test('prepare rejects a quarantine root symlink that escapes application data', async (t) => {
   const root = temporaryRoot(t);
   const outside = path.join(root, 'outside');
-  fs.mkdirSync(path.join(root, 'user-data', 'extension-cache'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'user-data', 'cache', 'quarantine'), { recursive: true });
   fs.mkdirSync(outside);
-  if (!createDirectorySymlink(t, outside, path.join(root, 'user-data', 'extension-cache', 'quarantine'))) return;
+  if (!createDirectorySymlink(t, outside, path.join(root, 'user-data', 'cache', 'quarantine', 'extensions'))) return;
 
   const source = writeExtension(path.join(root, 'source')).root;
   const distribution = service(root);
@@ -932,9 +932,9 @@ test('prepare rejects a quarantine root symlink that escapes application data', 
 test('prepare rejects an install state symlink that escapes application data', async (t) => {
   const root = temporaryRoot(t);
   const outside = path.join(root, 'outside');
-  fs.mkdirSync(path.join(root, 'user-data'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'user-data', 'data'), { recursive: true });
   fs.mkdirSync(outside);
-  if (!createDirectorySymlink(t, outside, path.join(root, 'user-data', 'extension-state'))) return;
+  if (!createDirectorySymlink(t, outside, path.join(root, 'user-data', 'data', 'extension-state'))) return;
 
   const source = writeExtension(path.join(root, 'source')).root;
   const distribution = service(root);
@@ -948,9 +948,9 @@ test('prepare rejects an install state symlink that escapes application data', a
 test('install rejects an extension data symlink that escapes application data', async (t) => {
   const root = temporaryRoot(t);
   const outside = path.join(root, 'outside');
-  fs.mkdirSync(path.join(root, 'user-data', 'extension-data'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'user-data', 'data', 'extension-data'), { recursive: true });
   fs.mkdirSync(outside);
-  if (!createDirectorySymlink(t, outside, path.join(root, 'user-data', 'extension-data', 'user'))) return;
+  if (!createDirectorySymlink(t, outside, path.join(root, 'user-data', 'data', 'extension-data', 'user'))) return;
 
   const source = writeExtension(path.join(root, 'source')).root;
   const distribution = service(root);

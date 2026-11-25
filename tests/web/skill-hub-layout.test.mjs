@@ -1,10 +1,21 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { sourceStatusLabel } from '../../web/src/features/skills/skill-catalog.ts';
 
 const css = readFileSync('web/src/features/skills/styles/skill-hub.css', 'utf8');
 const source = readFileSync('web/src/features/skills/SkillHub.tsx', 'utf8');
 const catalog = readFileSync('web/src/features/skills/SkillCatalogDialog.tsx', 'utf8');
+
+test('skill counts are shown only for successfully read, enabled sources', () => {
+  const source = { enabled: true, lastError: '' };
+  assert.equal(sourceStatusLabel(source, 0, false), '0 个技能');
+  assert.equal(sourceStatusLabel(source, 9, false), '9 个技能');
+  const failed = { ...source, lastError: '读取失败的原因' };
+  assert.equal(sourceStatusLabel(failed, 0, false), '读取失败');
+  assert.equal(sourceStatusLabel(failed, 0, true), '正在读取…');
+  assert.equal(sourceStatusLabel({ ...failed, enabled: false }, 0, true), '已停用');
+});
 
 test('the skill hub loading state stays frameless in the overview and install preview', () => {
   assert.match(source, /<LoadingState variant="section">正在读取技能源/);

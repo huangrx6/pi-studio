@@ -185,8 +185,8 @@
   pointer-events: none;
 }
 .plugin-catalog-filters > .pi-select { flex: 0 1 10rem; min-width: min(100%, 8.5rem); max-width: 100%; }
-.plugin-catalog-feedback, .plugin-source-load-error { padding-block: var(--space-2); font: var(--settings-preference-body-font); }
-.plugin-catalog-feedback p, .plugin-source-load-error p { margin: 0 0 var(--space-2); overflow-wrap: anywhere; }
+.plugin-source-load-error { padding-block: var(--space-2); font: var(--settings-preference-body-font); }
+.plugin-source-load-error p { margin: 0 0 var(--space-2); overflow-wrap: anywhere; }
 .plugin-catalog-errors { border-top: 1px solid var(--divider); }
 .plugin-catalog-errors ul { list-style: none; margin: 0; padding: 0 0 var(--space-3); }
 .plugin-catalog-errors li { display: grid; gap: var(--space-1); padding-block: var(--space-2); overflow-wrap: anywhere; }

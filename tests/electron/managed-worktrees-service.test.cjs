@@ -247,7 +247,8 @@ test('worktree cleanup never follows a replaced root into another disk', async t
   fs.mkdirSync(saved, { recursive: true });
   const database = createStudioDatabase(path.join(dir, 'studio.sqlite'));
   t.after(() => database.close());
-  fs.symlinkSync(external, path.join(dir, 'worktrees'), 'junction');
+  fs.mkdirSync(path.join(dir, 'data'), { recursive: true });
+  fs.symlinkSync(external, path.join(dir, 'data', 'worktrees'), 'junction');
   await assert.rejects(cleanupManagedWorktrees({ database, userDataPath: dir }), /根目录已被替换/);
   assert.equal(fs.existsSync(saved), true);
 });

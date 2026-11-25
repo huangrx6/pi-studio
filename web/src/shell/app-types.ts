@@ -1,4 +1,9 @@
-import type { AgentToolSelection } from '../types/agent-tool-types';
+import type {
+  AgentToolSelection,
+  TemporaryCapabilitiesSnapshot,
+  ToolProfilesSnapshot,
+} from '../types/agent-tool-types';
+import type { PermissionProfilesSnapshot } from '../types/permission-types';
 import type { TurnDiff, TurnDiffFile } from '../types/chat-types';
 import type { ConversationSummary } from '../types/durable-types';
 import type { ExtensionHostSnapshot } from '../types/extension-types';
@@ -104,6 +109,9 @@ export type SettingsSnapshot = {
   extensionRegistryUrl: string;
   enabledModels: string[];
   agentTools: AgentToolSelection;
+  toolProfiles: ToolProfilesSnapshot;
+  permissionProfiles: PermissionProfilesSnapshot;
+  temporaryCapabilities?: TemporaryCapabilitiesSnapshot;
   harness: HarnessSettingsSnapshot;
   storagePath: string;
   runtimeVersions: StudioRuntimeVersions;

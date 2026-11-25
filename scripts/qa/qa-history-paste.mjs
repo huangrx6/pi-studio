@@ -1,6 +1,6 @@
 import { composerValue, selectComposerRange } from './fixtures/composer-editor.mjs';
 /**
- * Focused browser QA for the one-pass transcript load and long-paste attachments.
+ * Focused browser QA for windowed transcript navigation and long-paste attachments.
  *
  * Run the Vite server first:
  *   pnpm run web
@@ -43,9 +43,9 @@ await page.addInitScript(() => {
         role: 'assistant',
         timestamp: index + 1,
         content: [{ type: 'text', text: `第 ${(index + 1) / 2} 个回答\n\n这里是一段用于形成真实滚动高度的回复内容。` }],
-      }).map((message, sourceIndex) => ({ ...message, sourceIndex }));
-  const outlineItems = allMessages.flatMap((message, sourceIndex) => message.role === 'user'
-    ? [{ sourceIndex, text: message.content[0].text, timestamp: message.timestamp }]
+      }).map((message, index) => ({ ...message, sourceIndex: index + 1 }));
+  const outlineItems = allMessages.flatMap(message => message.role === 'user'
+    ? [{ sourceIndex: message.sourceIndex, text: message.content[0].text, timestamp: message.timestamp }]
     : []);
   const sessionSummary = {
     id: 'history-session',
@@ -64,15 +64,24 @@ await page.addInitScript(() => {
   window.__savedPastes = [];
   window.__openedFiles = [];
 
-  // 消息列表不再分页：一次调用就返回整段历史。
-  const historyPayload = () => {
-    const start = 0;
+  // Each fixture turn occupies two consecutive Durable entry IDs, starting at one.
+  const historyPayload = ({ turnLimit, before, after, around }) => {
+    window.__historyCalls.push({ turnLimit, before, after, around });
+    const turnOf = entryId => Math.floor((entryId - 1) / 2);
+    const turns = totalMessages / 2;
+    let end = turns;
+    if (before) end = turnOf(before.entryId);
+    let start = Math.max(0, end - turnLimit);
+    if (after) start = turnOf(after.entryId) + 1;
+    if (around !== undefined) start = Math.max(0, Math.min(turns - turnLimit, turnOf(around) - Math.floor(turnLimit / 2)));
+    end = Math.min(end, start + turnLimit);
+    const messages = allMessages.slice(2 * start, 2 * end);
     return {
       ...sessionSummary,
       model,
-      messages: allMessages,
-      page: { hasOlder: false },
-      messageStart: start,
+      messages,
+      page: { hasOlder: start > 0, hasNewer: end < turns },
+      messageStart: messages[0]?.sourceIndex,
       running: false,
       requestId: '',
       compacting: false,
@@ -101,10 +110,7 @@ await page.addInitScript(() => {
     composerResources: async () => ({ commands: [], skills: [] }),
     extensionsUi: async () => ({ items: [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
     modeGet: async () => ({ available: false, mode: 'smart' }),
-    conversationPage: async ({ limit } = {}) => {
-      window.__historyCalls.push({ limit });
-      return historyPayload();
-    },
+    conversationPage: async request => historyPayload(request),
     conversationOutline: async id => {
       window.__outlineCalls += 1;
       return { id, items: outlineItems, totalMessages };
@@ -175,20 +181,6 @@ async function scrollTranscript(top) {
   }, top);
 }
 
-async function assertOutlineFits() {
-  const metrics = await page.locator('.outline-track').evaluate(track => {
-    const bounds = track.getBoundingClientRect();
-    const ticks = Array.from(track.querySelectorAll('.outline-tick'), tick => {
-      const rect = tick.getBoundingClientRect();
-      return { top: rect.top, bottom: rect.bottom };
-    });
-    return { top: bounds.top, bottom: bounds.bottom, ticks };
-  });
-  assert.ok(metrics.ticks.length <= 12, `outline rendered ${metrics.ticks.length} ticks`);
-  assert.ok(metrics.ticks.every(tick => tick.top >= metrics.top && tick.bottom <= metrics.bottom),
-    'outline ticks must stay inside the conversation rail');
-}
-
 try {
   await page.goto(process.env.PREVIEW_URL || 'http://127.0.0.1:5180');
 
@@ -202,29 +194,34 @@ try {
     await page.waitForFunction(() => window.__historyCalls.length === 1 && window.__outlineCalls === 1);
   }
 
-  // 整段历史一次性载入，但 DOM 只挂载最近一窗；大纲仍覆盖首尾。
+  // The initial request mounts only the latest window. The outline uses its own scroll viewport.
   await openHistorySession();
+  await page.locator('#chat-turn-449').waitFor();
+  const initialLimit = await page.evaluate(() => window.__historyCalls[0].turnLimit);
   const mountedTurns = await page.locator('.message.user').count();
-  assert.ok(mountedTurns > 0 && mountedTurns < 225, `only a window of turns is mounted (${mountedTurns}/225)`);
+  assert.ok(initialLimit > 0 && initialLimit < 225);
+  assert.equal(mountedTurns, initialLimit, 'only the requested turn window mounts');
   assert.equal(await page.locator('.history-loading').count(), 0, 'no incremental loading placeholder');
-  assert.equal(await page.locator('.outline-tick').count(), 12, 'outline should remain visually bounded');
-  assert.equal(await page.locator('.outline-tick').first().getAttribute('aria-label'), '跳转到第 1 条提问');
-  assert.equal(await page.locator('.outline-tick').last().getAttribute('aria-label'), '跳转到第 225 条提问');
-  await assertOutlineFits();
+  const track = page.locator('.outline-track');
+  await track.getByRole('button', { name: '跳转到第 225 条提问', exact: true }).waitFor();
+  assert.ok(await track.locator('.outline-tick').count() < 225, 'the outline mounts only its visible band and overscan');
+  assert.ok(await track.evaluate(node => node.scrollHeight > node.clientHeight));
   await page.screenshot({ path: `${output}outline-compact.png`, animations: 'disabled' });
 
-  // 点第一条刻度直接跳过去，不再触发任何历史请求。
-  await page.locator('.outline-tick').first().click();
-  await page.locator('#chat-turn-0').waitFor();
+  await track.evaluate(node => node.scrollTo({ top: 0, behavior: 'instant' }));
+  await track.getByRole('button', { name: '跳转到第 1 条提问', exact: true }).click();
+  await page.locator('#chat-turn-1').waitFor();
   await page.waitForFunction(() => {
     const container = document.querySelector('.chat-scroll');
-    const target = document.querySelector('#chat-turn-0');
+    const target = document.querySelector('#chat-turn-1');
     if (!container || !target) return false;
     const containerRect = container.getBoundingClientRect();
     const targetRect = target.getBoundingClientRect();
-    return targetRect.top >= containerRect.top - 1 && targetRect.top <= containerRect.top + 40;
+    return targetRect.top >= containerRect.top - 1 && targetRect.bottom <= containerRect.bottom
+      && document.querySelector('.outline-tick[aria-current="location"]')?.getAttribute('aria-label') === '跳转到第 1 条提问';
   });
-  assert.equal(await page.evaluate(() => window.__historyCalls.length), 1, 'the jump reuses the loaded transcript');
+  assert.ok(await page.evaluate(() => window.__historyCalls.some(request => request.around === 1)), 'the jump requests the target window');
+  assert.equal(await page.locator('.message.user').count(), initialLimit);
   await page.screenshot({ path: `${output}outline-jump.png`, animations: 'disabled' });
 
   // 顶部滚动不再请求历史：没有任何待加载的更早内容。
@@ -246,12 +243,17 @@ try {
   assert.equal(await composerValue(composer), 'typed-');
   assert.equal(await page.evaluate(() => window.__savedPastes[0].text), pasted);
 
-  const attachment = page.getByRole('button', { name: '在右侧面板查看 long-paste.txt' });
+  const rail = page.getByRole('group', { name: '待发送附件' });
+  const attachment = rail.getByRole('button', { name: '在右侧面板查看 long-paste.txt' });
   await attachment.waitFor();
-  await attachment.locator('.attachment-open-cue').waitFor();
+  assert.ok(await rail.evaluate(node => {
+    const input = node.closest('.composer-wrap')?.querySelector('.composer');
+    return input && !input.contains(node) && node.getBoundingClientRect().bottom <= input.getBoundingClientRect().top;
+  }), 'long-paste attachments sit above the composer');
   await attachment.click();
-  await page.locator('.file-code').waitFor();
-  assert.match(await page.locator('.file-code').innerText(), /PPPP/);
+  const fileText = page.locator('.panel-file-preview .file-preview-code pre code');
+  await fileText.waitFor();
+  assert.equal((await fileText.innerText()).trim(), pasted);
   assert.deepEqual(await page.evaluate(() => window.__openedFiles), ['/var/tmp/pi-studio-long-paste.txt']);
 
   for (const theme of ['light', 'dark']) {
@@ -260,7 +262,7 @@ try {
   }
 
   assert.deepEqual(errors, []);
-  console.log('PASS: the transcript loads in one pass, every outline tick jumps to its turn, and oversized pasted batches stay isolated.');
+  console.log('PASS: bounded transcript and outline windows, first-turn navigation, and oversized paste attachments above the editor.');
 } catch (error) {
   await page.screenshot({ path: `${output}failure.png`, animations: 'disabled' });
   throw error;

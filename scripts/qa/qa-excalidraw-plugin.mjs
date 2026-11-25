@@ -25,7 +25,7 @@ const launch = () => launchTestDesktop(workspace, profile, 1450, 950, {
 await Promise.all([output, profile, workspace].map(directory => mkdir(directory, { recursive: true })));
 
 const spec = JSON.parse(await readFile(new URL(
-  '../../assets/official-plugins/packages/excalidraw/extension/skills/excalidraw-live-canvas/examples/flow/source.diagram.json',
+  '../../assets/official-plugins/packages/excalidraw/extension/skills/diagram-authoring/examples/flow/source.diagram.json',
   import.meta.url,
 ), 'utf8'));
 let offeredTools = [];
@@ -114,9 +114,107 @@ async function checkPenMotion(page) {
   }));
 }
 
+async function setAppTheme(page, theme) {
+  await page.emulateMedia({ colorScheme: theme });
+  await page.waitForFunction(mode => document.documentElement.dataset.theme === mode, theme);
+}
+
+async function expectCanvasTheme(panel, theme) {
+  await panel.locator(`.extension-canvas-editor[data-theme="${theme}"] .excalidraw${theme === 'dark' ? '.theme--dark' : ':not(.theme--dark)'}`).waitFor();
+}
+
+async function chooseCanvasTheme(page, panel, mode, previous) {
+  await panel.getByRole('button', { name: '画板外观', exact: true }).click();
+  await page.getByRole('menuitemcheckbox', { name: previous, exact: true, checked: true }).waitFor();
+  await page.getByRole('menuitemcheckbox', { name: mode, exact: true }).click();
+}
+
+async function checkCanvasAppearance(page, panel) {
+  await setAppTheme(page, 'light');
+  await expectCanvasTheme(panel, 'light');
+  await setAppTheme(page, 'dark');
+  await expectCanvasTheme(panel, 'dark');
+  await chooseCanvasTheme(page, panel, '浅色', '跟随应用');
+  await expectCanvasTheme(panel, 'light');
+  await setAppTheme(page, 'light');
+  await setAppTheme(page, 'dark');
+  await expectCanvasTheme(panel, 'light');
+  await panel.getByRole('button', { name: '画板外观', exact: true }).click();
+  await page.getByRole('menuitemcheckbox', { name: '浅色', exact: true, checked: true }).waitFor();
+  assert.equal(await panel.locator('.extension-canvas-toolbar').evaluate(node => getComputedStyle(node).colorScheme), 'light');
+  assert.equal(await page.getByRole('menu', { name: '画板外观' }).evaluate(node => getComputedStyle(node).colorScheme), 'light');
+  await panel.screenshot({ path: path.join(output, 'canvas-theme-menu.png'), scale: 'css', animations: 'disabled' });
+  const { x, y, width } = await panel.boundingBox();
+  const tabs = await page.locator('.panel-tabbar').boundingBox();
+  await page.screenshot({ path: path.join(output, 'canvas-theme-detail.png'), scale: 'css', animations: 'disabled',
+    clip: { x, y: tabs.y, width, height: y - tabs.y + 230 } });
+  await page.getByRole('menuitemcheckbox', { name: '深色', exact: true }).click();
+  await setAppTheme(page, 'light');
+  await expectCanvasTheme(panel, 'dark');
+  await panel.getByTestId('main-menu-trigger').click();
+  await panel.getByTestId('image-export-button').click();
+  const modal = page.locator('.excalidraw-modal-container.theme--dark .Dialog').filter({ has: page.locator('.ImageExportModal') });
+  assert.equal(await modal.evaluate(node => getComputedStyle(node).colorScheme), 'dark');
+  await modal.getByRole('button', { name: '关闭', exact: true }).click();
+  await chooseCanvasTheme(page, panel, '跟随应用', '深色');
+  await expectCanvasTheme(panel, 'light');
+}
+
+async function checkLibraryButton(page, editor) {
+  const rail = editor.locator('.mobile-misc-tools-container');
+  const library = rail.locator('.default-sidebar-trigger');
+  const checkbox = rail.locator('.sidebar-trigger__label-element input');
+  const cells = rail.locator('.default-sidebar-trigger, .ToolIcon__icon').filter({ visible: true });
+  const bounds = await cells.evaluateAll(icons => icons.map(icon => {
+    const { x, right, width, height } = icon.getBoundingClientRect();
+    return { x, right, width, height };
+  }));
+  assert.ok(bounds.length >= 3);
+  const canvas = await editor.boundingBox();
+  for (const cell of bounds) {
+    assert.equal(cell.width, bounds[0].width);
+    assert.equal(cell.height, bounds[0].height);
+    assert.ok(cell.x >= canvas.x - 0.5 && cell.right <= canvas.x + canvas.width + 0.5, 'every side tool fits the narrow canvas');
+  }
+  await page.mouse.move(0, 0);
+  const background = () => library.evaluate(node => getComputedStyle(node).backgroundColor);
+  const idle = await background();
+  let pressed;
+  await library.hover();
+  await page.mouse.down();
+  try {
+    pressed = await background();
+    assert.notEqual(pressed, idle);
+    assert.equal(await library.evaluate(node => getComputedStyle(node).boxShadow), 'none', 'pointer press has no exterior ring');
+    await rail.screenshot({ path: path.join(output, 'library-pressed.png'), scale: 'css' });
+  } finally {
+    await page.mouse.up();
+  }
+  await editor.locator('.layer-ui__library').waitFor();
+  assert.ok(await checkbox.isChecked());
+  await page.mouse.move(0, 0);
+  assert.equal(await background(), pressed, 'the open library keeps its selected color after pointer release');
+  await editor.getByTestId('sidebar-close').click();
+  await editor.locator('.layer-ui__library').waitFor({ state: 'hidden' });
+  // Move focus back to the library using the keyboard, as opposed to a pointer click.
+  await checkbox.focus();
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  assert.ok(await checkbox.evaluate(node => node.matches(':focus-visible')));
+  const ring = await library.evaluate(node => {
+    const style = getComputedStyle(node);
+    return (style.outlineStyle !== 'none' && parseFloat(style.outlineWidth) > 0 && parseFloat(style.outlineOffset) < 0)
+      || style.boxShadow.includes('inset');
+  });
+  assert.ok(ring, 'the visible library icon retains a keyboard focus ring within the tool cell');
+  await page.keyboard.press('Space');
+  await editor.locator('.layer-ui__library').waitFor();
+  await editor.getByTestId('sidebar-close').click();
+}
+
 async function checkImageExport(app, page, editor) {
   for (const theme of ['light', 'dark']) {
-    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+    await setAppTheme(page, theme);
     await editor.getByTestId('main-menu-trigger').click();
     await editor.getByTestId('image-export-button').click();
     const dialog = page.locator('.excalidraw-modal-container .Dialog').filter({ has: page.locator('.ImageExportModal') });
@@ -182,7 +280,7 @@ try {
       return window.piApi.installPlugin({ cwd, token: preview.token });
     }, { source: path.resolve(archive), cwd: workspace });
     assert.equal(installed.plugin.version, '1.1.0');
-    assert.deepEqual(installed.installed.skills.map(skill => skill.name), ['excalidraw-live-canvas']);
+    assert.deepEqual(installed.installed.skills.map(skill => skill.name), ['diagram-authoring']);
   } else {
     await page.locator('.sidebar-bottom button[title="设置"]').click();
     await page.locator('.settings-navigation').getByRole('button', { name: '插件', exact: true }).click();
@@ -190,7 +288,7 @@ try {
     await page.getByRole('button', { name: '安装 Excalidraw', exact: true }).click();
     const preview = page.getByRole('dialog', { name: '安装预览', exact: true });
     await preview.getByRole('heading', { name: 'Excalidraw', exact: true }).waitFor();
-    await preview.getByText('excalidraw-live-canvas', { exact: true }).waitFor();
+    await preview.getByText('diagram-authoring', { exact: true }).waitFor();
     await preview.getByRole('button', { name: '确认安装', exact: true }).click();
     await preview.waitFor({ state: 'detached' });
   }
@@ -206,13 +304,17 @@ try {
     Reflect.deleteProperty(window, 'showOpenFilePicker');
     Reflect.deleteProperty(Window.prototype, 'showOpenFilePicker');
   });
+  await page.evaluate(() => {
+    const preferences = JSON.parse(localStorage.getItem('pi-studio:preferences') || '{}');
+    localStorage.setItem('pi-studio:preferences', JSON.stringify({ ...preferences, theme: 'system' }));
+  });
   await page.reload();
   await selectTestSession(page, workspace, ids.first);
   const layer = page.getByRole('tabpanel', { name: 'Excalidraw', exact: true });
   const surface = layer.locator('.extension-drawing-board');
   const editor = surface.locator('.excalidraw');
   const tab = page.locator('.panel-tabbar').getByRole('tab', { name: 'Excalidraw', exact: true });
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await setAppTheme(page, 'dark');
   if (!archive) {
     await openCanvasFromMenu(page);
     await editor.locator('canvas').first().waitFor({ timeout: 20000 });
@@ -266,7 +368,7 @@ try {
   assert.deepEqual(motion.observed, ['arrow', 'outline', 'text'], JSON.stringify(motion.diagnostics));
   await surface.locator('.extension-canvas-status').getByText('已保存到当前聊天', { exact: true }).waitFor();
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  const boardDirectory = path.join(profile, 'plugin-data', 'studio.excalidraw', 'studio.excalidraw');
+  const boardDirectory = path.join(profile, 'data', 'plugin-data', 'studio.excalidraw', 'studio.excalidraw');
   const boardFiles = await readdir(boardDirectory);
   assert.equal(boardFiles.length, 1);
   assert.match(boardFiles[0], /^\d+\.excalidraw\.json$/);
@@ -291,7 +393,10 @@ try {
   assert.equal(updates.one.at(-1).elements, savedBoard.scene.elements.length);
   assert.ok(updates.two.every(update => update.elements === 0));
   await page.screenshot({ path: path.join(output, 'workspace.png') });
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await checkCanvasAppearance(page, surface);
+  await setAppTheme(page, 'dark');
+  await expectCanvasTheme(surface, 'dark');
+  await checkLibraryButton(page, editor);
   const toolsInView = await editor.locator('.App-toolbar--mobile').evaluate(toolbar => {
     const width = toolbar.closest('.extension-canvas-editor').getBoundingClientRect();
     return [...toolbar.querySelectorAll('.ToolIcon__icon')].every(tool => {
@@ -355,6 +460,8 @@ try {
   assert.equal(exported.type, 'excalidraw');
   assert.equal(exported.elements.length, file.elements.length + 1);
 
+  await chooseCanvasTheme(page, surface, '浅色', '跟随应用');
+  await expectCanvasTheme(surface, 'light');
   await app.close();
   ({ app, page } = await launch());
   await selectTestSession(page, workspace, ids.first);
@@ -386,7 +493,7 @@ try {
     const api = window.piApi;
     const view = await api.openExtensionDataView({ sourceId, cwd, sessionId });
     try {
-      await api.writeExtensionCanvas({ subscriptionId: view.subscriptionId, revision: 0, scene });
+      await api.invokeExtensionView({ subscriptionId: view.subscriptionId, method: 'save', params: { revision: 0, scene } });
     } finally {
       await api.closeExtensionDataView(view.subscriptionId);
     }
@@ -397,6 +504,10 @@ try {
   await openCanvasFromMenu(page);
   const secondPanel = page.getByRole('tabpanel', { name: 'Excalidraw', exact: true });
   await secondPanel.getByRole('button', { name: '适应画布' }).and(page.locator(':enabled')).waitFor();
+  await setAppTheme(page, 'dark');
+  await expectCanvasTheme(secondPanel, 'light');
+  await chooseCanvasTheme(page, secondPanel, '跟随应用', '浅色');
+  await expectCanvasTheme(secondPanel, 'dark');
   await secondPanel.getByTestId('main-menu-trigger').click();
   await secondPanel.getByTestId('clear-canvas-button').click();
   const clearDialog = page.locator('.excalidraw-modal-container .confirm-dialog').filter({ hasText: '清除画布' });

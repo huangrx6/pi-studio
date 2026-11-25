@@ -40,7 +40,7 @@ test('plugin preview reports the installed Studio version before parsing newer p
     code: 'INCOMPATIBLE_EXTENSION',
     message: `Excalidraw 需要 Pi Studio >=100.0.0，当前版本为 ${require('../../package.json').version}。`,
   });
-  assert.deepEqual(fs.readdirSync(path.join(process.env.PI_STUDIO_USER_DATA, 'plugin-quarantine')), []);
+  assert.equal(fs.existsSync(path.join(process.env.PI_STUDIO_USER_DATA, 'cache', 'quarantine', 'plugins')), false);
 });
 
 test('example toolkit-starter plugin validates', () => {

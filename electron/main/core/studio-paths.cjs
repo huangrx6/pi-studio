@@ -14,6 +14,9 @@ const os = require('node:os');
 const path = require('node:path');
 
 const STUDIO_DATA_DIRECTORY = '.pi-studio';
+const STUDIO_MANAGED_DATA_DIR = 'data';
+const STUDIO_CACHE_DIR = 'cache';
+const DOWNLOADS_DIRECTORY = 'downloads';
 const PLUGIN_INSTALL_DIRECTORY = 'plugins';
 const PLUGIN_DATA_DIRECTORY = 'plugin-data';
 
@@ -25,13 +28,48 @@ function studioDataDirectory() {
   return path.join(os.homedir(), STUDIO_DATA_DIRECTORY);
 }
 
+function attachmentsDirectory(root = studioDataDirectory()) {
+  return path.join(root, STUDIO_MANAGED_DATA_DIR, 'attachments');
+}
+
+function backgroundMediaDirectory(root = studioDataDirectory()) {
+  return path.join(root, STUDIO_MANAGED_DATA_DIR, 'background-media');
+}
+
+function worktreesDirectory(root = studioDataDirectory()) {
+  return path.join(root, STUDIO_MANAGED_DATA_DIR, 'worktrees');
+}
+
+function extensionStateDirectory(root = studioDataDirectory()) {
+  return path.join(root, STUDIO_MANAGED_DATA_DIR, 'extension-state');
+}
+
+function extensionDataDirectory(root = studioDataDirectory()) {
+  return path.join(root, STUDIO_MANAGED_DATA_DIR, 'extension-data');
+}
+
+function downloadsDirectory(root = studioDataDirectory()) {
+  return path.join(root, DOWNLOADS_DIRECTORY);
+}
+
+function modelCatalogsDirectory(root = studioDataDirectory()) {
+  return path.join(root, STUDIO_CACHE_DIR, 'model-catalogs');
+}
+
+function quarantineDirectory(kind, root = studioDataDirectory()) {
+  if (!['extensions', 'plugins', 'skills'].includes(kind)) {
+    throw new Error('隔离目录类型无效');
+  }
+  return path.join(root, STUDIO_CACHE_DIR, 'quarantine', kind);
+}
+
 function pluginDataDirectory(pluginId, extensionId, { root = studioDataDirectory(), create = false } = {}) {
   if (typeof pluginId !== 'string' || typeof extensionId !== 'string'
     || !/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(pluginId)
     || !/^[a-z0-9][a-z0-9._-]{1,63}$/.test(extensionId)) {
     throw new Error('插件或扩展 ID 无效');
   }
-  return managedDataSubdirectory(root, [PLUGIN_DATA_DIRECTORY, pluginId, extensionId], { create });
+  return managedDataSubdirectory(root, [STUDIO_MANAGED_DATA_DIR, PLUGIN_DATA_DIRECTORY, pluginId, extensionId], { create });
 }
 
 // Inside the Studio profile, a replaced directory must not redirect cleanup or
@@ -70,12 +108,23 @@ function globalInstructionStatus() {
 }
 
 module.exports = {
+  DOWNLOADS_DIRECTORY,
   PLUGIN_DATA_DIRECTORY,
   PLUGIN_INSTALL_DIRECTORY,
+  STUDIO_CACHE_DIR,
   STUDIO_DATA_DIRECTORY,
+  STUDIO_MANAGED_DATA_DIR,
+  attachmentsDirectory,
+  backgroundMediaDirectory,
+  downloadsDirectory,
+  extensionDataDirectory,
+  extensionStateDirectory,
   globalInstructionFile,
   globalInstructionStatus,
   managedDataSubdirectory,
+  modelCatalogsDirectory,
   pluginDataDirectory,
+  quarantineDirectory,
   studioDataDirectory,
+  worktreesDirectory,
 };

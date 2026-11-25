@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { composerDraftKeyForSession, readComposerDraft, saveComposerDraft } from '../../web/src/features/conversation/composer-drafts.ts';
 import {
   REFERENCE_GAP,
   extractComposerMentions,
@@ -32,16 +33,21 @@ test('role references round-trip as atomic chips alongside files, including esca
 
 test('typed capabilities preserve exact identity across drafts, transcript, plain previews and file extraction', () => {
   const skill = formatCapabilityReference({ type: 'skill', id: 'echo#123', name: '同名 | [技能]', source: '插件 · 示例', description: '' });
-  const mcp = formatCapabilityReference({ type: 'mcp', id: '["id","server","echo"]', server: '示例', name: 'echo', source: '插件 · 示例', description: '' });
+  const serverId = JSON.stringify(['id', '示例']);
+  const server = formatCapabilityReference({ type: 'mcp-server', id: serverId, server: '示例', name: '示例', source: '插件 · 示例', description: '', methodCount: 2 });
+  const mcp = formatCapabilityReference({ type: 'mcp', id: '["id","示例","echo"]', serverId, server: '示例', name: 'echo', source: '插件 · 示例', description: '' });
   const plugin = formatCapabilityReference({ type: 'plugin', id: 'studio.excalidraw', name: 'Excalidraw', source: 'Pi Studio', description: '' });
   const path = 'docs/' + skill + '.md';
   const file = formatFileReference(path);
-  const text = skill + ' ' + mcp + ' ' + plugin + ' ' + file;
+  const text = [skill, server, mcp, plugin, file].join(' ');
+  const drafts = new Map();
+  const key = composerDraftKeyForSession('mixed-capabilities');
+  saveComposerDraft(drafts, key, { text, attachments: [] });
   const references = splitMessageText(text).filter(item => item.kind === 'reference').map(item => item.reference);
-  assert.deepEqual(references.map(ref => ref.capabilityId), ['echo#123', '["id","server","echo"]', 'studio.excalidraw', undefined]);
-  assert.deepEqual(splitComposerText(text, new Set()).filter(s => s.kind === 'token').map(s => s.reference), references);
+  assert.deepEqual(references.map(ref => ref.capabilityId), ['echo#123', serverId, '["id","示例","echo"]', 'studio.excalidraw', undefined]);
+  assert.deepEqual(splitComposerText(readComposerDraft(drafts, key).text, new Set()).filter(s => s.kind === 'token').map(s => s.reference), references);
   assert.deepEqual(extractComposerMentions(text), [path]);
-  assert.equal(readableComposerReferences(text), '$同名 | [技能] $示例/echo $Excalidraw ' + file);
+  assert.equal(readableComposerReferences(text), '$同名 | [技能] $示例 $示例/echo $Excalidraw ' + file);
 });
 test('composer references keep paths with spaces inside one highlighted token', () => {
   const token = formatFileReference('02 Areas/饭撒的发生地/');

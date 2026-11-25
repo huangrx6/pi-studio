@@ -14,7 +14,7 @@ type LoadingStateProps = {
 
 export function LoadingState({ children, variant = 'inline', className = '' }: LoadingStateProps) {
   return <span className={`loading-state loading-state--${variant} ${className}`.trim()} role="status">
-    {variant === 'inline' ? <LoadingIndicator /> : <span className="loading-pi" aria-hidden="true">π</span>}
+    {variant === 'inline' ? <LoadingIndicator /> : <span className="loading-pi" aria-hidden="true"><span className="pi-mark" /></span>}
     <span className="loading-state-label">{children}</span>
   </span>;
 }

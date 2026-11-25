@@ -70,62 +70,31 @@ try {
   await page.locator('.assistant-response').filter({ hasText: '审查已完成' }).waitFor();
   assert.equal([...loadedResources].some((file) => file?.startsWith('markdown-highlighter-')), false, 'code-free history does not load the syntax highlighter');
 
-  const mapTrigger = page.getByRole('button', { name: '思维链路（11 步）', exact: true });
-  const map = page.getByRole('dialog', { name: '思维链路', exact: true });
-  const mapCanvas = map.getByRole('region', { name: '思维链路图', exact: true });
-  const selectedStep = map.locator('.thinking-map-node-card[aria-pressed="true"]');
-  async function checkMapFraming(onlySelected = false) {
-    await page.waitForFunction(({ onlySelected }) => {
-      const canvas = document.querySelector('.thinking-map-canvas');
-      if (!canvas) return false;
-      const cards = [...canvas.querySelectorAll(onlySelected ? '.thinking-map-node-card[aria-pressed="true"]' : '.thinking-map-node-card')];
-      const bounds = canvas.getBoundingClientRect();
-      return cards.length === (onlySelected ? 1 : 11) && cards.every(card => {
-        const box = card.getBoundingClientRect();
-        return box.width >= 140 && box.left >= bounds.left + 4 && box.top >= bounds.top + 4
-          && box.right <= bounds.right - 4 && box.bottom <= bounds.bottom - 4;
-      });
-    }, { onlySelected });
-  }
+  const progress = page.getByRole('region', { name: '本轮执行进展' });
+  const toggle = progress.locator('.turn-progress-toggle');
+  await toggle.waitFor();
+  assert.equal(await progress.count(), 1, 'one record disclosure per assistant turn');
+  assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+  assert.equal(await progress.getByRole('list').count(), 0, 'collapsed turns do not mount execution records');
+  assert.equal(await page.getByRole('button', { name: '执行流', exact: true }).count(), 0);
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  await mapTrigger.click();
-  await checkMapFraming();
-  assert.match(await selectedStep.getAttribute('aria-label'), /^第 11 步/);
-  assert.ok(await mapCanvas.locator('.thinking-map-node-card').evaluateAll(cards => new Set(cards.map(card => card.getBoundingClientRect().top)).size > 1));
-  await mapCanvas.getByRole('button', { name: /^第 3 步/ }).press('Enter');
-  await map.locator('.thinking-map-detail-pre').filter({ hasText: 'QA_EXPECTED_FAILURE' }).waitFor();
-  await map.getByRole('button', { name: '定位思考', exact: true }).click();
-  await map.locator('.thinking-map-prose strong').filter({ hasText: '完整决策正文' }).waitFor();
-  assert.doesNotMatch(await map.locator('.thinking-map-detail-head').innerText(), /完整决策正文/);
-  await mapCanvas.getByRole('button', { name: '放大', exact: true }).click();
-  await mapCanvas.getByRole('button', { name: '适配画布', exact: true }).click();
-  await checkMapFraming();
-  await page.mouse.move(0, 0);
-  await map.locator('.thinking-map-dialog').screenshot({ path: path.join(output, 'thinking-map-wide.png'), animations: 'disabled' });
-
+  const failures = progress.getByRole('button', { name: '1 次调用失败', exact: true });
+  await failures.click();
+  const failedList = progress.getByRole('list', { name: '失败的工具调用' });
+  assert.equal(await failedList.getByRole('listitem').count(), 1);
+  await failedList.getByText(/QA_EXPECTED_FAILURE/).waitFor();
+  await failedList.getByRole('button', { name: /pnpm check --fixture-only/ }).press('Enter');
+  await failedList.locator('.activity-tool-body').getByText(/QA_EXPECTED_FAILURE/).waitFor();
+  await capture('execution-progress-wide');
   await page.setViewportSize({ width: 620, height: 570 });
-  await map.getByRole('button', { name: '最新一步', exact: true }).click();
-  await checkMapFraming(true);
-  assert.match(await selectedStep.getAttribute('aria-label'), /^第 11 步/);
-  await map.getByRole('button', { name: '定位思考', exact: true }).click();
-  await checkMapFraming(true);
-  assert.match(await selectedStep.getAttribute('aria-label'), /^第 1 步/);
-  assert.ok(await mapCanvas.evaluate(canvas => {
-    const view = canvas.getBoundingClientRect();
-    return [...canvas.querySelectorAll('.thinking-map-node-card')].slice(0, 4).every(card => {
-      const box = card.getBoundingClientRect();
-      return box.left > view.left && box.right < view.right && box.top > view.top && box.bottom < view.bottom;
-    });
-  }), 'the first two rows remain fully visible when returning to the start in a narrow window');
-  await page.mouse.move(0, 0);
-  await map.locator('.thinking-map-dialog').screenshot({ path: path.join(output, 'thinking-map-narrow.png'), animations: 'disabled' });
-  await page.keyboard.press('Escape');
-  await map.waitFor({ state: 'detached' });
-  await focused(mapTrigger);
+  await failedList.getByRole('button', { name: /pnpm check --fixture-only/ }).scrollIntoViewIfNeeded();
+  await capture('execution-progress-narrow');
+  await failures.click();
+  await toggle.click();
   await page.setViewportSize({ width: 1440, height: 920 });
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  result.checks.push('Thinking map fits its wrapped chain, reveals offscreen steps in a narrow window, renders the selected Markdown once and restores focus');
+  result.checks.push('Completed turn exposes one inline record disclosure and opens a failed command directly at desktop and narrow widths');
 
   const draft = '筛选和查看记录时，请保留这段草稿。';
   await composer.fill(draft);
@@ -251,50 +220,30 @@ try {
   await focused(shell.locator('.session-row'));
   result.checks.push('menu Arrow/Home/End loop, Escape, Space/Enter, pin callback and focus restoration, scroll dismissal, Tab exit');
 
-  const trace = page.locator('.turn-trace-toggle').first();
-  assert.equal(await trace.getAttribute('aria-expanded'), 'false');
-  assert.equal(await page.locator('.activity-tool').count(), 0, 'completed trace does not mount child tool components before first expansion');
-  const remaining = page.locator('.turn-trace-toggle').last();
-  assert.match(await remaining.innerText(), /1 步失败/);
-  await trace.click();
-  await remaining.click();
-  await page.locator('.activity-tool').first().waitFor();
-  assert.equal(await page.locator('.activity-tool-body').count(), 0, 'standard tools do not mount large output while closed');
-  assert.equal(await page.locator('.activity-thinking-body').count(), 0, 'closed thinking does not mount markdown');
-  const tool = page.locator('.activity-tool').first();
-  assert.equal(await tool.locator('summary').getAttribute('aria-description'), '已完成');
-  assert.equal(await tool.locator('.activity-tool-status').count(), 0, 'success state avoids a repeated visual completion label');
-  await page.locator('.activity-tool.is-error').getByText('失败', { exact: true }).waitFor();
-  const gallery = page.locator('.tool-result-images').first();
-  assert.equal(await gallery.locator('.conversation-image-tile').count(), 1, 'image results remain separate from closed parameter details');
-  await tool.locator('summary').click();
-  await tool.locator('.activity-tool-body').waitFor();
-  assert.match(await tool.locator('.activity-tool-body').innerText(), /QA_TOOL_OUTPUT_0/);
-  await tool.locator('summary').click();
-  await tool.locator('.activity-tool-body').waitFor({ state: 'detached' });
-  assert.equal(await gallery.locator('.conversation-image-tile').count(), 1);
-  const thinking = page.locator('.activity-thinking').first();
-  await thinking.locator('summary').click();
-  await thinking.locator('.activity-thinking-body strong').filter({ hasText: '完整决策正文' }).waitFor();
-  await thinking.locator('summary').click();
-  await thinking.locator('.activity-thinking-body').waitFor({ state: 'detached' });
-  await tool.locator('summary').click();
-  await tool.locator('.activity-tool-body').waitFor();
-  await trace.click();
-  assert.equal(await page.locator('.activity-tool').count(), 10, 'visited trace preserves child state when folded');
-  await trace.click();
-  assert.equal(await tool.getAttribute('open'), '', 'manual tool expansion survives whole-trace folding');
-  await tool.locator('summary').click();
+  await toggle.click();
+  const records = progress.getByRole('list', { name: '执行明细' });
+  assert.equal(await records.getByRole('listitem').count(), 11);
+  assert.equal(await records.locator('.activity-tool-body, .activity-thinking-body').count(), 0,
+    'standard history only mounts the detail that the reader opens');
+  const read = records.getByRole('button', { name: /读取 .*readable/ });
+  await read.click();
+  await records.locator('.activity-tool-body').getByText(/QA_TOOL_OUTPUT_0/).waitFor();
+  await records.locator('.conversation-image-tile').waitFor();
+  await read.click();
+  await records.locator('.activity-tool-body').waitFor({ state: 'detached' });
+  const thought = records.getByRole('button', { name: '思考', exact: true });
+  await thought.click();
+  await records.locator('.activity-thinking-body strong').getByText('完整决策正文').waitFor();
+  await thought.click();
+  await records.locator('.activity-thinking-body').waitFor({ state: 'detached' });
   await page.setViewportSize({ width: 980, height: 640 });
-  await capture('04-trace-expanded-light');
-  await page.locator('.turn-trace-collapse').click();
-  await focused(remaining);
-  assert.equal(await remaining.getAttribute('aria-expanded'), 'false');
-  await trace.click();
+  await capture('04-progress-expanded-light');
+  await toggle.click();
+  assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  await capture('05-trace-collapsed-dark');
+  await capture('05-progress-collapsed-dark');
   assert.equal(await composerValue(composer), draft);
-  result.checks.push('lazy trace/tool/thinking bodies, independent result image, accessible success/error states, preserved manual expansion, bottom collapse focus');
+  result.checks.push('Inline records lazily reveal the original output, screenshot and thought, preserve the draft, and fold to one line');
 
   const settingsTrigger = page.locator('.sidebar-bottom button[title="设置"]');
   await settingsTrigger.click();
@@ -308,22 +257,20 @@ try {
   await focused(settingsTrigger);
   assert.equal(await composerValue(composer), draft, 'settings Escape return preserves the current draft');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await trace.click();
+  await toggle.click();
   await search.fill('');
   await chooseFilter('运行中');
   await page.mouse.move(1000, 100);
   await page.locator('.session-running .spin').waitFor();
   const motion = await page.evaluate(() => ({
-    chevron: getComputedStyle(document.querySelector('.turn-trace-toggle > .activity-disclosure-chevron')).transitionDuration,
-    details: getComputedStyle(document.querySelector('.activity-tool'), '::details-content').transitionDuration,
+    chevron: getComputedStyle(document.querySelector('.turn-progress-toggle > svg')).transitionDuration,
     spinners: [...document.querySelectorAll('.spin')].map((element) => getComputedStyle(element).animationName),
   }));
   assert.equal(motion.chevron, '0s');
-  assert.equal(motion.details, '0s');
   assert.ok(motion.spinners.length > 0, 'reduced-motion check observes a real running-state spinner');
   assert.ok(motion.spinners.every((animation) => animation === 'none'));
   result.reducedMotion = motion;
-  result.checks.push('settings Escape clear/return with focus and draft preserved, reduced-motion disables trace transitions and spinners');
+  result.checks.push('settings Escape clear/return with focus and draft preserved, reduced-motion keeps record controls still and disables spinners');
   assert.deepEqual(result.pageErrors, []);
   console.log(`Conversation refinement QA passed: ${result.checks.length} groups; screenshots: ${output}`);
 } catch (error) {

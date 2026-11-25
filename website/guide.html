@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pi Studio 文档 — 使用、扩展开发与架构</title>
   <meta name="description" content="Pi Studio 完整文档：安装、工作区、会话、长期目标、子智能体、模型、Harness、权限、技能、MCP、扩展开发、Durable 运行时、安全边界、构建发布与故障排查。">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23111110'/%3E%3Ctext x='32' y='43' font-size='34' font-family='Georgia,serif' fill='%23f1efe8' text-anchor='middle'%3E%CF%80%3C/text%3E%3C/svg%3E">
+  <link rel="icon" type="image/svg+xml" href="assets/pi-mark.svg">
   <link rel="stylesheet" href="styles/docs.css">
 </head>
 <body>
@@ -14,7 +14,7 @@
   <header class="site-nav">
     <div class="nav-inner">
       <a class="brand" href="index.html" aria-label="返回 Pi Studio 产品首页">
-        <span class="brand-mark">π</span>
+        <img class="brand-mark" src="assets/pi-mark.svg" width="24" height="24" alt="">
         <span>Pi Studio</span>
       </a>
       <nav class="nav-links" aria-label="站点导航">
@@ -249,7 +249,7 @@
             </ul>
 
             <h3>临时对话</h3>
-            <p>临时对话使用独立的 Durable <code>MemoryStorage</code> 和空 registry。它可以使用已配置的模型与凭据，但不加载工作区工具、扩展、MCP、Skill 或项目指令。</p>
+            <p>临时对话使用独立的 Durable <code>MemoryStorage</code>，不写工作区文件也不记入会话历史。你可以在「设置 → 智能体配置 → 临时对话」中单独为其绑定工具方案、权限方案与 Harness 方案，按需开放内置工具、用户扩展或指定的 MCP 服务器。</p>
             <div class="callout warning">
               <strong>不落盘边界</strong>
               <p>关闭临时聊天标签或退出应用后，其中的消息、图片和运行状态会清除。需要保存的文件或结果应在会话结束前主动导出或复制。</p>
@@ -395,7 +395,7 @@
           <header class="section-heading">
             <span class="section-kicker">09 / Harness</span>
             <h2 id="harness-title">Harness 配置</h2>
-            <p>所有持久会话，无论是否启用了 <code>/goal</code>，都使用同一套 Harness；临时对话是唯一例外。</p>
+            <p>所有持久会话，无论是否启用了 <code>/goal</code>，都使用按全局或工作区选择的 Harness；临时对话可在「智能体配置」中绑定独立的 Harness 方案。</p>
           </header>
           <div class="doc-copy">
             <figure class="figure">
@@ -438,7 +438,7 @@
                 <tbody>
                   <tr><td>未启用 /goal</td><td>是</td><td>是</td></tr>
                   <tr><td>已启用 /goal</td><td>是</td><td>是</td></tr>
-                  <tr><td>临时对话</td><td>否</td><td>否，使用独立内存 Harness</td></tr>
+                  <tr><td>临时对话</td><td>可用独立 Harness 方案</td><td>部分遵循工具与权限配置</td></tr>
                 </tbody>
               </table>
             </div>
@@ -619,7 +619,7 @@
               <li>应用会在启动、前台使用和重新聚焦时检查 GitHub Release；同一版本只要构建指纹不同，也会作为新构建提示。</li>
               <li>下载完成后由用户选择立即重启安装，或保留到下一次退出；同版本重构建使用完整 ZIP，避免复用旧 blockmap。</li>
             </ul>
-            <p>菜单栏和应用内通知只做入口，不复制完整对话。点击通知会回到对应会话；没有被启用的通知可以静默留在通知中心。</p>
+            <p>菜单栏和系统完成通知只做入口，不复制完整对话。点击通知会直接回到对应会话。</p>
 
             <h3>交互式终端</h3>
             <p>从右侧工作台打开终端时，Studio 在 Electron 主进程创建 PTY，renderer 只接收 JSON-safe 会话元数据和输出字符串。POSIX 终端以交互式登录 shell 启动，按所用 shell 的规则读取用户环境。终端跟随当前主题与对话字号，切换 Tab 时由主进程保留输出并回放；最多同时打开 8 个窗口级 PTY。</p>
@@ -760,8 +760,8 @@ builtin:studio-subagents/subagent</code></pre>
               </table>
             </div>
             <div class="callout">
-              <strong>实时数据从可见时开始</strong>
-              <p><code>dataView</code> 只在已经挂载且可见时订阅。切换会话、关闭窗口、停用、重载或组件卸载时都会执行 provider 清理；扩展不能自行绘制浮层或后台全量推送。</p>
+              <strong>实时数据与沙箱自定义视图（panel.view）</strong>
+              <p><code>dataView</code> 只在已经挂载且可见时订阅；需要独立交互界面的侧栏面板可在 manifest 中声明 <code>view</code>（<code>entry</code> 位于插件 <code>ui/</code> 目录），由主进程通过 <code>pi-ext://</code> 协议与 <code>iframe sandbox</code> 隔离加载，经 JSON <code>postMessage</code> 桥读写数据，不与宿主渲染进程耦合。</p>
             </div>
             <div class="reference-grid">
               <a class="ref-link" href="https://github.com/huangrx6/pi-studio/blob/main/docs/extensions/ui.md"><span>UI Block 与示例</span><span>↗</span></a>
@@ -897,12 +897,12 @@ Model provider</code></pre>
                 <thead><tr><th>资源</th><th>有效 scope</th><th>冲突规则</th></tr></thead>
                 <tbody>
                   <tr><td>AGENTS.md</td><td>应用 + 项目目录链</td><td>项目更具体；后加载覆盖先加载</td></tr>
-                  <tr><td>Harness Profile</td><td>全局默认 + 精确工作区</td><td>工作区选择一个完整 Profile</td></tr>
+                  <tr><td>Harness Profile</td><td>全局默认 + 精确工作区 + 临时对话</td><td>工作区或临时对话分别选择一个完整 Profile</td></tr>
                   <tr><td>Durable 运行策略</td><td>应用</td><td>单一全局策略</td></tr>
                   <tr><td>模型默认值</td><td>应用</td><td>只用于新会话</td></tr>
                   <tr><td>会话模型 / thinking</td><td>会话</td><td>会话选择优先，下一请求生效</td></tr>
-                  <tr><td>工具权限</td><td>user + workspace + session</td><td><code>deny &gt; ask &gt; allow</code></td></tr>
-                  <tr><td>智能体工具白名单</td><td>应用</td><td>单一白名单</td></tr>
+                  <tr><td>工具权限</td><td>方案库 + user + workspace + session</td><td><code>deny &gt; ask &gt; allow</code></td></tr>
+                  <tr><td>智能体工具方案</td><td>方案库（全局 / 工作区 / 临时对话 / 子智能体）</td><td>独立控制工具白名单、用户扩展与 MCP 范围</td></tr>
                   <tr><td>Skill</td><td>user + 精确工作区</td><td>项目私有 → 项目通用 → 用户私有 → 用户通用</td></tr>
                   <tr><td>MCP</td><td>应用</td><td>每 server 独立，再受 exposure / 白名单过滤</td></tr>
                   <tr><td>扩展</td><td>builtin + user + 精确工作区</td><td><code>core → system → optional → user → project</code></td></tr>
@@ -964,7 +964,7 @@ Model provider</code></pre>
             </ul>
             <div class="callout danger">
               <strong>安装原则</strong>
-              <p>只安装能够审查或确实信任的 Agent 扩展。声明式 UI 不执行 HTML、CSS 或 JS，但项目扩展仍可能来自不受信任仓库；信任前应检查 manifest、文件树、权限和运行入口。</p>
+              <p>只安装能够审查或确实信任的 Agent 扩展。声明式 UI 与沙箱 <code>panel.view</code> 都不会把插件脚本注入主渲染进程，但项目扩展仍可能来自不受信任仓库；信任前应检查 manifest、文件树、权限和运行入口。</p>
             </div>
           </div>
         </section>

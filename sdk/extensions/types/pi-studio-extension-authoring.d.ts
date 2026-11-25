@@ -247,10 +247,8 @@ export type PiStudioExtensionPanelContribution = {
   content?: PiStudioExtensionContent[];
   details?: string;
   visibility?: 'always' | 'while-active';
-  /** A Studio-rendered Excalidraw workbench canvas. Requires ui.data and no content blocks. */
-  canvas?: { sourceId: string };
-  /** A global Studio-rendered task board. Requires user scope, ui.data and no content blocks. */
-  taskBoard?: { sourceId: string };
+  /** A sandboxed custom view served from this extension's `ui/` directory via `pi-ext://`. */
+  view?: { entry: string; sourceId: string; scope?: 'session' | 'global'; fullscreen?: boolean };
 } & ({ slot: PiStudioExtensionUiSlot; slots?: never } | { slot?: never; slots: PiStudioExtensionSummarySlot[] });
 
 export interface PiStudioExtensionSettingContribution {
@@ -349,14 +347,6 @@ export interface PiStudioExtensionActivationContext {
   readonly dataDirectory: string;
   /** Focus this extension's panel for a foreground Durable conversation. Requires ui.panels. */
   readonly revealPanel?: (panelId: string, durableConversationId: number) => void;
-  /** Present when the host supports the extension's declared canvas contributions. */
-  readonly canvasVersion?: 1;
-  /** The host can play an incoming canvas snapshot one element at a time. */
-  readonly canvasPlaybackVersion?: 1;
-  /** Validate scene limits and retain only supported fields before storing a canvas. */
-  readonly normalizeCanvasScene?: (scene: PiStudioCanvasScene) => PiStudioCanvasScene;
-  /** Present when the host supports this extension's global task board. */
-  readonly taskBoard?: Readonly<PiStudioTaskBoardProtocol>;
   /**
    * Present only when `provider.credentials` is declared. Every call returns
    * the current value from Studio SQLite; omitted providers are rejected.
@@ -412,81 +402,18 @@ export interface PiStudioExtensionDataViewContext {
   readonly durableSessionId?: string;
   readonly webContentsId: number;
   readonly signal: AbortSignal;
-  readonly taskBoardQuery?: Readonly<PiStudioTaskBoardQuery>;
+  /** Optional JSON-safe query parameters sent by a sandboxed `panel.view` iframe. */
+  readonly viewParams?: Readonly<Record<string, unknown>>;
 }
 
 export interface PiStudioExtensionDataViewValue {
   content: PiStudioExtensionContent[];
 }
 
-export interface PiStudioCanvasScene {
-  elements: ReadonlyArray<Record<string, unknown>>;
-  files?: Readonly<Record<string, { dataURL: string; mimeType: string; created: number }>>;
-  appState?: { viewBackgroundColor: string };
-}
-
-export interface PiStudioCanvasSnapshot {
-  scene: PiStudioCanvasScene;
-  revision: number;
-  drawing?: boolean;
-  title?: string;
-  /** Present only while drawing. Earlier scene elements are already visible. */
-  playback?: { startAt: number; durationMs: number; firstElement: number };
-}
-
-export type PiStudioTaskBoardStatus = 'todo' | 'in_progress' | 'blocked' | 'done';
-export type PiStudioTaskBoardPriority = 'low' | 'normal' | 'high' | 'urgent';
-export type PiStudioTaskBoardScheduleField = 'plannedStartAt' | 'plannedEndAt' | 'actualStartAt' | 'actualEndAt';
-export type PiStudioTaskBoardDateField = 'createdAt' | 'updatedAt' | PiStudioTaskBoardScheduleField;
-
-export type PiStudioTaskBoardFields = Record<PiStudioTaskBoardScheduleField, string | null> & {
-  title: string;
-  details: string;
-  status: PiStudioTaskBoardStatus;
-  priority: PiStudioTaskBoardPriority;
-};
-
-export type PiStudioTaskBoardTask = PiStudioTaskBoardFields & {
-  id: string;
-  revision: number;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export interface PiStudioTaskBoardQuery {
-  status?: PiStudioTaskBoardStatus;
-  dateField?: PiStudioTaskBoardDateField;
-  /** Inclusive calendar date in the desktop time zone, YYYY-MM-DD or today. */
-  from?: string;
-  to?: string;
-  limit?: number;
-  offset?: number;
-}
-
-export interface PiStudioTaskBoardProtocol {
-  readonly version: 1;
-  readonly statuses: readonly PiStudioTaskBoardStatus[];
-  readonly dateFields: readonly PiStudioTaskBoardDateField[];
-  readonly maxPageSize: number;
-  normalizeId(value: unknown): string;
-  normalizeQuery(value?: unknown): PiStudioTaskBoardQuery & Required<Pick<PiStudioTaskBoardQuery, 'dateField' | 'limit' | 'offset'>>;
-}
-
-export interface PiStudioTaskBoardSnapshot {
-  tasks: PiStudioTaskBoardTask[];
-  total: number;
-  nextOffset: number | null;
-}
-
-export type PiStudioTaskBoardMutation =
-  | { action: 'create'; id: string; fields: PiStudioTaskBoardFields }
-  | { action: 'update'; id: string; revision: number; fields: Partial<PiStudioTaskBoardFields> };
-
 export type PiStudioExtensionDataViewContent =
   | PiStudioExtensionContent[]
   | PiStudioExtensionDataViewValue
-  | { canvas: PiStudioCanvasSnapshot }
-  | { taskBoard: PiStudioTaskBoardSnapshot };
+  | { viewData: unknown };
 
 export type PiStudioExtensionDataViewPublish = (
   value: PiStudioExtensionDataViewContent,
@@ -505,14 +432,12 @@ export interface PiStudioExtensionDataSourceProvider {
     context: Readonly<PiStudioExtensionDataViewContext>,
     publish: PiStudioExtensionDataViewPublish,
   ): PiStudioExtensionDataViewCleanup;
-  writeCanvas?(
+  /** Generic JSON-safe RPC handler for a sandboxed `panel.view` iframe. */
+  invoke?(
     context: Readonly<PiStudioExtensionDataViewContext>,
-    edit: { revision: number; scene: PiStudioCanvasScene },
-  ): PiStudioCanvasSnapshot | Promise<PiStudioCanvasSnapshot>;
-  writeTaskBoard?(
-    context: Readonly<PiStudioExtensionDataViewContext>,
-    mutation: PiStudioTaskBoardMutation,
-  ): PiStudioTaskBoardTask | Promise<PiStudioTaskBoardTask>;
+    method: string,
+    params: unknown,
+  ): unknown | Promise<unknown>;
 }
 
 export type PiStudioExtensionDataSources =

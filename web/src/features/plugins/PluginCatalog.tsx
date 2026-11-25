@@ -1,7 +1,7 @@
 import { Check, Download, FileCode2, Folder, Layers3, PackageOpen, Plug, Search, Terminal } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Accordion } from '../../shared/Accordion';
-import { LoadingState } from '../../shared/LoadingState';
+import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import { PackageIcon } from '../../shared/PackageIcon';
 import { Select } from '../../shared/Select';
 import type { PluginMarketItem, PluginMarketSnapshot, StudioPluginSummary } from '../../types/global';
@@ -17,15 +17,17 @@ const RESOURCE_ICON: Record<PluginResourceBadge['kind'], typeof Plug> = {
 
 type CardActions = {
   busy: boolean;
+  preparingId: string;
   catalogUnavailable: boolean;
   onOpen: (entry: PluginCatalogEntry) => void;
   onInstall: (item: PluginMarketItem, origin: HTMLButtonElement) => void;
   onToggle: (plugin: StudioPluginSummary) => void;
 };
 
-function PluginPackageCard({ entry, busy, catalogUnavailable, onOpen, onInstall, onToggle }: CardActions & { entry: PluginCatalogEntry }) {
+function PluginPackageCard({ entry, busy, preparingId, catalogUnavailable, onOpen, onInstall, onToggle }: CardActions & { entry: PluginCatalogEntry }) {
   const { item, installed } = entry;
   const listing = 'sourceId' in item ? item : undefined;
+  const preparing = preparingId === item.id;
   const version = installed?.version || listing?.latestVersion;
   const description = listing?.summary || item.description || installed?.description;
   const resources = pluginResourceBadges(item.provides);
@@ -52,8 +54,12 @@ function PluginPackageCard({ entry, busy, catalogUnavailable, onOpen, onInstall,
       <span className="plugin-card-source" title={source}><SourceIcon aria-hidden="true" /><span>{source}</span></span>
       <div className="plugin-card-actions">
         {listing && (!installed || installed.version !== listing.latestVersion) && <button type="button" className="settings-outline"
-          disabled={busy || catalogUnavailable} aria-label={installed ? `更换 ${item.name} 的版本` : `安装 ${item.name}`}
-          onClick={event => onInstall(listing, event.currentTarget)}><Download aria-hidden="true" />{installed ? '更换版本' : '安装'}</button>}
+          disabled={busy || catalogUnavailable} aria-busy={preparing || undefined}
+          aria-label={installed ? `更换 ${item.name} 的版本` : `安装 ${item.name}`}
+          onClick={event => onInstall(listing, event.currentTarget)}>
+          {preparing ? <LoadingIndicator /> : <Download aria-hidden="true" />}
+          {installed ? '更换版本' : '安装'}
+        </button>}
         {installed && <button type="button" role="switch" aria-checked={installed.enabled} aria-label={`启用插件 ${item.name}`}
           title={installed.enabled ? '停用插件' : '启用插件'} className={`switch${installed.enabled ? ' is-on' : ''}`}
           disabled={busy} onClick={() => onToggle(installed)}><span /></button>}
@@ -62,12 +68,11 @@ function PluginPackageCard({ entry, busy, catalogUnavailable, onOpen, onInstall,
   </li>;
 }
 
-export function PluginCatalog({ plugins, catalog, loading, error, preparing, ...actions }: CardActions & {
+export function PluginCatalog({ plugins, catalog, loading, error, ...actions }: CardActions & {
   plugins: readonly StudioPluginSummary[];
   catalog?: PluginMarketSnapshot;
   loading: boolean;
   error: string;
-  preparing: boolean;
 }) {
   const [query, setQuery] = useState('');
   const [source, setSource] = useState('');
@@ -100,7 +105,6 @@ export function PluginCatalog({ plugins, catalog, loading, error, preparing, ...
       ]} onChange={setCategory} />}
     </div>
     {error && <p className="settings-error" role="alert">插件目录读取失败：{error}</p>}
-    {preparing && <p className="plugin-catalog-feedback" role="status">正在准备安装预览…</p>}
     {loading && !catalog && <LoadingState variant="section">正在读取插件目录…</LoadingState>}
     {visible.length > 0 ? <ul className="plugin-card-grid" aria-label="插件卡片">
       {visible.map(entry => <PluginPackageCard key={entry.item.id} entry={entry} {...actions} />)}

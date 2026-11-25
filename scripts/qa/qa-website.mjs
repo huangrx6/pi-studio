@@ -6,7 +6,7 @@
  * captures reviewed previews under .qa/website-preview/.
  */
 import assert from 'node:assert/strict';
-import { access, mkdir } from 'node:fs/promises';
+import { access, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -16,6 +16,9 @@ const output = path.join(projectRoot, '.qa/website-preview');
 const guidePath = path.join(projectRoot, 'website/guide.html');
 const indexPath = path.join(projectRoot, 'website/index.html');
 await mkdir(output, { recursive: true });
+const markPath = path.join(projectRoot, 'website/assets/pi-mark.svg');
+assert.deepEqual(await readFile(markPath), await readFile(path.join(projectRoot, 'assets/pi-mark.svg')),
+  'the independently published website must carry the current Pi Studio mark');
 
 const browser = await chromium.launch({
   executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -29,6 +32,18 @@ const errors = [];
 page.on('pageerror', (error) => errors.push(`page: ${error.message}`));
 page.on('requestfailed', (request) => errors.push(`request: ${request.url()} ${request.failure()?.errorText || ''}`));
 await page.emulateMedia({ colorScheme: 'dark' });
+
+async function checkBrandMarks() {
+  const expected = pathToFileURL(markPath).href;
+  assert.equal(await page.locator('link[rel="icon"]').evaluate(link => link.href), expected);
+  for (const link of await page.locator('.brand, .footer-brand').all()) {
+    const mark = link.locator('img.brand-mark');
+    assert.equal(await mark.evaluate(async image => {
+      await image.decode();
+      return image.currentSrc;
+    }), expected);
+  }
+}
 
 async function checkReadingProgress(fraction) {
   await page.evaluate(value => {
@@ -45,6 +60,7 @@ async function checkReadingProgress(fraction) {
 
 try {
   await page.goto(pathToFileURL(guidePath).href);
+  await checkBrandMarks();
   await page.getByRole('heading', { name: '使用、扩展与实现手册', exact: true }).waitFor();
   await page.waitForFunction(() => document.fonts.status === 'loaded');
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'light', 'guide should default to light even when the system prefers dark');
@@ -117,6 +133,7 @@ try {
   await page.setViewportSize(desktopViewport);
   await page.evaluate(() => localStorage.removeItem('pi-studio-theme'));
   await page.goto(pathToFileURL(indexPath).href);
+  await checkBrandMarks();
   await page.getByRole('heading', { level: 1, name: /Pi Studio/i }).waitFor();
   assert.equal(await page.locator('html').getAttribute('data-theme'), 'light', 'home should default to light even when the system prefers dark');
   const homeShellWidth = await page.locator('.wrap').first().evaluate((element) => element.getBoundingClientRect().width);

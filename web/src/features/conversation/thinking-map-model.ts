@@ -52,7 +52,7 @@ function filePath(call: ToolCallBlock): string {
   return typeof path === 'string' ? path : '';
 }
 
-function toolTitle(call: ToolCallBlock, kind: ThinkingMapNodeKind): string {
+export function toolTitle(call: ToolCallBlock, kind: ThinkingMapNodeKind): string {
   const browserNames: Record<string, string> = {
     browser_tabs: '浏览器标签',
     browser_open: '打开网页',
@@ -80,10 +80,11 @@ function toolTitle(call: ToolCallBlock, kind: ThinkingMapNodeKind): string {
   if (kind === 'explore') {
     return ({ read: '读取文件', grep: '搜索内容', find: '查找文件', ls: '浏览目录' } as Record<string, string>)[call.name] || '探索';
   }
+  if (call.name === 'workbench_refresh') return '刷新视图';
   return call.name.split('__').at(-1) || call.name;
 }
 
-function toolPreview(call: ToolCallBlock, kind: ThinkingMapNodeKind): string {
+export function toolPreview(call: ToolCallBlock, kind: ThinkingMapNodeKind): string {
   const args = call.arguments || {};
   if (kind === 'command') return short(args.command, 120);
   if (kind === 'write' || kind === 'edit' || (kind === 'explore' && call.name === 'read')) {

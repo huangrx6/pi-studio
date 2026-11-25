@@ -2,23 +2,28 @@
  * rules to the conversation so file editors and floating dialogs remain legible. */
 .app :is(.chat-scroll, .temporary-scroll) :is(.user-bubble, .message-edit) {
   background: var(--conversation-control-surface);
-  border-color: var(--border);
+  border-color: var(--transparent);
   box-shadow: none;
 }
 
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
-  .attachment-card, .conversation-image-tile, .file-change-summary, .assistant-orb,
-  .activity-tool-code:not(.is-error), .request-inspector pre, .composer-model-hint
+  .attachment-card, .conversation-image-tile, .file-change-summary,
+  .activity-code-block:not(.is-error), .request-inspector pre, .composer-model-hint
 ) {
   background: var(--conversation-reading-surface);
-  border-color: var(--border);
+  border-color: var(--divider);
+}
+
+.app :is(.chat-scroll, .temporary-scroll) .assistant-orb {
+  background: var(--transparent);
+  border-color: var(--transparent);
 }
 
 /* Nested elements tint the existing surface instead of adding another solid card. */
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
-  .ref-skill-body, .attachment-kind,
+  .ref-skill-body,
   .assistant-interrupted, .assistant-turn-meta > span,
-  .composer-attachment, .message-edit-cancel,
+  .message-edit-cancel,
   .composer-feedback.is-info, .code-work-view code,
   .activity-tool.is-running .activity-tool-status, .compaction-banner
 ) {
@@ -32,7 +37,7 @@
 
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
   .attachment-card.is-openable, .conversation-image-tile,
-  .composer-attachment.is-openable, .message-action:not(:disabled),
+  .message-action:not(:disabled),
   .message-edit-cancel:not(:disabled),
   .file-change-item.is-openable,
   .file-change-more:not(:disabled), .file-change-undo:not(:disabled),
@@ -51,7 +56,7 @@
 
 /* Preserve semantic foregrounds and borders; only soften their tinted panels. */
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
-  .conversation-error, .message-error, .activity-tool-code.is-error,
+  .conversation-error, .message-error, .activity-code-block.is-error,
   .activity-tool.is-error .activity-tool-status, .message-edit-error
 ) {
   background: color-mix(in srgb, var(--error) 9%, var(--conversation-reading-surface));

@@ -18,6 +18,7 @@ type AppSidebarProps = {
   onOpenSettings: (page?: SettingsTab) => void;
   workspace: string;
   sessionId?: string;
+  isNewConversation?: boolean;
   workspaces: PiWorkspace[];
   allExpanded: boolean;
   onToggleAllExpanded: () => void;
@@ -51,6 +52,7 @@ function AppSidebarView({
   onOpenSettings,
   workspace,
   sessionId,
+  isNewConversation = false,
   workspaces,
   allExpanded,
   onToggleAllExpanded,
@@ -80,7 +82,13 @@ function AppSidebarView({
   return (
     <ShellSidebar className="sidebar" onCollapse={onCollapse}>
       <nav className="nav" aria-label="快捷入口">
-        <button type="button" className="nav-row new-chat" title="新对话" onClick={onStartSession}>
+        <button
+          type="button"
+          className={`nav-row new-chat${isNewConversation ? ' is-active' : ''}`}
+          aria-current={isNewConversation ? 'page' : undefined}
+          title="新对话"
+          onClick={onStartSession}
+        >
           <SquarePen aria-hidden="true" /><span>新对话</span>
         </button>
         <button type="button" className="nav-row" title="临时聊天" onClick={onOpenTemporaryChat}>
@@ -126,7 +134,7 @@ function AppSidebarView({
         actions={sidebarActions}
       />
       <div className="sidebar-bottom">
-        <button className="bottom-row" title="设置" onClick={() => onOpenSettings()}><Settings /><span>设置</span><span className="status"><i />本地运行</span></button>
+        <button className="bottom-row" title="设置" onClick={() => onOpenSettings()}><Settings /><span>设置</span></button>
       </div>
     </ShellSidebar>
   );

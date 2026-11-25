@@ -46,10 +46,9 @@ try {
     await page.locator('.settings-toast').first().waitFor({ state: 'hidden' });
     await target.screenshot({ path: path.join(output, name + '.png'), animations: 'disabled' });
   }
-  const markOf = card => card.locator('.harness-profile-icon').evaluate(node => ({
+  const markOf = card => card.locator('.settings-profile-icon').evaluate(node => ({
     shape: node.dataset.shape,
-    ink: node.dataset.ink,
-    layers: [...node.querySelector('.harness-profile-layers').children].map(layer => [layer.style.width, layer.className]),
+    image: node.querySelector('img').currentSrc,
   }));
   const iconButton = dialog => dialog.getByRole('button', { name: '更换方案图标' });
   async function checkMoreMenu(dialog, captureName) {
@@ -99,8 +98,9 @@ try {
     }));
   }
   await baseline.waitFor();
-  assert.equal(await cards.count(), 1);
-  assert.equal(await grid.locator(':scope > *').count(), 1);
+  await cards.filter({ hasText: 'studio-temporary' }).waitFor();
+  assert.equal(await cards.count(), 2);
+  assert.equal(await grid.locator(':scope > *').count(), 2);
   const [policyBounds, createBounds] = await Promise.all([policyButton.boundingBox(), create.boundingBox()]);
   assert.ok(policyBounds && createBounds);
   assert.equal(createBounds.y, policyBounds.y);
@@ -123,14 +123,12 @@ try {
   await id.fill('qa-review');
   const automaticMark = await markOf(iconButton(newProfile));
   await iconButton(newProfile).click();
-  assert.equal(await newProfile.getByRole('radio').count(), 10);
-  await newProfile.getByText('错层', { exact: true }).click();
-  await newProfile.getByTitle('藤紫', { exact: true }).click();
+  assert.equal(await newProfile.getByRole('group', { name: '图案', exact: true }).getByRole('radio').count(), 6);
+  await newProfile.getByText('流程图', { exact: true }).click();
   await newProfile.getByRole('button', { name: '恢复自动匹配' }).click();
   assert.deepEqual(await markOf(iconButton(newProfile)), automaticMark);
-  await newProfile.getByText('递进', { exact: true }).click();
-  await newProfile.getByTitle('藤紫', { exact: true }).click();
-  assert.ok(await newProfile.getByRole('radio', { name: '藤紫' }).isChecked());
+  await newProfile.getByText('指令册', { exact: true }).click();
+  assert.ok(await newProfile.getByRole('radio', { name: '指令册' }).isChecked());
   await capture('icon-picker-light', newProfile.locator('.settings-form-section').first());
   await iconButton(newProfile).click();
   assert.notEqual(await newProfile.locator('.harness-composition').getAttribute('open'), null);
@@ -179,8 +177,7 @@ try {
   await custom.waitFor();
   let originalMark = await markOf(custom);
   assert.equal(originalMark.shape, 'ascending');
-  assert.equal(originalMark.ink, 'berry');
-  assert.notDeepEqual(originalMark.layers, (await markOf(baseline)).layers);
+  assert.ok(originalMark.image && originalMark.image !== (await markOf(baseline)).image);
   assert.ok(await create.isVisible());
   let snapshot = await saved();
   assert.notEqual(snapshot.globalProfileId, 'qa-review');
@@ -200,15 +197,15 @@ try {
   await capture('editor');
   await edit.getByLabel('方案名称').fill('发布审查');
   await iconButton(edit).click();
-  await edit.getByRole('radio', { name: '藤紫' }).press('ArrowLeft');
-  assert.ok(await edit.getByRole('radio', { name: '海蓝' }).isChecked());
+  await edit.getByRole('radio', { name: '指令册' }).press('ArrowLeft');
+  assert.ok(await edit.getByRole('radio', { name: '流程图' }).isChecked());
+  originalMark = await markOf(iconButton(edit));
   await iconButton(edit).click();
   await edit.getByRole('button', { name: '保存配置' }).click();
   await edit.waitFor({ state: 'detached' });
   await harness.getByRole('button', { name: '编辑发布审查', exact: true }).waitFor();
-  originalMark = { ...originalMark, ink: 'ocean' };
   assert.deepEqual(await markOf(custom), originalMark);
-  assert.deepEqual((await saved()).profiles.find(row => row.id === 'qa-review').icon, { shape: 'ascending', ink: 'ocean' });
+  assert.deepEqual((await saved()).profiles.find(row => row.id === 'qa-review').icon, { shape: 'stagger' });
   await capture('marks-light', grid);
   await nav.locator('[data-settings-page="general"]').click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
@@ -228,7 +225,7 @@ try {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await iconButton(edit).click();
   await capture('icon-picker-dark', edit.locator('.settings-form-section').first());
-  await edit.getByText('收束', { exact: true }).click();
+  await edit.getByText('运行', { exact: true }).click();
   await edit.getByRole('button', { name: '取消', exact: true }).click();
   await page.getByRole('alertdialog', { name: '放弃未保存的 Harness 更改？' }).getByRole('button', { name: '放弃更改' }).click();
   await edit.waitFor({ state: 'detached' });
@@ -281,7 +278,7 @@ try {
   assert.ok(await checkWidth(edit));
   await iconButton(edit).click();
   assert.ok(await checkWidth(edit));
-  await capture('icon-picker-narrow', edit.locator('.harness-identity-fields'));
+  await capture('icon-picker-narrow', edit.locator('.profile-identity-grid'));
   await iconButton(edit).click();
   await edit.locator('.harness-guidance > summary').click();
   await edit.getByRole('button', { name: '编辑 read 的工具说明' }).click();
@@ -311,8 +308,8 @@ try {
   await page.getByRole('alertdialog', { name: '删除 Harness 配置？' }).getByRole('button', { name: '删除配置' }).click();
   await edit.waitFor({ state: 'detached' });
   await custom.waitFor({ state: 'detached' });
-  assert.equal(await cards.count(), 1);
-  assert.equal(await grid.locator(':scope > *').count(), 1);
+  assert.equal(await cards.count(), 2);
+  assert.equal(await grid.locator(':scope > *').count(), 2);
   assert.ok(await create.isEnabled());
   snapshot = await saved();
   assert.equal(snapshot.globalProfileId, 'studio-coding');

@@ -1,0 +1,16 @@
+/* The window chrome, conversation and loading surfaces share the same silhouette. */
+.pi-mark {
+  display: inline-block;
+  flex: none;
+  width: var(--icon-lg);
+  aspect-ratio: 1;
+  background-color: currentColor;
+  mask: url('../../../../assets/pi-mark.svg') center / contain no-repeat;
+}
+
+@media (forced-colors: active) {
+  .pi-mark {
+    forced-color-adjust: none;
+    background: CanvasText !important;
+  }
+}

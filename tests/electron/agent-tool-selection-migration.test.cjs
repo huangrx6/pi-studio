@@ -29,6 +29,7 @@ test('defaults include browser act tools', () => {
   assert.ok(DEFAULT_AGENT_TOOLS.includes('browser_type'));
   assert.ok(DEFAULT_AGENT_TOOLS.includes('browser_wait'));
   assert.ok(DEFAULT_AGENT_TOOLS.includes('browser_highlight'));
+  assert.ok(DEFAULT_AGENT_TOOLS.includes('workbench_refresh'));
   assert.ok(!DEFAULT_AGENT_TOOLS.includes('browser_evaluate'));
 });
 
@@ -43,12 +44,12 @@ test('version 3 selections migrate through browser act tools', () => {
   for (const name of [
     'browser_tabs', 'browser_open', 'browser_navigate', 'browser_snapshot', 'browser_screenshot',
     'browser_click', 'browser_type', 'browser_scroll', 'browser_wait', 'browser_select',
-    'browser_dialog', 'browser_download', 'browser_highlight',
+    'browser_dialog', 'browser_download', 'browser_highlight', 'workbench_refresh',
   ]) {
     assert.ok(next.enabled.includes(name), `missing ${name}`);
   }
   assert.ok(!next.enabled.includes('browser_evaluate'), 'evaluate must not auto-enable');
-  assert.equal(db.getSetting('studio.agent.tools.version'), 6);
+  assert.equal(db.getSetting('studio.agent.tools.version'), 7);
 });
 
 test('local saves preserve legacy MCP choices, including overlapping wildcards and offline methods', () => {

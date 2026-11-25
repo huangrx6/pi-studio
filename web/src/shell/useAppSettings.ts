@@ -10,7 +10,7 @@ import type {
   SettingsEditor,
   SettingsSnapshot,
 } from './app-types';
-import type { PluginWorkspaceSection, SettingsDestination, SettingsTab } from './app-shell-config';
+import type { AgentConfigSection, PluginWorkspaceSection, SettingsDestination, SettingsTab } from './app-shell-config';
 import { resolveSettingsDestination } from './app-shell-config';
 import type {
   ConcreteThinkingLevel,
@@ -88,6 +88,8 @@ type AppSettingsDependencies = {
   setSettingsAnchor: Setter<SettingsDestination['anchor']>;
   pluginSection: PluginWorkspaceSection;
   setPluginSection: Setter<PluginWorkspaceSection>;
+  agentSection: AgentConfigSection;
+  setAgentSection: Setter<AgentConfigSection>;
   setSettingsData: Setter<SettingsSnapshot | null>;
   setSettingsError: Setter<string | null>;
   showToast: (message: string, tone?: 'success' | 'error' | 'info') => void;
@@ -112,6 +114,7 @@ type AppSettingsDependencies = {
   setMcpTestResult: Setter<McpTestResult | null>;
   setMcpTesting: Setter<boolean>;
   setModelQuery: Setter<string>;
+  setModelView: Setter<'all' | 'provider'>;
   setExpandedProvider: Setter<string | null>;
   setProviderModels: Setter<Record<string, ProviderModelInfo[]>>;
   setModelRefreshError: Setter<string | null>;
@@ -131,6 +134,7 @@ type AppSettingsDependencies = {
   setCustomModel: Setter<CustomModelDraft>;
   setTokenUnits: Setter<Record<TokenField, TokenUnit>>;
   setMcpDetailState: Setter<McpInfo | null>;
+  closeMcpDetail: () => void;
   setSkillDetail: (value: SkillInfo | null) => void;
   setCompaction: Setter<{ active: boolean; reason?: string }>;
   setContextPolicy: Setter<ContextPolicy | null>;
@@ -178,6 +182,8 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     setSettingsAnchor,
     pluginSection,
     setPluginSection,
+    agentSection,
+    setAgentSection,
     settingsData,
     setSettingsData,
     setSettingsError,
@@ -222,6 +228,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     setMcpTestResult,
     setMcpTesting,
     setModelQuery,
+    setModelView,
     expandedProvider,
     setExpandedProvider,
     providerModels,
@@ -261,6 +268,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     tokenUnits,
     setTokenUnits,
     setMcpDetailState,
+    closeMcpDetail,
     mcpDetailRef,
     mcpDetailGenerationRef,
     skillDetailRef,
@@ -303,7 +311,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     if (!settingsOpen) return true;
     const allowed = await settingsDraftGuard.canLeave((labels) => settingsLeaveConfirmation.confirm({
       title: '丢弃未保存的设置更改？',
-      cardClassName: settingsTab === 'subagents' ? 'subagent-confirm' : undefined,
+      cardClassName: settingsTab === 'agents' && agentSection === 'subagents' ? 'subagent-confirm' : undefined,
       description: `尚未保存：${labels.join('、')}。离开会丢弃这些编辑；已提交的保存仍会继续。`,
       confirmLabel: '丢弃并离开',
       cancelLabel: '继续编辑',
@@ -313,28 +321,49 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     return allowed;
   }
 
+  function resetTransientSettingsUi() {
+    setModelView('all');
+    setModelQuery('');
+    setExpandedProvider(null);
+    for (const [id, request] of providerDiscoveryRequestsRef.current) {
+      providerDiscoveryRequestsRef.current.set(id, request + 1);
+    }
+    setProviderDiscovery({});
+  }
+
   function applySettingsDestination(tab: SettingsTab) {
     const destination = resolveSettingsDestination(tab);
     setSettingsTab(destination.tab);
     setSettingsAnchor(destination.anchor);
-    if (destination.pluginSection) setPluginSection(destination.pluginSection);
+    setPluginSection(destination.pluginSection ?? 'plugins');
+    if (destination.agentSection) setAgentSection(destination.agentSection);
   }
 
   async function selectSettingsTab(tab: SettingsTab) {
     const destination = resolveSettingsDestination(tab);
     const sameTab = destination.tab === settingsTab;
-    const sameSection = !destination.pluginSection || destination.pluginSection === pluginSection;
-    if (sameTab && sameSection && !destination.anchor) return;
-    // Switching plugin hub sections stays on the same page; only leave-check when the nav tab changes.
+    const samePluginSection = !destination.pluginSection || destination.pluginSection === pluginSection;
+    const sameAgentSection = !destination.agentSection || destination.agentSection === agentSection;
+    if (sameTab && samePluginSection && sameAgentSection && !destination.anchor) return;
+    // Switching hub sections stays on the same page; only leave-check when the nav tab changes.
     if (!sameTab && !await canLeaveSettings()) return;
     applySettingsDestination(tab);
-    if (!sameTab) setModelQuery('');
+    if (!sameTab) resetTransientSettingsUi();
   }
 
   async function closeSettings({ restoreFocus = true }: { restoreFocus?: boolean } = {}) {
     if (!await canLeaveSettings()) return false;
     if (!restoreFocus) settingsReturnFocusRef.current = null;
     setSettingsAnchor(undefined);
+    setSettingsTab('general');
+    setPluginSection('plugins');
+    setAgentSection('main');
+    resetTransientSettingsUi();
+    setExtensionDetail(null);
+    setExtensionInstallerOpen(false);
+    setExtensionInstallPreview(null);
+    closeSkillDetail();
+    closeMcpDetail();
     setSettingsOpen(false);
     return true;
   }
@@ -346,9 +375,13 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
       if (leavingPage && !await canLeaveSettings()) return;
       if (!settingsOpen) settingsReturnFocusRef.current = document.activeElement as HTMLElement;
       applySettingsDestination(tab);
+      if (leavingPage) resetTransientSettingsUi();
     } else if (!settingsOpen) {
       settingsReturnFocusRef.current = document.activeElement as HTMLElement;
+      setSettingsTab('general');
+      setPluginSection('plugins');
       setSettingsAnchor(undefined);
+      resetTransientSettingsUi();
     }
     setSettingsOpen(true);
     setSettingsError(null);
@@ -1595,9 +1628,22 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
 
   async function selectPluginSection(section: PluginWorkspaceSection) {
     if (section === pluginSection && settingsTab === 'plugins') return;
-    if (settingsTab !== 'plugins' && !await canLeaveSettings()) return;
-    applySettingsDestination('plugins');
+    const leavingPage = settingsTab !== 'plugins';
+    if (leavingPage && !await canLeaveSettings()) return;
+    setSettingsTab('plugins');
+    setSettingsAnchor(undefined);
     setPluginSection(section);
+    if (leavingPage) resetTransientSettingsUi();
+  }
+
+  async function selectAgentSection(section: AgentConfigSection) {
+    if (section === agentSection && settingsTab === 'agents') return;
+    const leavingPage = settingsTab !== 'agents';
+    if (leavingPage && !await canLeaveSettings()) return;
+    setSettingsTab('agents');
+    setSettingsAnchor(undefined);
+    setAgentSection(section);
+    if (leavingPage) resetTransientSettingsUi();
   }
 
   return {
@@ -1605,6 +1651,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     canLeaveSettings,
     selectSettingsTab,
     selectPluginSection,
+    selectAgentSection,
     closeSettings,
     openSettings,
     loadOfficialExtensions,

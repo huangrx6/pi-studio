@@ -14,6 +14,14 @@ test('the launcher starts with workspace tools and appends newly available exten
     ['user:reports', ...launcherToolOrder, 'project:notes', 'user:new-app']);
 });
 
+test('restoring an older launcher order skips the retired flow entry and preserves neighboring tools', () => {
+  const saved = ['terminal', 'flow', 'user:reports', 'files'];
+  const visible = [...launcherToolOrder, 'user:reports'];
+  const restored = ids(visible, saved);
+  assert.deepEqual(restored.slice(0, 3), ['terminal', 'user:reports', 'files']);
+  assert.ok(!restored.includes('flow'));
+});
+
 test('moving visible entries keeps the slots of hidden tools and other workspaces', () => {
   const visible = ['files', 'terminal', 'user:reports'];
   const order = ['files', 'project:elsewhere', 'git', 'terminal', 'user:reports'];

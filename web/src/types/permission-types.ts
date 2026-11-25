@@ -1,3 +1,5 @@
+import type { ProfileIcon } from './profile-icon';
+
 export type PermissionMode = 'ask' | 'smart' | 'full';
 export type PermissionDecision = 'allow' | 'ask' | 'deny';
 export type PermissionScope = 'user' | 'workspace' | 'session';
@@ -23,6 +25,27 @@ export type PermissionPolicy = {
   default: PermissionDecision;
   tools: Record<string, PermissionDecision>;
   rules: PermissionRule[];
+};
+
+export type PermissionProfile = {
+  id: string;
+  name: string;
+  description: string;
+  builtin?: boolean;
+  icon?: ProfileIcon | null;
+  policy: PermissionPolicy;
+};
+
+export type PermissionProfilePatch = Pick<PermissionProfile, 'id'> & Partial<PermissionProfile>;
+
+export type PermissionProfilesSnapshot = {
+  version: number;
+  mainProfileId: string;
+  workspaceProfileId: string;
+  activeMainProfileId: string;
+  temporaryProfileId: string;
+  profiles: PermissionProfile[];
+  storage: string;
 };
 
 export type PermissionPolicyLayer = {

@@ -34,6 +34,11 @@ const {
   parseSemver,
   satisfiesSemver,
 } = require('../core/extension-semver.cjs');
+const {
+  extensionDataDirectory,
+  extensionStateDirectory,
+  quarantineDirectory,
+} = require('../core/studio-paths.cjs');
 
 const INSTALL_STATE_VERSION = 1;
 const REGISTRY_SCHEMA_VERSION = 1;
@@ -547,6 +552,17 @@ function sleep(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function removeDirectoryIfEmpty(directory) {
+  if (!directory) return;
+  try {
+    const stat = fs.lstatSync(directory, { throwIfNoEntry: false });
+    if (!stat?.isDirectory()) return;
+    if (fs.readdirSync(directory).length === 0) fs.rmdirSync(directory);
+  } catch {
+    // Concurrent writer or non-empty directory; leave untouched.
+  }
+}
+
 async function withInstallLock(lockPath, callback) {
   ensurePrivateDirectory(path.dirname(lockPath));
   const deadline = Date.now() + 5_000;
@@ -573,6 +589,7 @@ async function withInstallLock(lockPath, callback) {
   } finally {
     try {
       fs.rmSync(lockPath, { recursive: true, force: true });
+      removeDirectoryIfEmpty(path.dirname(lockPath));
     } catch {
       // Lock cleanup must not disguise a committed operation as a failed write,
       // or replace the original failure. A leftover lock follows the existing
@@ -870,9 +887,9 @@ class ExtensionDistributionService {
     this.limits = { ...DEFAULT_ARCHIVE_LIMITS, ...(options.limits || {}) };
     this.prepared = new Map();
     this.claimedPrepared = new Set();
-    this.quarantineRoot = path.join(this.userDataPath, 'extension-cache', 'quarantine');
-    this.stateRoot = path.join(this.userDataPath, 'extension-state');
-    this.dataRoot = path.join(this.userDataPath, 'extension-data');
+    this.quarantineRoot = quarantineDirectory('extensions', this.userDataPath);
+    this.stateRoot = extensionStateDirectory(this.userDataPath);
+    this.dataRoot = extensionDataDirectory(this.userDataPath);
     this.uninstallRecoveryErrors = [];
   }
 
@@ -913,7 +930,7 @@ class ExtensionDistributionService {
     return path.join(workspace, '.pi-studio', 'extensions');
   }
 
-  stateDirectory(scope, cwd, create = true) {
+  stateDirectory(scope, cwd, create = false) {
     const directory = path.join(this.stateRoot, this.scopeKey(scope, cwd));
     if (create) return ensureContainedDirectory(directory, this.userDataPath);
     assertManagedPathInside(this.userDataPath, directory, '扩展状态目录');
@@ -971,6 +988,8 @@ class ExtensionDistributionService {
 
   recoverPendingUninstalls() {
     this.uninstallRecoveryErrors = [];
+    const journalPath = path.join(this.stateRoot, '.uninstall-journal');
+    if (!fs.existsSync(journalPath)) return [];
     let directory;
     let names;
     try {
@@ -981,7 +1000,7 @@ class ExtensionDistributionService {
         .sort();
     } catch (error) {
       this.uninstallRecoveryErrors.push({
-        path: directory || path.join(this.stateRoot, '.uninstall-journal'),
+        path: directory || journalPath,
         message: error instanceof Error ? error.message : String(error),
       });
       return [...this.uninstallRecoveryErrors];
@@ -2232,7 +2251,7 @@ class ExtensionDistributionService {
       this.assertPermissionConsent(prepared.summary.addedPermissions, options.acceptedPermissions);
       this.assertCapabilityConsent(prepared.summary, options);
       const verifiedSignature = this.assertPreparedPublisherTrust(prepared, options);
-      const lock = path.join(this.stateDirectory(scope, cwd), `.${id}.lock`);
+      const lock = path.join(this.stateDirectory(scope, cwd, true), `.${id}.lock`);
       return await withInstallLock(lock, async () => {
       const dependencies = this.dependencyState(prepared.validated.manifest, scope, cwd);
       if (dependencies.missing.length > 0) {
@@ -2446,7 +2465,7 @@ class ExtensionDistributionService {
   async rollback(id, options = {}) {
     assertSafeExtensionId(id);
     const { scope, cwd } = this.installTarget(options.scope, options.cwd);
-    const lock = path.join(this.stateDirectory(scope, cwd), `.${id}.lock`);
+    const lock = path.join(this.stateDirectory(scope, cwd, true), `.${id}.lock`);
     return withInstallLock(lock, async () => {
       const state = this.readState(scope, cwd, id);
       if (!state) throw distributionError('EXTENSION_NOT_INSTALLED', `扩展未安装：${id}`);
@@ -2534,7 +2553,7 @@ class ExtensionDistributionService {
   async uninstall(id, options = {}) {
     assertSafeExtensionId(id);
     const { scope, cwd } = this.installTarget(options.scope, options.cwd);
-    const lock = path.join(this.stateDirectory(scope, cwd), `.${id}.lock`);
+    const lock = path.join(this.stateDirectory(scope, cwd, true), `.${id}.lock`);
     return withInstallLock(lock, async () => {
       const state = this.readState(scope, cwd, id);
       if (!state) return { removed: false, dataPreserved: false };
@@ -2681,6 +2700,9 @@ class ExtensionDistributionService {
         // A concurrent installer may have just moved or removed the quarantine.
       }
     }
+    removeDirectoryIfEmpty(this.quarantineRoot);
+    removeDirectoryIfEmpty(path.dirname(this.quarantineRoot));
+    removeDirectoryIfEmpty(path.dirname(path.dirname(this.quarantineRoot)));
   }
 }
 

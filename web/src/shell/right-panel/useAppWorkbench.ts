@@ -7,7 +7,7 @@ import type {
   PanelFileSource,
   PanelTab,
 } from '../app-types';
-import { destroyTemporary } from '../../features/conversation/temporary-chat-store';
+import { destroyTemporary, seedTemporaryChat } from '../../features/conversation/temporary-chat-store';
 import type { BrowserLibraryView } from '../../features/browser/browser-history';
 import { errorText } from '../../shared/error-text';
 import { createPanelFileCache, panelFileKey } from './panel-file-cache';
@@ -57,7 +57,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   const previousContext = useRef(contextKey);
   const tabIsVisible = useCallback((tab: PanelTab) => {
     if (tab.kind === 'trace') return showTrace && tab.sessionId === sessionId;
-    if (tab.kind === 'progress' || tab.kind === 'subagents') return tab.sessionId === sessionId;
+    if (tab.kind === 'progress' || tab.kind === 'subagents') return Boolean(sessionId) && tab.sessionId === sessionId;
     if (tab.kind === 'git') return Boolean(sessionId) && tab.cwd === cwd;
     if (tab.kind === 'extension') return Boolean(tab.extensionPanel?.global) || (tab.cwd === cwd && tab.sessionId === sessionId);
     return true;
@@ -163,9 +163,12 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     }, 300);
   }
 
-  function openTemporaryChat() {
+  function openTemporaryChat(options?: { prompt?: string; autoSubmit?: boolean; title?: string }) {
     const id = crypto.randomUUID();
-    setPanelTabs(current => [...current, { id, kind: 'temporary', title: '临时聊天' }]);
+    if (options?.prompt) {
+      seedTemporaryChat(id, options.prompt, options.autoSubmit === true);
+    }
+    setPanelTabs(current => [...current, { id, kind: 'temporary', title: options?.title || '临时聊天' }]);
     setActivePanelTabId(id);
     if (filesOpen) setPanelEntered(true); else openPanel();
   }
@@ -259,8 +262,8 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     openToolTab({ id: `git:${cwd}`, kind: 'git', title: 'Git', cwd, ...(gitPage && { gitPage }) });
   }
 
-  function openExtensionTab(item: Pick<ExtensionUiItem, 'id' | 'extensionId' | 'extensionName' | 'taskBoard'>) {
-    const global = Boolean(item.taskBoard);
+  function openExtensionTab(item: Pick<ExtensionUiItem, 'id' | 'extensionId' | 'extensionName' | 'view'>) {
+    const global = item.view?.scope === 'global';
     openToolTab({
       id: JSON.stringify(global ? ['extension', item.id] : ['extension', cwd, sessionId ?? null, item.extensionId]),
       kind: 'extension',
@@ -268,6 +271,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
       ...(!global && { cwd, sessionId }),
       extensionPanel: { extensionId: item.extensionId, panelId: item.id, global },
     });
+    if (item.view?.fullscreen) setPanelFullscreen(true);
   }
 
   function openServicesTab() {
@@ -442,7 +446,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     if (tab.kind === 'terminal') void window.piApi.terminalClose(tab.id).catch(() => {});
   }
 
-  /** 关闭标签；最后一个标签关闭后直接收起工作台。 */
+  /** 关闭标签；最后一个标签关闭后保留工作台并回到起始工具页。 */
   function closePanelTab(id: string) {
     const current = panelTabsRef.current.filter(tabIsVisible);
     const index = current.findIndex((tab) => tab.id === id);
@@ -454,7 +458,6 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
       setActivePanelTabId('');
       setFile(null);
       setPanelSplit(false);
-      closePanel();
       return;
     }
     if (activePanelTabIdRef.current === id) {
@@ -505,7 +508,6 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
       setActivePanelTabId('');
       setFile(null);
       setPanelSplit(false);
-      closePanel();
     }
     else if (!next.some(tab => tab.id === activePanelTabIdRef.current)) activatePanelTab(next.find(tab => tab.id === id) ?? next[0]);
   }
@@ -635,6 +637,26 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
   // openBrowserTab closes over latest setters; mount once.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const workbenchRefreshRef = useRef<(scope: string) => void>(() => {});
+  workbenchRefreshRef.current = scope => {
+    if (scope !== 'all' && scope !== 'files') return;
+    if (treeVisible && workspaceRef.current) void loadTree('');
+    const activeTab = panelTabsRef.current.find(tab => tab.id === activePanelTabIdRef.current);
+    if (activeTab?.kind === 'file' && activeTab.path && (!activeTab.source || activeTab.source !== 'attachment')) {
+      fileCacheRef.current.drop(panelFileKey({
+        path: activeTab.path,
+        source: activeTab.source || 'workspace',
+        cwd: activeTab.cwd,
+        sessionId: activeTab.sessionId,
+      }));
+      if (filesOpen) void loadFileToTab(activeTab);
+      else deferredFileRefreshRef.current = activeTab.id;
+    }
+  };
+  useEffect(() => (
+    window.piApi.onWorkbenchRefresh?.(event => workbenchRefreshRef.current(event.scope))
+  ), []);
 
   useEffect(() => () => {
     ++fileReadRef.current;

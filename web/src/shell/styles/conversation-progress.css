@@ -59,9 +59,13 @@
 .is-featured .long-task-detail { color: var(--text-2); font-size: var(--text-sm); }
 .is-featured .long-task-actions { justify-content: flex-start; gap: 8px; margin: 2px 0 0; }
 .is-featured .long-task-action { min-height: 28px; }
-.progress-goal-state svg { color: currentColor; }
+.progress-goal-state svg { color: currentColor; transition: transform var(--motion-switch); }
 .progress-goal-state[aria-expanded="true"] svg { transform: rotate(180deg); }
-.progress-goal-note { max-height: 140px; overflow: auto; color: var(--text-2); font-size: var(--text-sm); overflow-wrap: anywhere; }
+.progress-goal-note { max-height: 140px; overflow: auto; color: var(--text-2); font-size: var(--text-sm); overflow-wrap: anywhere; animation: pi-disclosure-in var(--motion-expand) both; }
+@media (prefers-reduced-motion: reduce) {
+  .progress-goal-state svg { transition: none; }
+  .progress-goal-note { animation: none; }
+}
 .progress-goal-note p { margin: 0; white-space: pre-wrap; }
 .progress-goal-note small { color: var(--text-3); }
 .is-featured.is-blocked .progress-goal-state { color: var(--warning); }

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useMemo, useRef } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import type { CSSProperties } from 'react';
 import { ExtensionSlot } from './features/extensions/ExtensionSlot';
 import { ExtensionSummaries } from './features/extensions/ExtensionSummaries';
@@ -52,9 +52,6 @@ export function App() {
     installUpdate,
     shortcutsOpen,
     setShortcutsOpen,
-    notifications,
-    markAllNotificationsRead,
-    clearNotifications,
     workspaces,
     workspace,
     session,
@@ -258,7 +255,6 @@ export function App() {
     startSession,
     selectDraftWorkspace,
     openSession,
-    openNotificationSession,
     updateComposerMenu,
     sendPromptFromExtension,
     executeExtensionCommand,
@@ -268,7 +264,6 @@ export function App() {
     restoreArchivedConversation,
     permanentlyDeleteArchivedConversation,
     deleteArchivedGroup,
-    runNotificationAction,
     actionPaletteOpen,
     setActionPaletteOpen,
     availableConversationActions,
@@ -433,6 +428,7 @@ export function App() {
       onOpenSettings={onSidebarOpenSettings}
       workspace={workspace}
       sessionId={session?.id}
+      isNewConversation={!session && !settingsOpen}
       workspaces={workspaces}
       allExpanded={allExpanded}
       onToggleAllExpanded={toggleAllExpanded}
@@ -520,24 +516,18 @@ export function App() {
     compaction,
     retryInfo,
     liveDiff,
-    notifications,
-    markAllRead: markAllNotificationsRead,
-    clearNotifications,
     conversationSubscriptionError,
     retryConversationSubscription,
     settingsOpen,
     visible: !settingsOpen && !panelFullscreen,
   }), [
     busy,
-    clearNotifications,
     compaction,
     conversationSubscriptionError,
     error,
     isNewConversation,
     liveDiff,
-    markAllNotificationsRead,
     messages.length,
-    notifications,
     panelFullscreen,
     preferences,
     retryConversationSubscription,
@@ -586,8 +576,6 @@ export function App() {
     onOpenProgress: workbench.openProgressTab,
     onOpenTrace: openTrace,
     onOpenGit: openGit,
-    onOpenNotificationSession: openNotificationSession,
-    onRunNotificationAction: runNotificationAction,
     activeTool: selectedTool === 'progress' || selectedTool === 'trace' ? selectedTool : undefined,
     status: !panelFullscreen && conversationExtensions.headerItems.length > 0 ?
       <ExtensionSummaries {...extensionPicker} slot="status.chip" items={conversationExtensions.headerItems} />
@@ -595,10 +583,16 @@ export function App() {
     extensionMenu: <ConversationExtensionsMenu {...extensionPicker}
       open={extensionMenuOpen} onOpenChange={setExtensionMenuOpen} />,
   };
+  const openGitChangesRef = useRef<() => void>(() => {});
+  openGitChangesRef.current = () => openGit('changes');
+  const handleOpenGitChanges = useCallback(() => {
+    openGitChangesRef.current();
+  }, []);
   const workspaceActions = useMemo(() => ({
     openAttachment: handleOpenAttachment,
     openFile: handleOpenFile,
     openChanges: handleOpenChanges,
+    openGit: handleOpenGitChanges,
     undoTurnDiff,
     editMessage: handleEditMessage,
   }), [
@@ -606,6 +600,7 @@ export function App() {
     handleOpenAttachment,
     handleOpenChanges,
     handleOpenFile,
+    handleOpenGitChanges,
     undoTurnDiff,
   ]);
 
@@ -861,6 +856,16 @@ export function App() {
     openLink: (url: string) => markdownLinkRef.current(url),
   }), [panelWorkspace, session?.id, handleOpenFile, openFile]);
 
+  const extensionWorkspaces = useMemo(
+    () => workspaces.map(item => ({ name: item.name, path: item.cwd })),
+    [workspaces],
+  );
+  useEffect(() => (
+    window.piApi.onWorkbenchRefresh?.(event => {
+      if (event.scope === 'all' || event.scope === 'sessions') void loadState();
+    })
+  ), [loadState]);
+
   return (
     <GitRepositoryContext.Provider value={repositories}>
     <MarkdownActions.Provider value={markdownActionsValue}>
@@ -917,11 +922,13 @@ export function App() {
           tab={tab}
           session={session}
           preferences={preferences}
+          workspaces={extensionWorkspaces}
           modelSelection={modelSelection}
           progress={progressContent}
           trace={workbenchTrace}
           subagents={subagentWorkspace}
           extensions={extensionPicker}
+          onOpenTemporaryChat={openTemporaryChat}
           onOpenProgress={workbench.openProgressTab}
           onOpenGit={openGit}
           onOpenGitFile={openGitFile}
@@ -933,11 +940,13 @@ export function App() {
         onLauncherOrderChange={(order) => foundation.updatePreference('workbenchLauncherOrder', order)}
         showTrace={preferences.showCodeView}
         workspace={workspace}
+        workspaces={workspaces}
         session={session}
         modelSelection={modelSelection}
         workspaceName={panelWorkspaceName}
         dragPreviewRef={dragPreviewRef}
         makeDragPreview={makeDragPreview}
+        onSelectWorkspace={selectDraftWorkspace}
         onChooseWorkspace={chooseFile}
         onOpenSettings={(page) => { void openSettings(page); }}
         terminalAppearance={terminalAppearance}

@@ -2,29 +2,37 @@
   "$schema": "../../sdk/plugins/schemas/pi-studio.plugin.registry.schema.json",
   "schemaVersion": 1,
   "name": "Pi Studio 官方插件",
-  "updatedAt": "2026-11-25T00:00:00.000Z",
+  "updatedAt": "2026-11-26T00:00:00.000Z",
   "plugins": [
     {
       "id": "studio.excalidraw",
       "name": "Excalidraw",
       "publisher": "Pi Studio",
       "summary": "在侧栏看着图逐步画出来，完成后可以继续编辑。",
-      "description": "聊天绘图、手动画布和本地导出。支持架构图、依赖图、流程图、状态图、拓扑图及思维导图。",
+      "description": "完全独立的实时画布插件：聊天绘图、手动画布和本地导出。支持架构图、依赖图、流程图、状态图、拓扑图及思维导图。",
       "category": "productivity",
       "icon": "assets/icon.png",
       "homepage": "https://excalidraw.com/",
       "repository": "https://github.com/huangrx6/pi-studio",
-      "keywords": ["画布", "绘图", "diagram", "mermaid", "excalidraw"],
+      "keywords": [
+        "画布",
+        "绘图",
+        "diagram",
+        "mermaid",
+        "excalidraw"
+      ],
       "provides": {
-        "skills": ["excalidraw-live-canvas"],
+        "skills": [
+          "diagram-authoring"
+        ],
         "extension": true
       },
       "versions": [
         {
-          "version": "1.1.0",
+          "version": "2.0.0",
           "packagePath": "packages/excalidraw",
-          "sha256": "3f3effe6e5790fb77171faad8ce16dd87360c319affcf5351fa8c179d541fc49",
-          "publishedAt": "2026-11-24T00:00:00.000Z"
+          "sha256": "e3e5da48d7474768807994659bdbd6c0495fa1a4bf94d7e534aea64215891ff4",
+          "publishedAt": "2026-11-25T00:00:00.000Z"
         }
       ]
     },
@@ -32,21 +40,52 @@
       "id": "studio.task-board",
       "name": "任务看板",
       "publisher": "Pi Studio",
-      "summary": "所有会话共享一份任务看板，拖动卡片即可更新状态。",
-      "description": "新增和编辑任务，记录详情、优先级以及计划与实际起止时间。AI 可以按状态和本地日期查询。",
+      "summary": "完全独立的全局任务看板，支持分类、多项目关联、进展记录、归档与 AI 总结日报周报。",
+      "description": "按需求、Bug、优化与常规任务分类管理，支持关联单个或多个项目、记录进展时间线与归档恢复，并通过只读工具和技能在临时会话或任意会话中梳理日报与周报。",
       "category": "productivity",
       "icon": "assets/icon.png",
       "repository": "https://github.com/huangrx6/pi-studio",
-      "keywords": ["任务", "看板", "计划", "kanban", "tasks"],
-      "provides": { "extension": true },
+      "keywords": [
+        "任务",
+        "看板",
+        "计划",
+        "日报",
+        "周报",
+        "kanban",
+        "tasks"
+      ],
+      "provides": {
+        "skills": [
+          "task-board-reporting"
+        ],
+        "extension": true
+      },
       "versions": [
         {
-          "version": "1.0.0",
+          "version": "2.0.0",
           "packagePath": "packages/task-board",
-          "sha256": "a1fb38d99838de12160a56080a415635b14c7a30bf92678db1a93c7dd671fc88",
+          "sha256": "e3b56e8bd64b1e16436ee2f7c6bfbdda9c75700b3b23e879227481b8780153c1",
           "publishedAt": "2026-11-25T00:00:00.000Z"
         }
       ]
+    },
+    {
+      "id": "studio.notes-library",
+      "name": "知识库",
+      "publisher": "Pi Studio",
+      "summary": "一个可在各工作区使用的本地 PARA 阅读与编辑工作台。",
+      "description": "连接已有笔记目录，搜索与编辑 Markdown 和 HTML。可切换整页主题、调整大纲宽度，支持 AI 检索和按版本写入。",
+      "category": "productivity",
+      "icon": "assets/icon.png",
+      "repository": "https://github.com/huangrx6/pi-studio",
+      "keywords": ["知识库", "笔记库", "PARA", "Markdown", "HTML", "学习", "notes"],
+      "provides": { "skills": ["para-notes"], "extension": true },
+      "versions": [{
+        "version": "1.3.0",
+        "packagePath": "packages/notes-library",
+        "sha256": "904b5b48edf8964ebc86eb7543fbc795b1eee830f25874e3b9a320a3a88ab45e",
+        "publishedAt": "2026-11-26T00:00:00.000Z"
+      }]
     }
   ]
 }

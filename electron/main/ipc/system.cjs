@@ -33,12 +33,22 @@ async function deviceStorageSources() {
 }
 
 function registerSystemIpc(waitForStartup) {
-  const storage = createDeviceStorageService({ shell, clipboard, getSources: deviceStorageSources });
+  const storage = createDeviceStorageService({
+    shell,
+    clipboard,
+    getSources: deviceStorageSources,
+    getDatabaseStats: () => getStudioDatabase().databaseStorageStats(),
+    compactDatabase: () => getStudioDatabase().compactDatabase(),
+  });
   ipcMain.handle('pi:device-storage', async () => {
     try { return await storage.snapshot(); }
     catch { throw new Error('无法读取存储用量，请刷新重试。'); }
   });
   ipcMain.handle('pi:device-storage-location', (_event, id, action) => storage.useLocation(id, action));
+  ipcMain.handle('pi:device-storage-cleanup', async () => {
+    try { return await storage.cleanup(); }
+    catch { throw new Error('存储整理未能完成，请稍后重试。'); }
+  });
   ipcMain.handle('pi:startup-ready', () => waitForStartup());
   // 渲染进程切换外观（设置页），持久化并同步原生窗口与菜单栏。
   ipcMain.handle(

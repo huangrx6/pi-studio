@@ -16,7 +16,6 @@ import type {
   PiSessionSummary,
   PiWorkspace,
 } from '../../shell/app-types';
-import type { AppNotificationAction, NotificationTone } from '../../shell/NotificationCenter';
 import { errorText } from '../../shared/error-text';
 import {
   composerDraftMatches,
@@ -124,13 +123,6 @@ type MessageDeliveryDependencies = {
   refreshOutline: (sessionId: string, generation?: number) => Promise<OutlineData | undefined>;
   refreshSubagentChildren: (showSpinner?: boolean) => Promise<void>;
   resumeTranscriptFollow: () => void;
-  pushNotification: (
-    message: string,
-    tone?: NotificationTone,
-    title?: string,
-    sessionId?: string,
-    action?: AppNotificationAction,
-  ) => void;
   showComposerFeedback: (message: string, tone?: 'info' | 'warning') => void;
   commandHandlersRef: MutableRefObject<{
     findExtensionCommand: (input: string) => Promise<{ commandId: string; argument: string } | undefined>;
@@ -198,7 +190,6 @@ export function useMessageDelivery({
   refreshOutline,
   refreshSubagentChildren,
   resumeTranscriptFollow,
-  pushNotification,
   showComposerFeedback,
   commandHandlersRef,
 }: MessageDeliveryDependencies) {
@@ -578,18 +569,8 @@ export function useMessageDelivery({
       if (latestPromptBySessionRef.current.get(submission.sessionId) === requestId) {
         latestPromptBySessionRef.current.delete(submission.sessionId);
       }
-      if (postCommitError) {
-        if (current) setError(null);
-        try {
-          pushNotification(
-            postCommitError,
-            'warning',
-            mode === 'prompt' ? '消息已提交' : '排队消息已发送',
-            submission.sessionId,
-          );
-        } catch {
-          // The admitted state remains authoritative if notifications fail.
-        }
+      if (postCommitError && current) {
+        setError(null);
       }
       return postCommitError
         ? {
@@ -606,16 +587,6 @@ export function useMessageDelivery({
       }
       if (current) {
         setError(null);
-      }
-      try {
-        pushNotification(
-          result.postCommitError || message,
-          'warning',
-          mode === 'prompt' ? '消息已提交' : '排队消息已发送',
-          submission.sessionId,
-        );
-      } catch {
-        // The admitted state is still preserved if notifications fail.
       }
       return {
         state: 'admitted-but-postcommit-read-failed',
@@ -696,7 +667,7 @@ export function useMessageDelivery({
     setRetryInfo(null);
     let admitted = false;
     try {
-      const result = await window.piApi.conversationEdit({
+      await window.piApi.conversationEdit({
         id: sessionId,
         entryId,
         text: normalizedText,
@@ -704,14 +675,6 @@ export function useMessageDelivery({
         mentions: extractComposerMentions(text),
       });
       admitted = true;
-      if (result.postCommitError) {
-        pushNotification(
-          result.postCommitError,
-          'warning',
-          '消息已重新发送',
-          sessionId,
-        );
-      }
       void loadState().catch(() => {});
       if (editRequestRef.current !== requestId || sessionRef.current?.id !== sessionId) return;
       const saved = await loadEditedTranscriptWindow(sessionId, entryId, normalizedText);
@@ -737,12 +700,6 @@ export function useMessageDelivery({
       if (admitted) {
         // Durable has already accepted the replacement. A projection read
         // failure must not make the edit dialog look like a failed send.
-        pushNotification(
-          '消息已重新发送，当前内容正在同步。',
-          'warning',
-          '编辑消息已提交',
-          sessionId,
-        );
         return;
       }
       if (editRequestRef.current === requestId && sessionRef.current?.id === sessionId) {
@@ -769,25 +726,10 @@ export function useMessageDelivery({
         images: submission.imagePayload,
       });
     } catch (error) {
-      const message = errorText(error);
-      pushNotification(
-        `排队消息未能继续发送：${message}`,
-        'error',
-        '排队发送失败',
-        submission.sessionId,
-      );
-      return { state: 'rejected', current: false, error: message };
+      return { state: 'rejected', current: false, error: errorText(error) };
     }
     try {
       void loadState().catch(() => {});
-      if (result.postCommitError) {
-        pushNotification(
-          result.postCommitError,
-          'warning',
-          '排队消息已发送',
-          submission.sessionId,
-        );
-      }
       return result.postCommitError
         ? {
             state: 'admitted-but-postcommit-read-failed',
@@ -797,11 +739,6 @@ export function useMessageDelivery({
         : { state: 'admitted', current: false };
     } catch {
       const message = '排队消息已提交，但界面暂时无法刷新。';
-      try {
-        pushNotification(message, 'warning', '排队消息已发送', submission.sessionId);
-      } catch {
-        // Do not convert an admitted Durable input into a retryable failure.
-      }
       return {
         state: 'admitted-but-postcommit-read-failed',
         current: false,
@@ -971,13 +908,6 @@ export function useMessageDelivery({
               ? '消息未发送，原草稿已恢复，等待期间的新输入也已保留。'
               : '消息未发送，原草稿已恢复。',
           );
-        } else {
-          pushNotification(
-            `消息未发送：${delivery.error}。原草稿已保存在该会话。`,
-            'error',
-            '消息未发送',
-            prepared.sessionId,
-          );
         }
       } else if (latestAttempt) {
         composerDeliveryRetriesRef.current.delete(ownerKey);
@@ -1008,14 +938,6 @@ export function useMessageDelivery({
         updateSessionQueuedPrompts(sessionId, items => (
           markRejectedQueuedSubmission(items, id, requestId, outcome.error)
         ));
-        if (!outcome.current) {
-          pushNotification(
-            `排队消息未能发送：${outcome.error}`,
-            'error',
-            '排队发送失败',
-            sessionId,
-          );
-        }
         return;
       }
       updateSessionQueuedPrompts(sessionId, items => (
@@ -1026,12 +948,6 @@ export function useMessageDelivery({
       updateSessionQueuedPrompts(sessionId, items => (
         markRejectedQueuedSubmission(items, id, requestId, message)
       ));
-      pushNotification(
-        `排队消息未能发送：${message}`,
-        'error',
-        '排队发送失败',
-        sessionId,
-      );
     } finally {
       clearQueueAdmissionPending(sessionId, requestId);
       queuedDrainSessionsRef.current.delete(sessionId);
@@ -1071,14 +987,6 @@ export function useMessageDelivery({
           updateSessionQueuedPrompts(sessionId, items => (
             markRejectedQueuedSubmission(items, item.id, requestId, outcome.error)
           ));
-          if (!outcome.current) {
-            pushNotification(
-              `排队消息未能发送：${outcome.error}`,
-              'error',
-              '排队发送失败',
-              sessionId,
-            );
-          }
           break;
         }
         admittedCount += 1;
@@ -1099,12 +1007,6 @@ export function useMessageDelivery({
           )
         ));
       }
-      pushNotification(
-        `排队消息未能发送：${message}`,
-        'error',
-        '排队发送失败',
-        sessionId,
-      );
     } finally {
       queuedDrainSessionsRef.current.delete(sessionId);
     }
@@ -1283,14 +1185,6 @@ export function useMessageDelivery({
             outcome.error,
           )
         ));
-        if (sameActiveSession && !outcome.current) {
-          pushNotification(
-            `排队消息未能发送：${outcome.error}`,
-            'error',
-            '排队发送失败',
-            sessionId,
-          );
-        }
         return;
       }
       updateSessionQueuedPrompts(sessionId, (current) => (
@@ -1310,12 +1204,6 @@ export function useMessageDelivery({
           message,
         )
       ));
-      pushNotification(
-        `排队消息未能发送：${message}`,
-        'error',
-        '排队发送失败',
-        sessionId,
-      );
     } finally {
       clearQueueAdmissionPending(sessionId, next.submission.requestId);
       queuedDrainSessionsRef.current.delete(sessionId);

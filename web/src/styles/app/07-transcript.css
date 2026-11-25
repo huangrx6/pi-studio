@@ -20,27 +20,27 @@
   contain-intrinsic-size: none;
 }
 
-.assistant-content { max-width: 100%; min-width: 0; font-size: var(--text-md); line-height: var(--chat-line-height); overflow-wrap: anywhere; }
+.assistant-content { max-width: 100%; min-width: 0; font-size: var(--chat-font-size, 15px); line-height: var(--chat-line-height); overflow-wrap: anywhere; }
 .assistant-content > .markdown + .markdown { margin-top: 10px; }
 /* Keep prose line boxes on whole pixels. Fractional line heights make the
    live footer and current-run rail alternate by a pixel as text grows. */
-.markdown { color: var(--text); font-size: var(--text-md); line-height: var(--chat-line-height); line-height: round(up, calc(var(--text-md) * var(--chat-line-height)), 1px); overflow-wrap: anywhere; }
+.markdown { color: var(--text); font-size: var(--chat-font-size, 15px); line-height: var(--chat-line-height); line-height: round(up, calc(var(--chat-font-size, 15px) * var(--chat-line-height)), 1px); overflow-wrap: anywhere; }
 .markdown-plain { white-space: pre-wrap; }
 .markdown > :first-child { margin-top: 0; }
 .markdown > :last-child { margin-bottom: 0; }
-.markdown p { margin: 0 0 12px; }
-.markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: 22px 0 10px; line-height: var(--leading-normal); letter-spacing: -.25px; }
-.markdown h1 { font-size: var(--text-title); }
-.markdown h2 { font-size: var(--text-lg); }
-.markdown h3 { font-size: var(--text-md); }
-.markdown h4 { font-size: var(--text-base); }
-.markdown ul, .markdown ol { margin: 0 0 12px; padding-left: 22px; }
-.markdown li { margin: 3px 0; }
-.markdown li > p { margin-bottom: 5px; }
-.markdown blockquote { margin: 12px 0; padding: 2px 0 2px 14px; border-left: 2px solid var(--accent); border-radius: 0 var(--radius-tag) var(--radius-tag) 0; background: var(--surface-soft); color: var(--muted); }
+.markdown p { margin: 0 0 15px; }
+.markdown h1, .markdown h2, .markdown h3, .markdown h4 { margin: 26px 0 11px; line-height: var(--leading-normal); letter-spacing: -.2px; color: var(--text-1); }
+.markdown h1 { font-size: 1.52em; }
+.markdown h2 { font-size: 1.26em; }
+.markdown h3 { font-size: 1.1em; }
+.markdown h4 { font-size: 1em; font-weight: var(--weight-semibold); }
+.markdown ul, .markdown ol { margin: 0 0 15px; padding-left: 22px; }
+.markdown li { margin: 6px 0; }
+.markdown li > p { margin-bottom: 6px; }
+.markdown blockquote { margin: 15px 0; padding: 6px 0 6px 14px; border-left: 2px solid var(--accent); border-radius: 0 var(--radius-tag) var(--radius-tag) 0; background: var(--conversation-inset-surface, var(--surface-soft)); color: var(--muted); }
 .markdown blockquote > :first-child { margin-top: 0; }
 .markdown blockquote > :last-child { margin-bottom: 0; }
-.markdown hr { margin: 20px 0; border: 0; border-top: 1px solid var(--border); }
+.markdown hr { margin: 22px 0; border: 0; border-top: 1px solid var(--border); }
 .markdown a { color: var(--accent-foreground); text-decoration: underline; text-underline-offset: 2px; }
 .markdown strong { font-weight: var(--weight-bold); }
 .markdown a.md-path-link {
@@ -57,32 +57,33 @@
 /* Inline code that turned into a path link keeps its code chrome. */
 .markdown a.md-path-link > code { color: inherit; }
 
-.markdown code { padding: 2px 5px; border-radius: var(--radius-tag); background: var(--surface-soft); font: .88em var(--mono); }
-.markdown pre { margin: 12px 0; padding: 13px 14px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface); font: var(--text-sm)/var(--leading-relaxed) var(--mono); }
+.markdown code { padding: 2px 6px; border-radius: var(--radius-tag); background: var(--inline-code-bg, var(--surface-soft)); font-size: .87em; font-family: var(--mono); }
+.markdown pre { margin: 14px 0; padding: 14px 16px; overflow: auto; border: 1px solid var(--divider); border-radius: var(--radius-card); background: var(--conversation-reading-surface, var(--surface)); font: var(--text-sm)/var(--leading-relaxed) var(--mono); }
 .markdown pre code { padding: 0; border: 0; background: var(--transparent); font: inherit; }
-/* 表格与代码块用同一个 8px 圆角：外框画在滚动容器上，单元格只画内部线，
+/* 表格与代码块用同一个圆角：外框画在滚动容器上，单元格只画内部线，
  * 否则 collapse 的单元格边框会把圆角顶成直角。 */
 .markdown-table-scroll {
   width: fit-content;
   max-width: 100%;
-  margin: 14px 0;
+  margin: 16px 0;
   overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-control);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-card);
+  background: var(--conversation-reading-surface, var(--surface));
 }
 .markdown-table-scroll:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 .markdown table {
   border-collapse: separate;
   border-spacing: 0;
-  font-size: var(--text-sm);
+  font-size: max(var(--text-13), calc(var(--chat-font-size, 15px) * 0.88));
   line-height: var(--leading-relaxed);
   overflow-wrap: normal;
 }
-.markdown th, .markdown td { padding: 7px 10px; border: 0; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.markdown th, .markdown td { padding: 8px 12px; border: 0; border-bottom: 1px solid var(--divider); text-align: left; vertical-align: top; }
 .markdown th { white-space: nowrap; }
 .markdown td { min-width: 5ch; overflow-wrap: break-word; }
 .markdown table:has(th:nth-child(6)) td { min-width: 7ch; }
-.markdown th + th, .markdown td + td { border-left: 1px solid var(--border); }
+.markdown th + th, .markdown td + td { border-left: 1px solid var(--divider); }
 .markdown tbody tr:last-child td { border-bottom: 0; }
 /* 表头在任意底色上都只叠一层 tint，浅色主题下 --surface-soft 与卡片同色会看不出分区。 */
 .markdown th { background: color-mix(in srgb, var(--text-1) 4%, transparent); font-weight: var(--weight-semibold); }
@@ -96,8 +97,6 @@
 .markdown .hljs-variable, .markdown .hljs-params { color: var(--syntax-keyword); }
 /* 会话图片：固定盒子、完整等比显示，图片多时横向滚动而不撑高正文。 */
 .conversation-image-gallery { width: 100%; max-width: 100%; margin: 10px 0; }
-.message-images { margin: 8px 0 0; }
-/* 用户气泡内的附件条由 22-composer 接管；助手消息仍可用默认 gallery 间距。 */
 .assistant-content .conversation-image-gallery { margin: 10px 0; }
 .conversation-image-strip {
   display: flex;
@@ -430,6 +429,11 @@
 .composer-picker-label > span { display: inline-grid; place-items: center; min-width: 16px; height: 15px; padding: 0 4px; border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--faint); font-size: var(--text-xs); letter-spacing: 0; }
 .composer-option { display: flex; align-items: center; gap: 8px; width: 100%; min-height: 36px; padding: 4px 7px; border-radius: var(--radius-tag); text-align: left; }
 .composer-option.is-active { background: var(--surface-hover); }
+.composer-mcp-server-row { display: flex; align-items: stretch; gap: var(--space-1); }
+.composer-mcp-server-row > .composer-option { flex: 1; min-width: 0; }
+.composer-mcp-methods { display: inline-flex; align-items: center; gap: var(--space-1); padding-inline: var(--space-2); border-radius: var(--radius-tag); color: var(--muted); font-size: var(--text-xs); white-space: nowrap; }
+.composer-mcp-methods:hover, .composer-mcp-methods:focus-visible { background: var(--surface-hover); color: var(--text); }
+.composer-mcp-methods svg { width: var(--icon-xs); height: var(--icon-xs); }
 .composer-option-icon { display: grid; place-items: center; width: 22px; height: 22px; flex: none; color: var(--icon); }
 .composer-option-icon svg { width: var(--icon-sm); height: var(--icon-sm); }
 .composer-option-icon.is-plugin img { width: 100%; height: 100%; border-radius: var(--radius-tag); object-fit: contain; }

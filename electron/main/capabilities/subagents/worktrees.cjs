@@ -14,7 +14,7 @@ const { execFile } = require('node:child_process');
 const { promisify } = require('node:util');
 const { getStudioDatabase } = require('../../core/studio-db.cjs');
 const { checkWorktreeSpace } = require('../../core/worktree-space.cjs');
-const { studioDataDirectory } = require('../../core/studio-paths.cjs');
+const { studioDataDirectory, worktreesDirectory } = require('../../core/studio-paths.cjs');
 
 const execFileAsync = promisify(execFile);
 const GIT_TIMEOUT = 30_000;
@@ -44,7 +44,7 @@ function resolveOptions(options = {}) {
 }
 
 function managedRoot(options = {}) {
-  return path.join(resolveOptions(options).userDataPath, 'worktrees');
+  return worktreesDirectory(resolveOptions(options).userDataPath);
 }
 
 async function git(cwd, args, { env, timeout = GIT_TIMEOUT, allowFailure = false } = {}) {
@@ -353,7 +353,8 @@ async function createManagedWorktree(input = {}, options = {}) {
   // Validate each managed component before creating anything below it.
   if (!input.worktreeParent) fs.mkdirSync(resolved.userDataPath, { recursive: true, mode: 0o700 });
   const group = path.join(root, workspaceKey(info.repositoryRoot));
-  for (const directory of [root, group]) {
+  const managedComponents = input.worktreeParent ? [root, group] : [path.dirname(root), root, group];
+  for (const directory of managedComponents) {
     try { fs.mkdirSync(directory, { mode: 0o700 }); }
     catch (error) { if (error.code !== 'EEXIST') throw error; }
     if (!fs.lstatSync(directory).isDirectory()) throw new Error('工作树位置不是普通目录');
@@ -660,6 +661,9 @@ async function cleanupManagedWorktrees(options = {}) {
     }
   }
 
+  if (fs.existsSync(path.dirname(root)) && !fs.lstatSync(path.dirname(root)).isDirectory()) {
+    throw new Error('托管工作树根目录已被替换');
+  }
   if (fs.existsSync(root)) {
     if (!fs.lstatSync(root).isDirectory()) throw new Error('托管工作树根目录已被替换');
     for (const workspaceDirectory of fs.readdirSync(root, { withFileTypes: true })) {

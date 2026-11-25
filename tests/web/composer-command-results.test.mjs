@@ -26,7 +26,7 @@ const flush = async () => { await Promise.resolve(); await Promise.resolve(); aw
 function fixture() {
   const store = new Map();
   saveComposerDraft(store, 'A', { text: '/command', attachments: [] });
-  const calls = { notifications: [], feedback: [], prompts: [], actions: [], opened: [], errors: [], refreshes: 0 };
+  const calls = { feedback: [], prompts: [], actions: [], opened: [], errors: [], refreshes: 0 };
   const pending = { command: deferred(), create: deferred(), goal: deferred(), action: null, settings: null, nested: null };
   const owner = { current: 'A' }, generation = { current: 1 }, session = { current: { id: 'A', title: 'Session A' } };
   const module = { exports: {} };
@@ -36,7 +36,7 @@ function fixture() {
     workspace: '/workspace-a', composerDraftMatches, snapshotComposerDraft, clearComposerDraft, readComposerDraft,
     parseStudioCommand: () => ({ route: 'goal.control', argument: 'goal' }), parseGoalCommandArgument: () => ({ action: 'set', text: 'goal' }),
     setLongTaskBusy() {}, setBusy() {}, setError: error => calls.errors.push(error), errorText: error => String(error),
-    pushNotification: (...args) => calls.notifications.push(args), showComposerFeedback: (...args) => calls.feedback.push(args),
+    showComposerFeedback: (...args) => calls.feedback.push(args),
     sendPromptFromExtension: (text, submit) => {
       calls.prompts.push([text, submit]);
       saveComposerDraft(store, owner.current, { ...readComposerDraft(store, owner.current), text });
@@ -66,7 +66,7 @@ test('late successful extension result cannot replace or submit another conversa
   assert.equal(await running, true, 'main execution succeeded even though its UI result was suppressed');
   assert.equal(f.calls.prompts.length, 0);
   assert.equal(readComposerDraft(f.store, 'B').text, 'keep B');
-  assert.equal(f.calls.notifications[0][3], 'A');
+  assert.equal(f.calls.feedback.length, 0);
 });
 
 test('edited input suppresses extension sendPrompt actions and explains the preserved input', async () => {
@@ -95,7 +95,7 @@ test('a goal whose creation finishes after navigation is not submitted or opened
   f.pending.create.resolve({ id: 'new-goal', cwd: '/workspace-a', title: 'Goal' });
   await running;
   assert.equal(f.calls.actions.length, 0); assert.equal(f.calls.opened.length, 0);
-  assert.match(f.calls.notifications[0][0], /目标尚未提交/);
+  assert.equal(f.calls.feedback.length, 0);
   assert.equal(readComposerDraft(f.store, 'A').text, '/command');
 });
 
@@ -108,7 +108,7 @@ test('a committed goal remains committed after navigation but never clears or op
   saveComposerDraft(f.store, 'B', { text: 'keep B', attachments: [] });
   f.pending.goal.resolve({ started: true }); await running;
   assert.equal(f.calls.opened.length, 0);
-  assert.match(f.calls.notifications[0][0], /目标已在/);
+  assert.equal(f.calls.feedback.length, 0);
   assert.equal(readComposerDraft(f.store, 'B').text, 'keep B');
   assert.equal(readComposerDraft(f.store, 'A').text, '/command');
 });
@@ -131,8 +131,7 @@ test('combined owned prompt changes still apply subsequent settings and message 
   await running;
   assert.deepEqual(f.calls.prompts, [['action text', false], ['final text', false]]);
   assert.equal(readComposerDraft(f.store, 'A').text, 'final text');
-  assert.equal(f.calls.feedback.length, 0);
-  assert.equal(f.calls.notifications[0][0], 'all applied');
+  assert.deepEqual(f.calls.feedback, [['all applied', 'info']]);
 });
 
 test('an intentional submission consuming its own text does not suppress later result messages', async () => {
@@ -140,8 +139,7 @@ test('an intentional submission consuming its own text does not suppress later r
   const running = f.executeExtensionCommand('fixture.command');
   f.pending.command.resolve({ promptText: 'submit this', submit: true, settingsPage: 'general', message: 'submitted' });
   await flush(); f.pending.settings.resolve(); await running;
-  assert.equal(f.calls.feedback.length, 0);
-  assert.equal(f.calls.notifications[0][0], 'submitted');
+  assert.deepEqual(f.calls.feedback, [['submitted', 'info']]);
 });
 
 test('nested commands propagate only their own draft changes to the parent result guard', async () => {
@@ -150,6 +148,5 @@ test('nested commands propagate only their own draft changes to the parent resul
   f.pending.command.resolve({ action: { kind: 'runCommand', commandId: 'nested.command' }, promptText: 'parent final', message: 'finished' });
   await flush(); f.pending.nested.resolve({ promptText: 'nested text' }); await running;
   assert.deepEqual(f.calls.prompts, [['nested text', false], ['parent final', false]]);
-  assert.equal(f.calls.feedback.length, 0);
-  assert.equal(f.calls.notifications[0][0], 'finished');
+  assert.deepEqual(f.calls.feedback, [['finished', 'info']]);
 });

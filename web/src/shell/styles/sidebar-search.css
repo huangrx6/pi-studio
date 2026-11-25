@@ -1,4 +1,11 @@
-.sidebar-search-panel { display: grid; gap: var(--space-2); flex: none; margin-bottom: var(--space-3); }
+.sidebar-search-panel { display: grid; gap: var(--space-2); flex: none; margin-bottom: var(--space-3); animation: sidebar-search-in var(--motion-enter); }
+@keyframes sidebar-search-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-search-panel { animation: none; }
+}
 .sidebar-search-panel .workspace-search { margin: 0; padding-inline: var(--space-2); }
 .sidebar-search-panel .workspace-search > svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
 .sidebar-search-panel .workspace-search input { min-width: 0; }

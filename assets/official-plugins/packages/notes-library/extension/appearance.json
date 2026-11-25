@@ -1,0 +1,36 @@
+{
+  "defaultTheme": "night",
+  "outline": { "minimum": 180, "maximum": 400, "initial": 216 },
+  "legacyThemes": {
+    "nord": "night",
+    "github-dark": "night",
+    "vscode-dark": "night",
+    "lapis": "sage",
+    "github-light": "sage",
+    "vscode-light": "sage",
+    "pie": "paper"
+  },
+  "themes": [
+    { "id": "studio", "title": "跟随 Studio" },
+    { "id": "night", "title": "蓝墨", "scheme": "dark",
+      "bg": "#19232e", "surface": "#202c39", "floating": "#293744",
+      "text": "#e6eaf0", "muted": "#acbac6", "heading": "#f1f0e9", "accent": "#a8c8dc", "action": "#43627a",
+      "code": "#212d3b", "inlineFg": "#aecbe1", "quoteBg": "#202f3c",
+      "keyword": "#d6bcdb", "string": "#acc4a9", "number": "#dec0a1" },
+    { "id": "graphite", "title": "暖炭", "scheme": "dark",
+      "bg": "#231e1c", "surface": "#2d2622", "floating": "#362d28",
+      "text": "#ebe3d9", "muted": "#b9ab9e", "heading": "#f2e7d9", "accent": "#d8ad91", "action": "#80543f",
+      "code": "#302823", "inlineFg": "#e6b095", "quoteBg": "#302620",
+      "keyword": "#e0b6c8", "string": "#b7c7a8", "number": "#dfbe94" },
+    { "id": "paper", "title": "亚麻", "scheme": "light", "serif": true,
+      "bg": "#faf6ee", "surface": "#f1eadf", "floating": "#fcf9f3",
+      "text": "#342d27", "muted": "#685d52", "heading": "#2c241e", "accent": "#7a5136", "action": "#765039",
+      "code": "#efe7d9", "inlineFg": "#8a4739", "quoteBg": "#f1e8dc",
+      "keyword": "#7b4464", "string": "#396243", "number": "#824d26" },
+    { "id": "sage", "title": "灰绿", "scheme": "light",
+      "bg": "#f2f6f1", "surface": "#e7eee6", "floating": "#fafcf8",
+      "text": "#28342b", "muted": "#526558", "heading": "#22392d", "accent": "#3b6352", "action": "#395f4c",
+      "code": "#e7ede5", "inlineFg": "#375c54", "quoteBg": "#e8f0e7",
+      "keyword": "#644c79", "string": "#355e44", "number": "#825337" }
+  ]
+}

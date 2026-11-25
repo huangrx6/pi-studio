@@ -22,6 +22,8 @@
 测试对不透明颜色及同色混合后的配对计算对比度。
  */
 
+/* The board and its portaled menus can use a different mode from the window. */
+:where(.canvas-appearance-light, .canvas-appearance-dark, .excalidraw-modal-container),
 :root {
   color-scheme: light;
   /* 每套主题只维护一个主色，背景与描边统一从它派生。
@@ -32,16 +34,15 @@
   --scheme-ocean: #3b6ed3;
   --scheme-amber: #cb493f;
   --scheme-berry: #7c53dd;
-  --theme-accent: var(--scheme-ocean);
 
   /* 存储分类和 Harness 图标使用的独立色。 */
   --scheme-lime: #00818a;
 
-  /* Available to the launch document before the renderer reads its theme. */
-  --launch-ground: light-dark(#f6f7f4, #101715);
-  --launch-light: light-dark(#ffffff, #1d312a);
-  --launch-orbit: light-dark(rgb(55 101 79 / 18%), rgb(150 203 173 / 17%));
-  --launch-glint: light-dark(#43836a, #93c9ad);
+  --launch-shadow: light-dark(rgb(49 41 34 / 19%), rgb(7 5 4 / 55%));
+  --launch-contact-shadow: light-dark(rgb(49 41 34 / 24%), rgb(7 5 4 / 63%));
+  --launch-paper-shadow: rgb(68 44 24 / 48%);
+  --launch-light-spill: light-dark(rgb(255 200 126 / 32%), rgb(255 181 105 / 26%));
+  --launch-bulb-off: rgb(62 51 42);
 
   /* 页面与表面层级：页面背景、卡片表面、侧栏背景保持中性；surface-soft/hover/
   active 表示交互递进，selected-bg 用于选中行。层级从低到高靠明度差而不是阴影
@@ -53,6 +54,9 @@
   --surface-chrome: #eaeaea;
   --surface-raised: #ffffff;
   --surface-floating: #ffffff;
+  --composer-surface: #ffffff;
+  --composer-highlight: rgb(255 255 255 / 72%);
+  --launcher-card-bg: #ffffff;
   --surface-hover: #ebebed;
   --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
   /* 中性 tint：设置页这类单色界面用的选中底。 */
@@ -189,6 +193,7 @@
 系列保持中性灰阶，不加入色相。
  */
 
+:where(.canvas-appearance-dark, .excalidraw-modal-container.theme--dark),
 :root[data-theme="dark"] {
   color-scheme: dark;
 
@@ -198,6 +203,9 @@
   --surface-chrome: #282829;
   --surface-raised: #181818;
   --surface-floating: #181818;
+  --composer-surface: #1e1f21;
+  --composer-highlight: rgb(255 255 255 / 6%);
+  --launcher-card-bg: #1e1f21;
   --surface-hover: #2f3030;
   --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
   /* 中性 tint：设置页这类单色界面用的选中底。 */
@@ -213,9 +221,9 @@
   --surface-active: var(--surface-hover);
   --selected-bg: var(--accent-tint);
 
-  --text-1: #e8eaed;
-  --text-2: #9aa0a8;
-  --text-3: #6f7680;
+  --text-1: #eef0f3;
+  --text-2: #a6acb6;
+  --text-3: #767d87;
   --text: var(--text-1);
   --muted: var(--text-2);
   --faint: var(--text-2);
@@ -300,6 +308,7 @@
 success/warning/error 等语义状态保持不变，避免配色切换改变状态含义。
 */
 
+:root { --theme-accent: var(--scheme-ocean); }
 :root[data-palette="amber"] { --theme-accent: var(--scheme-amber); }
 :root[data-palette="berry"] { --theme-accent: var(--scheme-berry); }
 
@@ -310,6 +319,7 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
  */
 
 /* Shared roles derive from the active palette in both modes. */
+:where(.canvas-appearance-light, .canvas-appearance-dark, .excalidraw-modal-container),
 :root {
   --transparent: transparent;
   --nav-selected-bg: var(--tint-neutral);
@@ -322,6 +332,7 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --image-dismiss-fg: #202020;
   /* One hue; no independently tuned hover, border or focus colors. */
   --accent: var(--theme-accent);
+  --profile-icon-background: color-mix(in srgb, var(--text-1) 76%, var(--theme-accent));
   /* Status icons keep the workspace palette in the monochrome settings preview. */
   --extension-icon-neutral: var(--text-2);
   --extension-icon-accent: var(--accent);
@@ -400,6 +411,7 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
      颜色本身不会被看到。 */
   --mask-opaque: #000;
   --focus-ring: 0 0 0 2px var(--focus-color);
+  --composer-focus-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-color) 16%, transparent);
   --live-ring: 0 0 0 2px var(--focus-color);
   /* 贴在一起的内容表面只靠 1px 边框分界，不再叠投影：输入框、选择器、按钮、
      气泡、卡片都是如此。投影只留给真正浮起来的层——菜单、tooltip、对话框、

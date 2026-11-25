@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pi Studio</title>
+    <script src="/launch-appearance.js"></script>
+    <link rel="preload" as="image" href="./src/shell/assets/launch-workbench-enamel.webp" />
+    <link rel="preload" as="image" href="./src/shell/assets/launch-workbench-paper-motion.webp" />
     <link rel="stylesheet" href="./src/styles/tokens.css" />
     <link rel="stylesheet" href="./src/styles/palette.css" />
     <link rel="stylesheet" href="./src/shell/styles/launch-screen.css" />
@@ -11,8 +14,13 @@
   <body>
     <section id="launch-screen" class="launch-screen" role="status" aria-label="正在启动">
       <div class="launch-mark" aria-hidden="true">
-        <span class="launch-orbit"></span>
-        <img src="./src/shell/assets/launch-pi.webp" width="144" height="144" alt="" draggable="false" fetchpriority="high" />
+        <div class="launch-lamplight"></div>
+        <div class="launch-sculpture">
+          <img class="launch-workbench" src="./src/shell/assets/launch-workbench.webp"
+               width="802" height="900" alt="" draggable="false" fetchpriority="high" />
+          <span class="launch-enamel"></span>
+        </div>
+        <div class="launch-paper"></div>
       </div>
     </section>
     <div id="root" inert></div>

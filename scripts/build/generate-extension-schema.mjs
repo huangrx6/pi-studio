@@ -130,12 +130,15 @@ const contributors = {
     content: array(content, 64),
     details: contributionId,
     visibility: { enum: ['always', 'while-active'] },
-    canvas: object({ sourceId: { $ref: '#/$defs/contributionRef' } }),
-    taskBoard: object({ sourceId: { $ref: '#/$defs/contributionRef' } }),
+    view: object({
+      entry: text(200, 1),
+      sourceId: { $ref: '#/$defs/contributionRef' },
+      scope: { enum: ['session', 'global'] },
+      fullscreen: { type: 'boolean' },
+    }, ['entry', 'sourceId']),
   }, ['id', 'title'], {
     oneOf: [{ required: ['slot'] }, { required: ['slots'] }],
-    not: { required: ['canvas', 'taskBoard'] },
-    if: { anyOf: [{ required: ['canvas'] }, { required: ['taskBoard'] }] },
+    if: { required: ['view'] },
     then: { required: ['slot'], properties: { slot: { const: 'panel.side' }, content: { maxItems: 0 } } },
   }), 256),
   settings: array(object({

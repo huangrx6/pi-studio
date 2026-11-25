@@ -48,19 +48,6 @@ dialog:modal::backdrop {
   to { opacity: 1; translate: none; }
 }
 
-@supports (interpolate-size: allow-keywords) {
-  @media (prefers-reduced-motion: no-preference) {
-    :is(.settings-overlay, .native-dialog-motion) .pi-accordion { interpolate-size: allow-keywords; }
-    :is(.settings-overlay, .native-dialog-motion) .pi-accordion::details-content {
-      block-size: 0;
-      overflow: clip;
-      transition: block-size var(--settings-page-enter) var(--settings-motion-out),
-        content-visibility var(--settings-page-enter) allow-discrete;
-    }
-    :is(.settings-overlay, .native-dialog-motion) .pi-accordion[open]::details-content { block-size: auto; }
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .native-dialog-motion, .native-dialog-motion > *, .native-dialog-motion::backdrop { animation: none !important; }
   .action-menu, .pi-select-menu { animation: none !important; }

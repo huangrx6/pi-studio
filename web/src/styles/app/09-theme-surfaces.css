@@ -64,12 +64,7 @@ body { background: var(--bg); color: var(--text); }
 .markdown .hljs-comment, .markdown .hljs-quote { color: var(--faint); }
 .assistant-response .markdown h1, .assistant-response .markdown h2 { color: var(--text); }
 .assistant-response .markdown pre, .assistant-response .markdown code { background: var(--surface-soft); border-color: var(--border); }
-.attachment-kind, .attachment-kind.is-code, .attachment-kind.is-archive, .attachment-kind.is-sheet, .attachment-kind.is-doc { color: var(--muted); background: var(--surface-soft); }
-.attachment-card, .composer-attachment { background: var(--surface); border-color: var(--border); }
-.composer-attachment-remove { background: var(--surface); border-color: var(--border); color: var(--muted); }
-.composer-attachment.is-image > .composer-attachment-remove { background: var(--image-dismiss-bg); color: var(--image-dismiss-fg); border: 2px solid var(--surface); }
-.composer-attachment.is-image > .composer-attachment-remove:hover { color: var(--image-dismiss-fg); background: var(--image-dismiss-bg); }
-.composer-attachment-remove:focus-visible { outline: 2px solid var(--focus-color); outline-offset: 2px; }
+.attachment-card { background: var(--surface); border-color: var(--border); }
 .settings-error { border-color: var(--error-border); background: var(--error-soft); box-shadow: none; }
 .outline-line { background: var(--border-strong); }
 .outline-tick:hover .outline-line, .outline-tick.is-active .outline-line { background: var(--accent); }
@@ -117,29 +112,43 @@ body { background: var(--bg); color: var(--text); }
 hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 
 .sidebar-row-shell { position: relative; min-width: 0; }
-.sidebar-row-actions { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 5px; padding: 0; background: var(--transparent); opacity: 0; visibility: hidden; }
+.sidebar-row-actions { position: absolute; right: 5px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; padding: 0; background: var(--transparent); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity var(--transition-fast); }
 /* 行按钮被鼠标点击后仍会持有焦点；只在 hover、键盘可见焦点或操作栏自身
 有焦点/浮层时显示，避免操作栏粘在选中行上并遮住运行状态。 */
 .sidebar-row-shell:hover > .sidebar-row-actions,
 .sidebar-row-shell:has(> :is(.workspace-row, .session-row):focus-visible) > .sidebar-row-actions,
 .sidebar-row-actions:focus-within,
-.sidebar-row-actions.is-open { opacity: 1; visibility: visible; }
+.sidebar-row-actions.is-open { opacity: 1; visibility: visible; pointer-events: auto; }
 .sidebar-row-actions > button { display: grid; place-items: center; width: 24px; height: 28px; padding: 0; color: var(--faint); border-radius: var(--radius-tag); background: var(--transparent); }
-.sidebar-row-actions > button:hover, .sidebar-row-actions > button:focus-visible { background: var(--transparent); color: var(--text); }
+.sidebar-row-actions > button:hover, .sidebar-row-actions > button:focus-visible { background: var(--surface-active); color: var(--text); }
 .sidebar-row-actions > button svg { width: var(--icon-sm); height: var(--icon-sm); }
 .sidebar-confirm-name { margin: 0; color: var(--text); font-size: var(--text-md); font-weight: var(--weight-medium); overflow-wrap: anywhere; }
-.sidebar-row-shell:hover > .workspace-row,
-.workspace-row-shell:has(> .workspace-row:focus-visible) > .workspace-row,
-.workspace-row-shell:has(> .sidebar-row-actions:is(:focus-within, .is-open)) > .workspace-row { padding-right: 62px; }
-.sidebar-row-shell:hover > .session-row,
-.session-row-shell:has(> .session-row:focus-visible) > .session-row,
-.session-row-shell:has(> .sidebar-row-actions:is(:focus-within, .is-open)) > .session-row { padding-right: 88px; }
+/* Keep horizontal padding constant on hover so labels never jump; fade tail smoothly behind actions. */
+.workspace-row .chevron,
+.workspace-row .workspace-count,
+.workspace-row .workspace-running-dot,
+.session-row .session-meta { transition: opacity var(--transition-fast); }
+.sidebar-row-shell:hover .workspace-label,
+.workspace-row-shell:has(> .workspace-row:focus-visible) .workspace-label,
+.workspace-row-shell:has(> .sidebar-row-actions:is(:focus-within, .is-open)) .workspace-label {
+  -webkit-mask-image: linear-gradient(to right, var(--text) calc(100% - 62px), transparent calc(100% - 36px));
+  mask-image: linear-gradient(to right, var(--text) calc(100% - 62px), transparent calc(100% - 36px));
+}
+.sidebar-row-shell:hover .session-title,
+.session-row-shell:has(> .session-row:focus-visible) .session-title,
+.session-row-shell:has(> .sidebar-row-actions:is(:focus-within, .is-open)) .session-title {
+  -webkit-mask-image: linear-gradient(to right, var(--text) calc(100% - 86px), transparent calc(100% - 58px));
+  mask-image: linear-gradient(to right, var(--text) calc(100% - 86px), transparent calc(100% - 58px));
+}
 .sidebar-row-shell:hover .session-meta,
 .sidebar-row-shell:has(> :is(.workspace-row, .session-row):focus-visible) .session-meta,
 .sidebar-row-shell:has(> .sidebar-row-actions:is(:focus-within, .is-open)) .session-meta,
-.workspace-row-shell:hover .chevron,
-.workspace-row-shell:has(> .workspace-row:focus-visible) .chevron,
-.workspace-row-shell:has(> .sidebar-row-actions:is(:focus-within, .is-open)) .chevron { display: none; }
+.workspace-row-shell:hover :is(.chevron, .workspace-count, .workspace-running-dot),
+.workspace-row-shell:has(> .workspace-row:focus-visible) :is(.chevron, .workspace-count, .workspace-running-dot),
+.workspace-row-shell:has(> .sidebar-row-actions:is(:focus-within, .is-open)) :is(.chevron, .workspace-count, .workspace-running-dot) {
+  opacity: 0;
+  pointer-events: none;
+}
 .session-pin-mark { color: var(--faint); font-size: var(--text-xs); line-height: 16px; text-align: center; white-space: nowrap; }
 .sidebar-action-menu { position: fixed; z-index: 250; width: 200px; padding: 5px; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--surface); box-shadow: var(--shadow-popover); }
 .sidebar-action-menu button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 36px; padding: 7px 10px; text-align: left; border-radius: var(--radius-control); color: var(--text); }
@@ -167,7 +176,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .popover-divider { height: 1px; margin: 8px 0; background: var(--border); }
 .pi-select-menu.popover-surface { padding: 6px; max-height: min(var(--select-menu-max-height, 360px), calc(100vh - 24px)); }
 .popover-surface .pi-select-option { padding: 9px 10px; gap: 16px; border-radius: var(--radius-control); }
-.popover-surface .pi-select-option > span { flex: 1; gap: 3px; }
+.popover-surface .pi-select-option > .pi-select-option-text { flex: 1; gap: 3px; }
 .popover-surface .pi-select-option-label { white-space: normal; overflow: visible; font-size: var(--text-sm); font-weight: var(--weight-medium); }
 .popover-surface .pi-select-option small { font-size: var(--text-sm); line-height: var(--leading-normal); }
 .popover-surface .pi-select-option.is-selected { color: var(--text); }
@@ -283,22 +292,21 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 
 /* 整段历史一次性渲染：content-visibility 的占位高度会让远处的消息位置在滚动
    过程中不断修正，大纲跳转因此经常落不到目标上。 */
-.composer-attachment.is-openable, .attachment-card.is-openable { cursor: pointer; }
-.composer-attachment.is-openable, .attachment-card.is-openable { transition: border-color var(--transition), background var(--transition); }
-.composer-attachment.is-openable:hover, .attachment-card.is-openable:hover { border-color: var(--accent-border); background: var(--surface-hover); }
-.attachment-card.is-openable:focus-visible, .composer-attachment.is-openable:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 1px; }
-.attachment-open-cue { display: grid; place-items: center; width: 16px; height: 16px; flex: none; color: var(--faint); opacity: .62; transition: color var(--transition), opacity var(--transition), transform var(--transition); }
-.attachment-open-cue svg { width: var(--icon-sm); height: var(--icon-sm); }
-.is-openable:hover .attachment-open-cue, .is-openable:focus-visible .attachment-open-cue { color: var(--accent-foreground); opacity: 1; transform: translateX(1px); }
+.attachment-card.is-openable { cursor: pointer; }
+.attachment-card.is-openable { transition: border-color var(--transition), background var(--transition); }
+.attachment-card.is-openable:hover { border-color: var(--accent-border); background: var(--surface-hover); }
+.attachment-card.is-openable:focus-visible { outline: 2px solid var(--accent-border); outline-offset: 1px; }
 
 .file-panel.is-open:not(.is-fullscreen), .file-panel.is-open.is-split:not(.is-fullscreen) { width: min(var(--panel-w, 700px), calc(100vw - 48px)); }
 .file-panel:not(.is-fullscreen) .file-panel-inner { width: var(--panel-w, 700px); min-width: var(--panel-w, 700px); }
 .file-panel.is-split:not(.is-fullscreen) .file-panel-inner { width: min(760px, 64vw); min-width: min(760px, 64vw); }
 .file-panel.is-resizing { transition: none; user-select: none; }
-.panel-resize-handle { position: absolute; left: 0; top: 0; bottom: 0; width: 7px; z-index: 60; cursor: col-resize; touch-action: none; }
-.panel-resize-handle::after { content: ""; position: absolute; inset: 0 auto 0 0; width: 1px; background: var(--border); }
+.panel-resize-handle { position: absolute; left: -3px; top: 0; bottom: 0; width: 7px; z-index: 60; cursor: col-resize; touch-action: none; }
+.panel-resize-handle::after { content: ""; position: absolute; inset: 0 auto 0 3px; width: 1px; background: var(--divider); transition: background var(--transition-fast), width var(--transition-fast), left var(--transition-fast); }
+.panel-resize-handle:hover::after,
+.file-panel.is-resizing .panel-resize-handle::after { left: 2px; width: 2px; background: var(--accent); }
 .panel-resize-handle:focus-visible { outline: none; }
-.panel-resize-handle:focus-visible::after { background: var(--focus-color); }
+.panel-resize-handle:focus-visible::after { left: 2px; width: 2px; background: var(--focus-color); }
 
 /* A round of changes shares one scroll surface, with lightweight file disclosures. */
 .changes-view { flex: 1; width: 100%; min-width: 0; height: 100%; min-height: 0; display: flex; flex-direction: column; background: var(--surface); }
@@ -345,7 +353,9 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .changes-file-head { display: flex; align-items: center; gap: 8px; min-height: 46px; padding: 5px 12px; background: var(--surface); }
 .changes-file-toggle { display: flex; align-items: center; min-width: 0; flex: 1; gap: 8px; border: 0; padding: 7px 0; background: var(--transparent); color: var(--text); text-align: left; cursor: pointer; font: var(--text-sm) var(--font); }
 .changes-file-toggle > svg { width: var(--icon-md); height: var(--icon-md); color: var(--muted); flex: none; }
-.changes-file-toggle > svg:first-child { width: var(--icon-xs); }
+.changes-file-toggle > svg:first-child { width: var(--icon-xs); transition: transform var(--motion-switch); }
+.changes-file-toggle[aria-expanded="true"] > svg:first-child { transform: rotate(90deg); }
+.changes-file > :not(.changes-file-head) { animation: pi-disclosure-in var(--motion-enter) both; }
 .changes-file-toggle > span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .changes-file-toggle small { color: var(--muted); font: inherit; }
 .changes-file-head .icon-button { width: var(--icon-button-compact); height: var(--icon-button-compact); background: var(--transparent); }
@@ -484,7 +494,5 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .temporary-error-card { position: relative; display: flex; align-items: flex-start; gap: var(--space-3); max-width: var(--content); margin: 0 auto var(--space-2); }
 .temporary-error-card > span { min-width: 0; flex: 1; font-family: var(--mono); line-height: var(--leading-body); }
 .temporary-error-card > button { flex: none; color: currentColor; }
-.temporary-attachments { scrollbar-width: none; }
-.temporary-attachments::-webkit-scrollbar { height: 0; }
 .diff-view-head, .panel-body .file-toolbar { height: var(--toolbar-height); min-height: var(--toolbar-height); max-height: var(--toolbar-height); padding-top: 0; padding-bottom: 0; flex: none; }
 .temporary-chat .model-popover { max-width: min(360px, calc(var(--panel-w, 700px) - 40px)); }
