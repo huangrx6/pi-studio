@@ -142,8 +142,8 @@ importers:
         specifier: ^6.0.0
         version: 6.4.5(@types/node@22.20.5)(jiti@2.7.0)(sass@1.51.0)(yaml@2.9.0)
       wait-on:
-        specifier: ^8.0.1
-        version: 8.0.5(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
+        specifier: ^9.5.1
+        version: 9.5.1(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
 
 packages:
 
@@ -3805,9 +3805,9 @@ packages:
   vscode-uri@3.0.8:
     resolution: {integrity: sha512-AyFQ0EVmsOZOlAnxoFOGOq1SQDWAB7C6aqMGS23svWAllfOaxbuFvcT8D1i8z3Gyn8fraVeZNNmN6e9bxxXkKw==}
 
-  wait-on@8.0.5:
-    resolution: {integrity: sha512-J3WlS0txVHkhLRb2FsmRg3dkMTCV1+M6Xra3Ho7HzZDHpE7DCOnoSoCJsZotrmW3uRMhvIJGSKUKrh/MeF4iag==}
-    engines: {node: '>=12.0.0'}
+  wait-on@9.5.1:
+    resolution: {integrity: sha512-bOtj1wRY6u+GPnNskZLcgZNHOaL5NC4+5hRCbEpVoVX6MbMrCLCqIBM2bjsAfrgst3ZC0siIo7vLb4LuYFfIow==}
+    engines: {node: '>=20.0.0'}
     hasBin: true
 
   wcwidth@1.0.1:
@@ -8176,12 +8176,11 @@ snapshots:
 
   vscode-uri@3.0.8: {}
 
-  wait-on@8.0.5(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1):
+  wait-on@9.5.1(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1):
     dependencies:
       axios: 1.20.0(debug@4.4.3(supports-color@8.1.1))(supports-color@8.1.1)
       joi: 18.3.0
       lodash: 4.18.1
-      minimist: 1.2.8
       rxjs: 7.8.2
     transitivePeerDependencies:
       - debug
