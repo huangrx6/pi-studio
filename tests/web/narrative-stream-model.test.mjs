@@ -152,11 +152,9 @@ test('live streaming respects browser_type privacy and redacted thinking', () =>
   const blocks = buildNarrativeBlocks(built.segments);
   const phases = buildNarrativePhases(blocks[0].entries, new Map(), blocks[0].toolImages);
   assert.equal(phases.length, 1);
-  assert.equal(phases[0].liveThought, undefined);
   assert.equal(phases[0].steps[1].prefix, '正在填写网页表单');
   const renderedText = [
     phases[0].headline,
-    phases[0].liveThought,
     ...phases[0].steps.flatMap((step) => [step.prefix, step.fileLabel, step.detail, step.liveThoughtExcerpt]),
   ].filter(Boolean).join(' ');
   assert.doesNotMatch(renderedText, /secret-token|敏感内部推理/);

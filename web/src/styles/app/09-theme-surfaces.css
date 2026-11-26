@@ -92,7 +92,7 @@ body { background: var(--bg); color: var(--text); }
 }
 .assistant-turn.is-retrying .assistant-turn-status { color: var(--warning); }
 .assistant-turn.is-retrying .assistant-turn-status::before { background: var(--warning); }
-.assistant-turn.is-retrying .assistant-orb { --assistant-cursor-color: var(--warning); border-color: var(--warning-border); color: var(--warning); box-shadow: none; }
+.assistant-turn.is-retrying .assistant-orb { border-color: var(--warning-border); color: var(--warning); box-shadow: none; }
 .extension-toast { background: var(--surface); border-color: var(--border); color: var(--muted); }
 .extension-toast.is-error { border-color: var(--error-border); background: var(--error-soft); color: var(--error); }
 .extension-toast.is-warning { color: var(--warning); background: var(--warning-soft); border-color: var(--warning-border); }
@@ -402,7 +402,7 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .chat-header, .is-new-conversation .chat-header, .panel-tabbar { height: var(--header-height); min-height: var(--header-height); max-height: var(--header-height); padding-top: 0; padding-bottom: 0; align-items: center; }
 .sidebar-top-toggle { top: calc((var(--header-height) - 28px)/2); }
 .brand { height: var(--toolbar-height); margin: 0 -12px; padding: 0 16px; border-bottom: 1px solid var(--divider); }
-.brand .brand-mark { width: 26px; height: 26px; }
+.brand .brand-mark { width: var(--icon-lg); height: var(--icon-lg); }
 .chat-header { border-bottom: 0; }
 .panel-tabbar { border-bottom: 0; }
 .changes-view { container-type: inline-size; }
@@ -451,7 +451,6 @@ hover，媒体查询里让操作常显并隐藏时间/箭头。 */
 .temporary-empty h2 { margin: 14px 0 0; color: var(--text); font-family: var(--font); font-size: var(--text-lg); font-weight: var(--weight-semibold); letter-spacing: -.02em; }
 .temporary-empty p { max-width: 390px; margin: 5px 0 0; color: var(--faint); font-size: var(--text-xs); line-height: var(--leading-normal); }
 .temporary-messages { width: 100%; gap: var(--space-8); }
-.temporary-thinking { min-height: 24px; }
 .temporary-composer-dock {
   position: relative;
   z-index: 10;

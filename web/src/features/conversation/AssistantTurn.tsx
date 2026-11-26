@@ -1,4 +1,4 @@
-import { memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useContext, useMemo, useRef } from 'react';
 import { Markdown } from '../../shared/Markdown';
 import { MarkdownActions, MarkdownImageRenderer } from '../../shared/markdown-actions';
 import type { StepCollapse, StepDisplay } from '../../shared/preferences';
@@ -10,7 +10,7 @@ import { FileChangeSummary } from './FileChangeSummary';
 import { collectFileChanges, sameChangePath, toolFilePatch } from './file-changes';
 import { formatTime } from './message-content';
 import { MessageActions } from './MessageActions';
-import { NarrativePendingStatus, NarrativeWorkstream } from './NarrativeWorkstream';
+import { NarrativeLiveStatus, NarrativeWorkstream } from './NarrativeWorkstream';
 import {
   buildNarrativeBlocks,
   collectTurnFilePaths,
@@ -125,27 +125,12 @@ function AssistantTurnViewComponent({
     onOpenGit?.();
   }
 
-  const pendingLabel = retry
-    ? `正在重试请求（${retry.attempt}/${retry.maxAttempts}）`
-    : '正在思考并准备回复…';
-
   const { startMs, endMs } = useMemo(
     () => computeTurnTiming(messages, toolResults, requestTraces, startedAt),
     [messages, requestTraces, startedAt, toolResults],
   );
-  const [liveNow, setLiveNow] = useState(() => Date.now());
-  useEffect(() => {
-    if (!live || !startMs) return;
-    setLiveNow(Date.now());
-    const timer = window.setInterval(() => setLiveNow(Date.now()), 1000);
-    return () => window.clearInterval(timer);
-  }, [live, startMs]);
-
-  const elapsedMs = startMs !== undefined
-    ? (live ? Math.max(0, liveNow - startMs) : endMs !== undefined ? Math.max(0, endMs - startMs) : 0)
-    : 0;
-  const durationLabel = formatTurnDuration(elapsedMs);
-  const headerTimeLabel = durationLabel || (!live && latest?.timestamp ? formatTime(latest.timestamp) : '');
+  const durationLabel = startMs !== undefined && endMs !== undefined ? formatTurnDuration(endMs - startMs) : '';
+  const headerTimeLabel = !live ? durationLabel || (latest?.timestamp ? formatTime(latest.timestamp) : '') : '';
   const headerTimeTitle = endMs
     ? new Date(endMs).toLocaleString('zh-CN')
     : latest?.timestamp
@@ -159,10 +144,6 @@ function AssistantTurnViewComponent({
         <span className="assistant-turn-name">Pi</span>
         {headerTimeLabel && <time title={headerTimeTitle}>{headerTimeLabel}</time>}
       </div>
-
-      {live && blocks.length === 0 && (
-        <NarrativePendingStatus label={pendingLabel} retrying={Boolean(retry)} />
-      )}
 
       <MarkdownActions.Provider value={turnMarkdownActions}>
       <MarkdownImageRenderer.Provider value={ConversationMarkdownImage}>
@@ -197,10 +178,6 @@ function AssistantTurnViewComponent({
       </MarkdownImageRenderer.Provider>
       </MarkdownActions.Provider>
 
-      {live && blocks.length > 0 && Boolean(retry) && (
-        <NarrativePendingStatus label={pendingLabel} retrying />
-      )}
-
       {/* 失败卡片只在非 live 时出现，避免自动重试过程中闪错误。 */}
       {!live && error && (interrupted
         ? <div className="assistant-interrupted" role="status">本轮已中断</div>
@@ -218,6 +195,7 @@ function AssistantTurnViewComponent({
       <MessageActions text={live ? '' : answerText} time={live ? undefined : latest?.timestamp} label="复制回答">
         {sources.length > 0 && <WebSources sources={sources} />}
       </MessageActions>
+      {live && <NarrativeLiveStatus startedAt={startMs} retry={retry} />}
     </div>
   </div>;
 }

@@ -12,7 +12,7 @@ const browser=await chromium.launch({executablePath:'/Applications/Google Chrome
 const errors=[];const blockedRequests=[];
 try {
  const page=await browser.newPage({viewport:{width:1500,height:1000},deviceScaleFactor:2}); page.setDefaultTimeout(8000);
- page.on('pageerror',error=>errors.push(error.message));
+ page.on('pageerror',error=>errors.push(error.stack || error.message));
  await page.route('**/*',route=>{const url=route.request().url();if(url.startsWith(`${server.origin}/`)||/^(data|blob):/.test(url))return route.continue();blockedRequests.push(url);return route.abort();});
  await page.addInitScript(()=>{
   localStorage.setItem("pi-studio:preferences",JSON.stringify({showCodeView:true}));
@@ -31,7 +31,7 @@ try {
   const listeners=new Set();
   let revision=0;
   window.emit=({type,payload})=>{revision+=1;for(const fn of listeners)fn({type,payload,conversationId:'demo',revision});};
-  const conversationSnapshot=()=>({...session,running:!!window.running,requestId:window.running?'running-request':'',compacting:false,inbox:[],tools:[],nestedTools:[],usage:{},agent:{cwd:'/workspace',name:'QA Agent'}});
+  const conversationSnapshot=()=>({...session,model,running:!!window.running,requestId:window.running?'running-request':'',compacting:false,inbox:[],tools:[],nestedTools:[],usage:{},agent:{cwd:'/workspace',name:'QA Agent'}});
   const tempListeners=new Set();window.temporaryCalls=[];window.temporaryModelCalls=[];window.temporaryClosed=[];window.temporaryModelShouldFail=false;
   window.finishTemporary=(id,text='临时聊天回复')=>{for(const fn of tempListeners)fn({id,type:'message',message:{role:'assistant',timestamp:200,content:[{type:'text',text}]}});window.tempResolve?.({ok:true});};
   window.piApi=new Proxy({
@@ -45,7 +45,7 @@ try {
    files:async()=>({path:'/workspace',entries:[]}),
    createConversation:async()=>{throw Error('Temporary chat must not create workspace conversation');},
    saveUpload:async()=>{throw Error('Temporary image must not be saved');},
-   state:async()=>({workspaces:[{cwd:'/workspace',name:'Pi Studio',sessions:[session]}],model}),
+   state:async()=>({cwd:'/workspace',workspaces:[{cwd:'/workspace',name:'Pi Studio',sessions:[session]}],model}),
    conversationPage:async()=>({...conversationSnapshot(),messages,turnDiffs:session.turnDiffs,page:{hasOlder:false},messageStart:0}),
    conversationOutline:async()=>({id:'demo',items:messages.flatMap((message,sourceIndex)=>message.role==='user'?[{sourceIndex,text:message.content?.[0]?.text||'',timestamp:message.timestamp}]:[]),totalMessages:messages.length}),
    conversationSnapshot:async()=>conversationSnapshot(),
@@ -146,17 +146,21 @@ try {
  await page.locator('.temporary-composer input[type=file]').setInputFiles({name:'sample.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
  await page.locator('.temporary-attachments img').waitFor();
  await page.getByRole('button',{name:'发送临时消息',exact:true}).click();
- await page.locator('.temporary-thinking').waitFor();
+ const liveStatus=page.locator('.temporary-messages .narrative-live-status');
+ await liveStatus.getByText('Pi 正在处理', {exact:true}).waitFor();
+ assert.match(await liveStatus.locator('.narrative-live-duration').innerText(), /^用时 \d+秒$/);
  const call=await page.evaluate(()=>window.temporaryCalls[0]);assert.equal(call.images[0].data,png);
  assert.equal(call.modelRef,'demo/alternate');assert.equal(call.thinkingLevel,'default');
  await page.getByRole('tab').filter({has:page.locator('.panel-tab-label',{hasText:/^变更$/})}).click();
  await page.evaluate(id=>window.finishTemporary(id),call.id);
  await tempTab.click();
  await page.locator('.assistant-turn').getByText('临时聊天回复',{exact:true}).waitFor();
+ await liveStatus.waitFor({state:'detached'});
  await temporaryInput.fill('再聊一句');
  await page.getByRole('button',{name:'发送临时消息',exact:true}).click();
  await page.getByRole('button',{name:'停止临时回复',exact:true}).click();
  await page.getByRole('button',{name:'发送临时消息',exact:true}).waitFor();
+ await liveStatus.waitFor({state:'detached'});
  // Paste and drop stay in memory too.
  await temporaryInput.evaluate((node,png)=>{const bytes=Uint8Array.from(atob(png),char=>char.charCodeAt(0));const data=new DataTransfer();data.setData('text/plain','混合粘贴保留文字');data.items.add(new File([bytes],'pasted.png',{type:'image/png'}));node.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,cancelable:true,clipboardData:data}));},png);
  await page.getByRole('button',{name:'移除 pasted.png',exact:true}).waitFor();

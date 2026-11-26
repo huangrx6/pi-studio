@@ -49,7 +49,6 @@ export type NarrativePhase = ExecutionPhase & {
   diff?: { added: number; removed: number };
   imageCount: number;
   steps: NarrativeStepItem[];
-  liveThought?: string;
 };
 
 function basename(filePath: string): string {
@@ -631,17 +630,6 @@ export function buildNarrativePhases(
       }
     }
 
-    let liveThought: string | undefined;
-    if (phase.status === 'running') {
-      for (let index = phase.entries.length - 1; index >= 0; index--) {
-        const item = phase.entries[index];
-        if (item.kind === 'thinking' && !item.block.redacted && item.block.thinking.trim()) {
-          liveThought = extractLiveThoughtExcerpt(item.block.thinking);
-          break;
-        }
-      }
-    }
-
     const icon: StepIconKind = steps.length === 1
       ? steps[0].icon
       : categoryToIcon(phase.category);
@@ -653,7 +641,6 @@ export function buildNarrativePhases(
       diff: added > 0 || removed > 0 ? { added, removed } : undefined,
       imageCount: phase.images.length,
       steps,
-      liveThought,
     };
   });
 }

@@ -4,6 +4,7 @@ import { JumpToLatestButton } from '../../shared/JumpToLatestButton';
 import { LoadingIndicator } from '../../shared/LoadingState';
 import { ChatMessageView } from './ChatMessage';
 import { AssistantTurnView } from './AssistantTurn';
+import { NarrativeLiveStatus } from './NarrativeWorkstream';
 import { groupTranscript } from './turn-content';
 import { ComposerImageAttachment } from './ComposerImageAttachment';
 import { ComposerFeedback } from './ComposerFeedback';
@@ -31,6 +32,7 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
   const [atBottom, setAtBottom] = useState(true);
   const [stopping, setStopping] = useState(false);
   const { turns, results: toolResults } = useMemo(() => groupTranscript(state.messages), [state.messages]);
+  const tailTurn = turns.at(-1);
   const images = useMemo(
     () => state.images.map((image) => ({
       src: `data:${image.mimeType};base64,${image.data}`,
@@ -180,17 +182,22 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
             <p>不绑定工作区 · 关闭标签或退出应用即清除</p>
           </div>}
           {state.messages.length > 0 && <div className="messages temporary-messages">
-            {turns.map((turn, index) => turn.kind === 'user'
-              ? <ChatMessageView key={`user:${turn.message.timestamp}:${index}`} message={turn.message} />
-              : <AssistantTurnView
-                  key={`assistant:${index}`}
-                  messages={turn.messages}
-                  toolResults={toolResults}
-                  busy={state.busy && index === turns.length - 1}
-                  stepDisplay="standard"
-                  stepCollapse="keep-open"
-                />)}
-            {state.busy && turns.at(-1)?.kind !== 'assistant' && <div className="thinking temporary-thinking" role="status"><span /><span /><span />正在思考</div>}
+            {turns.map((turn, index) => {
+              if (turn.kind === 'user') {
+                return <ChatMessageView key={`user:${turn.message.timestamp}:${index}`} message={turn.message} />;
+              }
+              const previousTurn = turns[index - 1];
+              return <AssistantTurnView
+                key={`assistant:${index}`}
+                messages={turn.messages}
+                toolResults={toolResults}
+                startedAt={previousTurn?.kind === 'user' ? previousTurn.message.timestamp : undefined}
+                busy={state.busy && turn === tailTurn}
+                stepDisplay="standard"
+                stepCollapse="keep-open"
+              />;
+            })}
+            {state.busy && tailTurn?.kind === 'user' && <NarrativeLiveStatus startedAt={tailTurn.message.timestamp} />}
           </div>}
         </div>
       </div>

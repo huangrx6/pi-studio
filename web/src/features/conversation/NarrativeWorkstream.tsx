@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import {
   BookOpen,
   Bot,
@@ -19,6 +19,7 @@ import { ActivityDetails } from './ActivityDetails';
 import { ConversationImagePreview, type ConversationImage } from './ConversationImageGallery';
 import {
   buildNarrativePhases,
+  formatTurnDuration,
   type NarrativePhase,
   type NarrativeStepItem,
   type StepIconKind,
@@ -234,39 +235,43 @@ function PhaseGroup({
   const Icon = STEP_ICON[phase.icon] || Wrench;
   const isRunning = phase.status === 'running';
 
-  // Single-step non-thinking phase renders cleanly as one direct row without double nesting.
-  const only = phase.steps[0];
-  if (phase.steps.length === 1 && only?.entry.kind === 'tool' && !isRunning) {
-    const expanded = expandedStepKeys.has(only.key);
-    return (
-      <div className="narrative-group is-flat">
-        <ul className="narrative-flat-list">
-          <StepLeafRow
-            step={only}
-            result={results.get(only.entry.call.id)}
-            expanded={expanded}
-            onToggle={() => {
-              setExpandedStepKeys((curr) => {
-                const next = new Set(curr);
-                if (next.has(only.key)) next.delete(only.key);
-                else next.add(only.key);
-                return next;
-              });
-            }}
-            onOpenFile={onOpenFile}
-            onOpenChangeDiff={onOpenChangeDiff}
-          />
-        </ul>
-      </div>
-    );
-  }
-
   // While streaming, keep visible children bounded to the latest 6 steps unless user asks for earlier ones.
   const maxLiveSteps = 6;
   const hiddenCount = !showEarlierSteps && live && phase.steps.length > maxLiveSteps
     ? phase.steps.length - maxLiveSteps
     : 0;
   const visibleSteps = hiddenCount > 0 ? phase.steps.slice(-maxLiveSteps) : phase.steps;
+  const earlierSteps = hiddenCount > 0 && (
+    <button type="button" className="narrative-earlier-btn" onClick={() => setShowEarlierSteps(true)}>
+      查看较早的 {hiddenCount} 步
+    </button>
+  );
+  const renderStep = (step: NarrativeStepItem) => (
+    <StepLeafRow
+      key={step.key}
+      step={step}
+      result={step.entry.kind === 'tool' ? results.get(step.entry.call.id) : undefined}
+      expanded={expandedStepKeys.has(step.key)}
+      onToggle={() => {
+        setExpandedStepKeys((current) => {
+          const next = new Set(current);
+          if (!next.delete(step.key)) next.add(step.key);
+          return next;
+        });
+      }}
+      onOpenFile={onOpenFile}
+      onOpenChangeDiff={onOpenChangeDiff}
+    />
+  );
+
+  if (phase.toolCount === 0 || (phase.steps.length === 1 && !isRunning)) {
+    return (
+      <div className="narrative-group is-flat">
+        {earlierSteps}
+        <ul className="narrative-flat-list">{visibleSteps.map(renderStep)}</ul>
+      </div>
+    );
+  }
 
   return (
     <div className={`narrative-group${isOpen ? ' is-open' : ''}${isRunning ? ' is-running' : ''}`}>
@@ -316,42 +321,8 @@ function PhaseGroup({
 
       {isOpen && (
         <div className="narrative-branch">
-          {isRunning && phase.liveThought && !phase.steps.some((step) => step.liveThoughtExcerpt) && (
-            <p className="narrative-branch-thought">{phase.liveThought}</p>
-          )}
-          {hiddenCount > 0 && (
-            <button
-              type="button"
-              className="narrative-earlier-btn"
-              onClick={() => setShowEarlierSteps(true)}
-            >
-              查看较早的 {hiddenCount} 步
-            </button>
-          )}
-          <ul className="narrative-step-list">
-            {visibleSteps.map((step) => {
-              const result = step.entry.kind === 'tool' ? results.get(step.entry.call.id) : undefined;
-              const expanded = expandedStepKeys.has(step.key);
-              return (
-                <StepLeafRow
-                  key={step.key}
-                  step={step}
-                  result={result}
-                  expanded={expanded}
-                  onToggle={() => {
-                    setExpandedStepKeys((curr) => {
-                      const next = new Set(curr);
-                      if (next.has(step.key)) next.delete(step.key);
-                      else next.add(step.key);
-                      return next;
-                    });
-                  }}
-                  onOpenFile={onOpenFile}
-                  onOpenChangeDiff={onOpenChangeDiff}
-                />
-              );
-            })}
-          </ul>
+          {earlierSteps}
+          <ul className="narrative-step-list">{visibleSteps.map(renderStep)}</ul>
         </div>
       )}
     </div>
@@ -419,11 +390,30 @@ function NarrativeWorkstreamComponent({
 
 export const NarrativeWorkstream = memo(NarrativeWorkstreamComponent);
 
-export function NarrativePendingStatus({ label, retrying = false }: { label: string; retrying?: boolean }) {
+export function NarrativeLiveStatus({
+  startedAt,
+  retry,
+}: {
+  startedAt?: number;
+  retry?: { attempt: number; maxAttempts: number };
+}) {
+  const [observedAt] = useState(Date.now);
+  const [now, setNow] = useState(observedAt);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const label = retry ? `正在重试请求（${retry.attempt}/${retry.maxAttempts}）` : 'Pi 正在处理';
+  const start = startedAt !== undefined && startedAt > 0 ? startedAt : observedAt;
+  const duration = formatTurnDuration(now - start) || '用时 0秒';
   return (
-    <div className={`narrative-pending${retrying ? ' is-retrying' : ''}`} role="status" aria-live="polite">
-      <span className="narrative-running-dot" aria-hidden="true" />
-      <span>{label}</span>
+    <div className={`narrative-live-status${retry ? ' is-retrying' : ''}`}>
+      <span className="pi-mark" aria-hidden="true" />
+      <span role="status">{label}</span>
+      <span aria-hidden="true">·</span>
+      <span className="narrative-live-duration">{duration}</span>
+      <span className="narrative-live-ellipsis" aria-hidden="true">…</span>
     </div>
   );
 }
