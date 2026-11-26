@@ -8,6 +8,7 @@
 
 const path = require('node:path');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
+const { isBrowserAgentControlEnabled } = require('../services/browser/settings.cjs');
 const { getDurableRuntime } = require('./durable-runtime.cjs');
 const {
   extensionHostSnapshot,
@@ -226,7 +227,16 @@ function runtimeToolFilter(selection, mcp, profile, options = {}) {
     )
     : null;
 
+  const browserControlEnabled = options.browserControlEnabled !== undefined
+    ? Boolean(options.browserControlEnabled)
+    : (() => {
+      try { return isBrowserAgentControlEnabled(); } catch { return true; }
+    })();
+
   return ({ extension, tool }) => {
+    if (extension.name === 'studio-browser-tools' && !browserControlEnabled) {
+      return false;
+    }
     if (extension.name.startsWith('studio-mcp:')) {
       const serverName = extension.name.slice('studio-mcp:'.length);
       return mcpAllowedByProfile(profile, serverName) && enabledMcp.has(tool.name);

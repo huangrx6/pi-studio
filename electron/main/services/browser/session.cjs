@@ -8,6 +8,7 @@
 const { session } = require('electron');
 const path = require('node:path');
 const { resolveLocalHtmlAsset, resolveLocalHtmlDocument } = require('../local-html.cjs');
+const { installBrowserNetworkTelemetry, recordNetworkStart } = require('./telemetry.cjs');
 
 const BROWSER_PARTITION = 'persist:pi-browser';
 const DENIED_PERMISSIONS = new Set([
@@ -57,8 +58,11 @@ function getBrowserSession() {
 function installBrowserSessionGuards() {
   const target = getBrowserSession();
   target.webRequest.onBeforeRequest((details, callback) => {
-    callback({ cancel: !isAllowedRequest(details.url, details.resourceType, details.webContentsId) });
+    const allowed = isAllowedRequest(details.url, details.resourceType, details.webContentsId);
+    if (allowed) recordNetworkStart(details);
+    callback({ cancel: !allowed });
   });
+  installBrowserNetworkTelemetry(target);
   target.setPermissionRequestHandler((_contents, permission, callback) => {
     callback(!DENIED_PERMISSIONS.has(permission));
   });

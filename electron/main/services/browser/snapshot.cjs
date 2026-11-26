@@ -360,7 +360,19 @@ const MAX_SCREENSHOT_BYTES = 1_200_000;
 
 async function captureBrowserScreenshot(contents, options = {}) {
   if (!contents || contents.isDestroyed()) throw new Error('浏览器标签尚未就绪');
-  const image = await contents.capturePage();
+  const rect = options.rect
+    && Number.isFinite(options.rect.width)
+    && Number.isFinite(options.rect.height)
+    && options.rect.width > 0
+    && options.rect.height > 0
+    ? {
+      x: Math.max(0, Math.round(Number(options.rect.x) || 0)),
+      y: Math.max(0, Math.round(Number(options.rect.y) || 0)),
+      width: Math.max(1, Math.round(options.rect.width)),
+      height: Math.max(1, Math.round(options.rect.height)),
+    }
+    : undefined;
+  const image = rect ? await contents.capturePage(rect) : await contents.capturePage();
   if (!image || image.isEmpty()) throw new Error('无法截取当前页面');
   let working = image;
   let encoded = working.toJPEG(82);

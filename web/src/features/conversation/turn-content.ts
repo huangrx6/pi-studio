@@ -56,8 +56,10 @@ export function activityKind(entry: ActivityEntry) {
     case 'subagent': case 'subagent_stop': case 'subagent_supervisor': case 'bg_wait': return 'agent';
     case 'browser_tabs': case 'browser_open': case 'browser_navigate':
     case 'browser_snapshot': case 'browser_screenshot':
-    case 'browser_click': case 'browser_type': case 'browser_scroll':
-    case 'browser_wait': case 'browser_select': case 'browser_dialog':
+    case 'browser_click': case 'browser_hover': case 'browser_type':
+    case 'browser_press': case 'browser_drag': case 'browser_scroll':
+    case 'browser_wait': case 'browser_select': case 'browser_viewport':
+    case 'browser_console': case 'browser_network': case 'browser_dialog':
     case 'browser_download': case 'browser_highlight': case 'browser_evaluate':
       return 'browser';
     default: return 'other';

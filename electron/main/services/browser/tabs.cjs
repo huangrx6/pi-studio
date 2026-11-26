@@ -6,6 +6,7 @@
  */
 const { webContents } = require('electron');
 const { BROWSER_PARTITION } = require('./session.cjs');
+const { attachWebContentsTelemetry } = require('./telemetry.cjs');
 
 /** @type {Map<string, object>} */
 const tabs = new Map();
@@ -232,6 +233,7 @@ function installBrowserTabWatchers(app) {
     }
     // Guest partition is the reliable check; skip unrelated webviews.
     if (partition !== BROWSER_PARTITION) return;
+    attachWebContentsTelemetry(contents);
     contents.on('destroyed', () => {
       unregisterByWebContentsId(contents.id);
     });

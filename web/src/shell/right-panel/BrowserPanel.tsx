@@ -14,10 +14,13 @@ import {
   ExternalLink,
   Globe,
   Hand,
+  Monitor,
   MoreHorizontal,
+  Play,
   Plus,
   RotateCw,
   Shield,
+  Square,
   Trash2,
   Unplug,
   X,
@@ -59,13 +62,35 @@ type WebviewElement = HTMLElement & {
   removeEventListener(type: string, listener: (event: unknown) => void): void;
 };
 
+type BrowserViewportOverride = {
+  width: number;
+  height: number;
+  label?: string;
+};
+
+type BrowserAgentActivity = {
+  active: boolean;
+  tabId?: string;
+  action?: string;
+  label?: string;
+};
+
 type BrowserCommand = {
   type: string;
   requestId?: string;
   url?: string;
   tabId?: string;
   newTab?: boolean;
+  viewport?: BrowserViewportOverride | null;
 };
+
+const VIEWPORT_PRESETS: Array<{ id: string; label: string; viewport: BrowserViewportOverride | null }> = [
+  { id: 'reset', label: '自适应面板', viewport: null },
+  { id: 'desktop', label: '桌面 1440×900', viewport: { width: 1440, height: 900, label: '桌面 1440×900' } },
+  { id: 'laptop', label: '笔记本 1280×800', viewport: { width: 1280, height: 800, label: '笔记本 1280×800' } },
+  { id: 'tablet', label: '平板 768×1024', viewport: { width: 768, height: 1024, label: '平板 768×1024' } },
+  { id: 'mobile', label: '手机 390×844', viewport: { width: 390, height: 844, label: '手机 390×844' } },
+];
 
 type BrowserDownload = {
   id: string;
@@ -292,6 +317,10 @@ export function BrowserPanel({
   const [clearing, setClearing] = useState(false);
   const confirmation = useActionConfirmation();
   const [agentPaused, setAgentPaused] = useState(false);
+  const [agentActivity, setAgentActivity] = useState<BrowserAgentActivity>({ active: false });
+  const [viewportOverride, setViewportOverride] = useState<BrowserViewportOverride | null>(null);
+  const stageRef = useRef<HTMLDivElement>(null);
+  const [stageSize, setStageSize] = useState({ width: 0, height: 0 });
   const [evaluateEnabled, setEvaluateEnabled] = useState(false);
   const [sitePolicies, setSitePolicies] = useState<Array<{
     id: string;
@@ -465,9 +494,51 @@ export function BrowserPanel({
   }, [tabs, activeId]);
 
   useEffect(() => {
+    const node = stageRef.current;
+    if (!node || typeof ResizeObserver === 'undefined') return;
+    let raf = 0;
+    const measure = () => {
+      raf = 0;
+      const rect = node.getBoundingClientRect();
+      setStageSize((current) => (
+        Math.abs(current.width - rect.width) < 1 && Math.abs(current.height - rect.height) < 1
+          ? current
+          : { width: rect.width, height: rect.height }
+      ));
+    };
+    measure();
+    const observer = new ResizeObserver(() => {
+      if (!raf) raf = requestAnimationFrame(measure);
+    });
+    observer.observe(node);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
+  }, []);
+
+  useEffect(() => {
     const stop = window.piApi.onBrowserCommand((command: BrowserCommand) => {
-      if (command.type === 'focus' && command.tabId) {
-        setActiveId(command.tabId);
+      if ((command.type === 'focus' || command.type === 'reveal') && command.tabId) {
+        if (tabsRef.current.some((tab) => tab.id === command.tabId)) {
+          setActiveId(command.tabId);
+        }
+        return;
+      }
+      if (command.type === 'close-tab' && command.tabId) {
+        const targetId = command.tabId;
+        void window.piApi.browserTabUnregister(targetId).catch(() => {});
+        contentsIdRef.current.delete(targetId);
+        readyRef.current.delete(targetId);
+        setTabs((current) => {
+          const next = closeBrowserGuestTab(current, activeIdRef.current, targetId, createId);
+          setActiveId(next.activeId);
+          return next.tabs;
+        });
+        return;
+      }
+      if (command.type === 'viewport') {
+        setViewportOverride(command.viewport ?? null);
       }
       // open commands are handled by the workbench (openNonce + commandRequestId).
     });
@@ -489,14 +560,41 @@ export function BrowserPanel({
       if (!cancelled) setEvaluateEnabled(Boolean(state?.evaluateEnabled));
     }).catch(() => {});
     void window.piApi.browserControlState?.().then((state) => {
-      if (!cancelled && state) setAgentPaused(Boolean(state.paused));
+      if (!cancelled && state) {
+        setAgentPaused(Boolean(state.paused));
+        if (state.activity) {
+          setAgentActivity({
+            active: Boolean(state.activity.active),
+            tabId: state.activity.tabId,
+            action: state.activity.action,
+            label: state.activity.label,
+          });
+        }
+      }
     }).catch(() => {});
     void window.piApi.browserSitePolicies?.().then((result) => {
       if (!cancelled && Array.isArray(result?.policies)) setSitePolicies(result.policies as typeof sitePolicies);
     }).catch(() => {});
     const stop = window.piApi.onBrowserEvent((event) => {
+      if (event?.type === 'activity') {
+        setAgentActivity({
+          active: Boolean(event.active),
+          tabId: event.tabId,
+          action: event.action,
+          label: event.label,
+        });
+        return;
+      }
       if (event?.type === 'control') {
         setAgentPaused(Boolean((event as { paused?: boolean }).paused));
+        if (event.activity) {
+          setAgentActivity({
+            active: Boolean(event.activity.active),
+            tabId: event.activity.tabId,
+            action: event.activity.action,
+            label: event.activity.label,
+          });
+        }
         return;
       }
       if (event?.type === 'preferences') {
@@ -849,6 +947,21 @@ export function BrowserPanel({
           <Shield aria-hidden="true" />允许当前站点的脚本求值
         </button>
         <button type="button" onClick={() => { setHistory(clearBrowserHistory()); setMenu(null); }}>清除历史记录</button>
+        <div className="browser-viewport-menu">
+          <strong><Monitor aria-hidden="true" />视口尺寸</strong>
+          <div className="browser-viewport-presets">
+            {VIEWPORT_PRESETS.map((item) => {
+              const selected = (!viewportOverride && !item.viewport)
+                || Boolean(viewportOverride && item.viewport && viewportOverride.width === item.viewport.width && viewportOverride.height === item.viewport.height);
+              return <button
+                key={item.id}
+                type="button"
+                className={selected ? 'is-selected' : undefined}
+                onClick={() => { setViewportOverride(item.viewport); setMenu(null); }}
+              >{item.label}</button>;
+            })}
+          </div>
+        </div>
         <button type="button" disabled={clearing} onClick={() => void clearProfileData()}>
           <Trash2 aria-hidden="true" />{clearing ? '正在清除…' : '清除浏览器数据'}
         </button>
@@ -874,20 +987,76 @@ export function BrowserPanel({
       </div>}
     </div>}
 
+    {viewportOverride && <div className="browser-viewport-bar" role="status">
+      <Monitor aria-hidden="true" />
+      <span>视口模拟：{viewportOverride.width} × {viewportOverride.height}</span>
+      {stageSize.width > 0 && stageSize.height > 0 && (() => {
+        const availW = Math.max(120, stageSize.width - 24);
+        const availH = Math.max(120, stageSize.height - 24);
+        const scale = Math.min(1, availW / viewportOverride.width, availH / viewportOverride.height);
+        return scale < 0.99 ? <small>缩放 {Math.round(scale * 100)}%</small> : null;
+      })()}
+      <button type="button" className="text-button" onClick={() => setViewportOverride(null)}>恢复自适应</button>
+    </div>}
+
     {activeFailed && <p className="browser-failure" role="status">{activeFailed}</p>}
 
-    <div className="browser-stage">
-      {tabs.map((tab) => (
-        <GuestFrame
-          key={tab.id}
-          tab={tab}
-          active={tab.id === activeId}
-          onReady={markReady}
-          onPatch={updateTab}
-          onHistory={rememberHistory}
-          registerView={registerView}
-        />
-      ))}
+    <div
+      ref={stageRef}
+      className={`browser-stage ${agentActivity.active && !agentPaused ? 'is-agent-active' : ''} ${viewportOverride ? 'is-viewport-emulated' : ''}`}
+    >
+      {(() => {
+        const frames = tabs.map((tab) => (
+          <GuestFrame
+            key={tab.id}
+            tab={tab}
+            active={tab.id === activeId}
+            onReady={markReady}
+            onPatch={updateTab}
+            onHistory={rememberHistory}
+            registerView={registerView}
+          />
+        ));
+        if (!viewportOverride) return frames;
+        const availW = Math.max(120, (stageSize.width || viewportOverride.width) - 24);
+        const availH = Math.max(120, (stageSize.height || viewportOverride.height) - 24);
+        const scale = Math.min(1, availW / viewportOverride.width, availH / viewportOverride.height);
+        const scaledW = Math.round(viewportOverride.width * scale);
+        const scaledH = Math.round(viewportOverride.height * scale);
+        return <div className="browser-viewport-scroll">
+          <div className="browser-viewport-frame" style={{ width: `${scaledW}px`, height: `${scaledH}px` }}>
+            <div
+              className="browser-viewport-canvas"
+              style={{
+                width: `${viewportOverride.width}px`,
+                height: `${viewportOverride.height}px`,
+                transform: scale < 0.999 ? `scale(${scale})` : undefined,
+              }}
+            >
+              {frames}
+            </div>
+          </div>
+        </div>;
+      })()}
+
+      {(agentActivity.active || agentPaused) && <div className="browser-live-controls" role="region" aria-label="AI 浏览器操控状态">
+        {agentPaused ? (
+          <button type="button" className="browser-live-resume" onClick={() => void toggleAgentPause()}>
+            <Play aria-hidden="true" />
+            <span>已接管 · 继续 AI 操作</span>
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="browser-live-stop"
+            title={agentActivity.label ? `正在执行：${agentActivity.label}（点击立即停止并接管）` : '点击立即停止并接管浏览器'}
+            onClick={() => void toggleAgentPause()}
+          >
+            <Square aria-hidden="true" />
+            <span>Stop</span>
+          </button>
+        )}
+      </div>}
     </div>
   </div>;
 }

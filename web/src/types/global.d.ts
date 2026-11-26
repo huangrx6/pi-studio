@@ -843,8 +843,16 @@ declare global {
         };
         error?: string;
       }): Promise<{ ok: boolean; tab?: unknown }>;
-      browserControlState(): Promise<{ paused: boolean; pausedTabs: string[] }>;
-      browserControlPause(payload: { paused?: boolean; tabId?: string }): Promise<{ paused: boolean; pausedTabs: string[] }>;
+      browserControlState(): Promise<{
+        paused: boolean;
+        pausedTabs: string[];
+        activity?: { active: boolean; tabId?: string; action?: string; label?: string; startedAt?: number };
+      }>;
+      browserControlPause(payload: { paused?: boolean; tabId?: string }): Promise<{
+        paused: boolean;
+        pausedTabs: string[];
+        activity?: { active: boolean; tabId?: string; action?: string; label?: string; startedAt?: number };
+      }>;
       browserSitePolicies(): Promise<{ policies: Array<{
         id: string;
         originPattern: string;
@@ -907,6 +915,14 @@ declare global {
         type: string;
         preferences?: BrowserPreferences;
         sessions?: Array<{ sessionId: string; targetId: string; title: string; url: string; attachedAt?: number }>;
+        paused?: boolean;
+        pausedTabs?: string[];
+        active?: boolean;
+        tabId?: string;
+        action?: string;
+        label?: string;
+        startedAt?: number;
+        activity?: { active: boolean; tabId?: string; action?: string; label?: string; startedAt?: number };
         reason?: string;
         download?: {
           id: string;
@@ -926,11 +942,12 @@ declare global {
         tabs?: unknown;
       }) => void): () => void;
       onBrowserCommand(listener: (command: {
-        type: 'open' | 'focus' | string;
+        type: 'open' | 'focus' | 'reveal' | 'close-tab' | 'viewport' | string;
         requestId?: string;
         url?: string;
         tabId?: string;
         newTab?: boolean;
+        viewport?: { width: number; height: number; label?: string } | null;
       }) => void): () => void;
       /** 创建或重新连接当前窗口独占的 PTY 会话。 */
       terminalCreate(payload: {

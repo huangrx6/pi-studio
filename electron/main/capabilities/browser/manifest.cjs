@@ -14,7 +14,9 @@ module.exports = Object.freeze([
     contributes: {
       tools: builtinToolContributions([
         'browser_tabs', 'browser_open', 'browser_navigate', 'browser_snapshot', 'browser_screenshot',
-        'browser_click', 'browser_type', 'browser_scroll', 'browser_wait', 'browser_select',
+        'browser_click', 'browser_hover', 'browser_type', 'browser_press', 'browser_drag',
+        'browser_scroll', 'browser_wait', 'browser_select', 'browser_viewport',
+        'browser_console', 'browser_network',
         'browser_dialog', 'browser_download', 'browser_highlight', 'browser_evaluate', 'browser_cdp', 'browser_external',
       ]),
     },

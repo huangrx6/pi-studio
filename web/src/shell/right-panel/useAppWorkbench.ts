@@ -620,14 +620,26 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     return () => { ++treeRequestRef.current; };
   }, [treeVisible, workspace]);
 
-  // Agent browser_open arrives as a main-process command; ensure the shell is up.
+  // Agent browser commands arrive from main process; ensure the workbench browser shell is visible.
   useEffect(() => {
     const stop = window.piApi.onBrowserCommand((command) => {
-      if (command?.type !== 'open') return;
-      openBrowserTab(command.url || '', { commandRequestId: command.requestId });
+      if (!command) return;
+      if (command.type === 'open') {
+        openBrowserTab(command.url || '', { commandRequestId: command.requestId });
+        return;
+      }
+      if (command.type === 'reveal' || command.type === 'focus' || command.type === 'viewport') {
+        const existing = panelTabsRef.current.find((tab) => tab.kind === 'browser');
+        if (!existing) return;
+        if (activePanelTabIdRef.current !== existing.id) {
+          setActivePanelTabId(existing.id);
+        }
+        if (filesOpenRef.current) setPanelEntered(true);
+        else openPanel();
+      }
     });
     return () => stop();
-  // openBrowserTab closes over latest setters; mount once.
+  // openBrowserTab and openPanel close over latest refs/setters; mount once.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

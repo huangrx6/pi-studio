@@ -25,13 +25,14 @@
 
 /* 负外边距让笔触跟随最后一行文字，同时保持问候语居中。 */
 .new-conversation-welcome h1::after {
+  --welcome-underline-width: 3.6em;
   content: "";
   display: inline-block;
-  inline-size: 2.8em;
-  block-size: .24em;
-  margin-inline-start: -2.8em;
-  vertical-align: -.36em;
-  border-block-start: .11em solid color-mix(in srgb, var(--theme-accent) 82%, var(--text-1));
+  inline-size: var(--welcome-underline-width);
+  block-size: .34em;
+  margin-inline-start: calc(-1 * var(--welcome-underline-width));
+  vertical-align: -.51em;
+  border-block-start: .15em solid color-mix(in srgb, var(--theme-accent) 82%, var(--text-1));
   border-radius: 50%;
   transform: rotate(-3deg);
   pointer-events: none;

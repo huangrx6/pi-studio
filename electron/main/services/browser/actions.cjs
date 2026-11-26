@@ -1,11 +1,40 @@
 /**
- * DOM actions against guest tabs using data-pi-ref from the last snapshot.
+ * DOM actions against guest tabs using data-pi-ref from the last snapshot,
+ * enhanced with real-time virtual AI cursor, floating action pills, click
+ * ripples, native keyboard/hover input, drag-and-drop, and viewport emulation.
  */
 const { getTabWebContents, resolveBrowserTab } = require('./tabs.cjs');
 const { captureBrowserSnapshot } = require('./snapshot.cjs');
-const { enqueueBrowserAction } = require('./queue.cjs');
+const { beginBrowserActivity, endBrowserActivity, enqueueBrowserAction } = require('./queue.cjs');
+const { requestRevealBrowserTab, requestSetBrowserViewport } = require('./commands.cjs');
 const { assertSiteActionAllowed } = require('./site-policy.cjs');
 const { assertBrowserEvaluateAllowed, getBrowserPreferences } = require('./settings.cjs');
+const {
+  buildAgentCursorScript,
+  buildClearOverlayScript,
+  buildOverlayVisibilityScript,
+} = require('./overlay.cjs');
+
+const VISUAL_GLIDE_MS = 220;
+
+const VIEWPORT_PRESETS = Object.freeze({
+  desktop: { width: 1440, height: 900, label: '桌面 1440×900' },
+  laptop: { width: 1280, height: 800, label: '笔记本 1280×800' },
+  tablet: { width: 768, height: 1024, label: '平板 768×1024' },
+  mobile: { width: 390, height: 844, label: '手机 390×844' },
+});
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function shouldAnimateOverlay() {
+  try {
+    return getBrowserPreferences().annotatedScreenshots !== 'never';
+  } catch {
+    return true;
+  }
+}
 
 function runInTab(tabId, script) {
   const entry = resolveBrowserTab(tabId);
@@ -22,13 +51,27 @@ function runInTab(tabId, script) {
   });
 }
 
-function withTabAction(tabId, actionClass, work) {
+function withTabAction(tabId, actionClass, work, meta = {}) {
   const entry = resolveBrowserTab(tabId);
   assertSiteActionAllowed(entry.url, actionClass);
   return enqueueBrowserAction(entry.id, async () => {
     const live = resolveBrowserTab(entry.id);
     assertSiteActionAllowed(live.url, actionClass);
-    return work(entry.id);
+    if (meta.reveal !== false) {
+      try { requestRevealBrowserTab(live.id); } catch { /* best-effort */ }
+    }
+    const token = meta.trackActivity === false
+      ? null
+      : beginBrowserActivity({
+        tabId: live.id,
+        action: meta.action || actionClass,
+        label: meta.label || '',
+      });
+    try {
+      return await work(live.id);
+    } finally {
+      if (token !== null) endBrowserActivity(token);
+    }
   });
 }
 
@@ -60,8 +103,8 @@ function highlightScript(ref, label, clearOthers) {
     [data-pi-highlight="1"] {
       outline: 2px solid #3b82f6 !important;
       outline-offset: 2px !important;
-      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.28) !important;
-      border-radius: 2px;
+      box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.24) !important;
+      border-radius: 3px;
     }
     #pi-browser-highlight-label {
       position: fixed;
@@ -94,24 +137,27 @@ function highlightScript(ref, label, clearOthers) {
     const el = document.querySelector('[data-pi-ref=' + JSON.stringify(target) + ']');
     if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
     el.setAttribute('data-pi-highlight', '1');
-    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
     const rect = el.getBoundingClientRect();
-    let badge = document.getElementById('pi-browser-highlight-label');
-    if (!badge) {
-      badge = document.createElement('div');
-      badge.id = 'pi-browser-highlight-label';
-      document.documentElement.appendChild(badge);
+    if (labelText) {
+      let badge = document.getElementById('pi-browser-highlight-label');
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.id = 'pi-browser-highlight-label';
+        document.documentElement.appendChild(badge);
+      }
+      badge.textContent = labelText;
+      const top = Math.max(8, Math.min(window.innerHeight - 28, rect.top - 28));
+      const left = Math.max(8, Math.min(window.innerWidth - 120, rect.left));
+      badge.style.top = top + 'px';
+      badge.style.left = left + 'px';
     }
-    badge.textContent = labelText || target;
-    const top = Math.max(8, Math.min(window.innerHeight - 28, rect.top - 28));
-    const left = Math.max(8, Math.min(window.innerWidth - 120, rect.left));
-    badge.style.top = top + 'px';
-    badge.style.left = left + 'px';
     return {
       ok: true,
       ref: target,
       tag: el.tagName.toLowerCase(),
       name: String(el.getAttribute('aria-label') || el.innerText || el.value || '').trim().slice(0, 80),
+      rect: { x: Math.round(rect.left), y: Math.round(rect.top), width: Math.round(rect.width), height: Math.round(rect.height) },
     };
   })()`;
 }
@@ -119,8 +165,9 @@ function highlightScript(ref, label, clearOthers) {
 async function clearBrowserHighlights(tabId) {
   return withTabAction(tabId, 'read', async (id) => {
     const { entry, result } = await runInTab(id, highlightScript('', '', true));
+    try { await runInTab(id, buildClearOverlayScript()); } catch { /* ignore */ }
     return { ok: true, tabId: entry.id, url: entry.url, cleared: true, ...result };
-  });
+  }, { reveal: false, trackActivity: false });
 }
 
 async function highlightBrowserRef(tabId, ref, options = {}) {
@@ -129,11 +176,13 @@ async function highlightBrowserRef(tabId, ref, options = {}) {
   return withTabAction(tabId, 'read', async (id) => {
     if (!target || options.clear === true) {
       const { entry } = await runInTab(id, highlightScript('', '', true));
+      try { await runInTab(id, buildClearOverlayScript()); } catch { /* ignore */ }
       return { ok: true, tabId: entry.id, url: entry.url, cleared: true };
     }
     const label = options.label || target;
     const { entry, result } = await runInTab(id, highlightScript(target, label, options.clearOthers !== false));
     if (!result?.ok) throw new Error(result?.error || '高亮失败');
+    await showBrowserCursorAction(id, { ref: target, label: options.label || `标注 ${result.name || target}`, kind: 'move' });
     return {
       ok: true,
       tabId: entry.id,
@@ -141,22 +190,71 @@ async function highlightBrowserRef(tabId, ref, options = {}) {
       ref: target,
       element: result,
     };
-  });
+  }, { action: 'highlight', label: options.label || `标注 ${target}` });
 }
 
-async function flashHighlight(id, ref, label) {
+async function showBrowserCursorAction(tabId, options = {}) {
+  if (!shouldAnimateOverlay()) return null;
   try {
-    await runInTab(id, highlightScript(ref, label || ref, true));
+    const { result } = await runInTab(tabId, buildAgentCursorScript(options));
+    return result;
   } catch {
-    // Highlight is best-effort; actions still proceed.
+    return null;
   }
+}
+
+async function setBrowserOverlayVisible(tabId, visible) {
+  try {
+    await runInTab(tabId, buildOverlayVisibilityScript(visible));
+  } catch {
+    // Best-effort for clean screenshots.
+  }
+}
+
+async function flashHighlight(id, ref, label, kind = 'move') {
+  if (!shouldAnimateOverlay()) return null;
+  try {
+    // Outline the element (without duplicating the old blue badge when our live pill is active).
+    const { result } = await runInTab(id, highlightScript(ref, '', true));
+    const readable = result?.name ? `${label}「${result.name.slice(0, 24)}」` : `${label} ${ref}`;
+    const cursor = await showBrowserCursorAction(id, { ref, label: readable, kind });
+    await sleep(VISUAL_GLIDE_MS);
+    return { element: result, cursor };
+  } catch {
+    return null;
+  }
+}
+
+async function getElementRect(tabId, ref) {
+  const target = String(ref || '').trim();
+  if (!target) return null;
+  const { result } = await runInTab(tabId, `(() => {
+    const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(target)}) + ']');
+    if (!el) return null;
+    el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return null;
+    return {
+      x: Math.max(0, Math.round(r.left)),
+      y: Math.max(0, Math.round(r.top)),
+      width: Math.max(1, Math.round(r.width)),
+      height: Math.max(1, Math.round(r.height)),
+    };
+  })()`);
+  return result || null;
 }
 
 async function clickBrowserRef(tabId, ref, options = {}) {
   const target = String(ref || '').trim();
   if (!target) throw new Error('需要 ref（先 browser_snapshot）');
+  const doubleClick = options.doubleClick === true;
+  const buttonName = ['left', 'right', 'middle'].includes(String(options.button || '').toLowerCase())
+    ? String(options.button).toLowerCase()
+    : 'left';
+  const buttonIndex = buttonName === 'right' ? 2 : buttonName === 'middle' ? 1 : 0;
+  const actionLabel = doubleClick ? '双击' : buttonName === 'right' ? '右键点击' : '点击';
   return withTabAction(tabId, 'act', async (id) => {
-    await flashHighlight(id, target, options.label || target);
+    await flashHighlight(id, target, options.label || actionLabel, 'click');
     const { entry, result } = await runInTab(id, `(() => {
       const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(target)}) + ']');
       if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
@@ -164,16 +262,35 @@ async function clickBrowserRef(tabId, ref, options = {}) {
       const rect = el.getBoundingClientRect();
       const cx = rect.left + Math.min(rect.width / 2, Math.max(4, rect.width - 4));
       const cy = rect.top + Math.min(rect.height / 2, Math.max(4, rect.height - 4));
-      const opts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy };
+      const btn = ${buttonIndex};
+      const dbl = ${doubleClick ? 'true' : 'false'};
+      const opts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy, button: btn, buttons: btn === 2 ? 2 : btn === 1 ? 4 : 1 };
+      el.dispatchEvent(new PointerEvent('pointerover', opts));
       el.dispatchEvent(new MouseEvent('mouseover', opts));
+      el.dispatchEvent(new PointerEvent('pointerdown', opts));
       el.dispatchEvent(new MouseEvent('mousedown', opts));
       if (typeof el.focus === 'function') el.focus();
-      if (typeof el.click === 'function') el.click();
-      el.dispatchEvent(new MouseEvent('mouseup', opts));
+      if (btn === 2) {
+        el.dispatchEvent(new PointerEvent('pointerup', opts));
+        el.dispatchEvent(new MouseEvent('mouseup', opts));
+        el.dispatchEvent(new MouseEvent('contextmenu', opts));
+      } else {
+        if (typeof el.click === 'function') el.click();
+        el.dispatchEvent(new PointerEvent('pointerup', opts));
+        el.dispatchEvent(new MouseEvent('mouseup', opts));
+        if (dbl) {
+          el.dispatchEvent(new MouseEvent('mousedown', { ...opts, detail: 2 }));
+          if (typeof el.click === 'function') el.click();
+          el.dispatchEvent(new MouseEvent('mouseup', { ...opts, detail: 2 }));
+          el.dispatchEvent(new MouseEvent('dblclick', { ...opts, detail: 2 }));
+        }
+      }
       return {
         ok: true,
         tag: el.tagName.toLowerCase(),
         name: String(el.getAttribute('aria-label') || el.innerText || el.value || '').trim().slice(0, 80),
+        x: Math.round(cx),
+        y: Math.round(cy),
       };
     })()`);
     if (!result?.ok) throw new Error(result?.error || '点击失败');
@@ -182,10 +299,59 @@ async function clickBrowserRef(tabId, ref, options = {}) {
       tabId: entry.id,
       url: entry.url,
       ref: target,
+      button: buttonName,
+      doubleClick,
       element: result,
       snapshot: await maybeSnapshot(entry, options.snapshot),
     };
-  });
+  }, { action: 'click', label: `${actionLabel} ${target}` });
+}
+
+async function hoverBrowserRef(tabId, ref, options = {}) {
+  const target = String(ref || '').trim();
+  if (!target) throw new Error('需要 ref（先 browser_snapshot）');
+  return withTabAction(tabId, 'act', async (id) => {
+    await flashHighlight(id, target, options.label || '悬停', 'move');
+    const { entry, contents, result } = await runInTab(id, `(() => {
+      const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(target)}) + ']');
+      if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
+      el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+      const rect = el.getBoundingClientRect();
+      const cx = rect.left + Math.min(rect.width / 2, Math.max(4, rect.width - 4));
+      const cy = rect.top + Math.min(rect.height / 2, Math.max(4, rect.height - 4));
+      const opts = { bubbles: true, cancelable: true, view: window, clientX: cx, clientY: cy };
+      el.dispatchEvent(new PointerEvent('pointerover', opts));
+      el.dispatchEvent(new PointerEvent('pointerenter', { ...opts, bubbles: false }));
+      el.dispatchEvent(new MouseEvent('mouseover', opts));
+      el.dispatchEvent(new MouseEvent('mouseenter', { ...opts, bubbles: false }));
+      el.dispatchEvent(new PointerEvent('pointermove', opts));
+      el.dispatchEvent(new MouseEvent('mousemove', opts));
+      return {
+        ok: true,
+        tag: el.tagName.toLowerCase(),
+        name: String(el.getAttribute('aria-label') || el.innerText || el.value || '').trim().slice(0, 80),
+        x: Math.round(cx),
+        y: Math.round(cy),
+      };
+    })()`);
+    if (!result?.ok) throw new Error(result?.error || '悬停失败');
+    // Also send a real Chromium mouseMove so CSS :hover selectors genuinely activate.
+    try {
+      if (typeof contents.sendInputEvent === 'function') {
+        contents.sendInputEvent({ type: 'mouseMove', x: result.x, y: result.y });
+      }
+    } catch {
+      // Fallback JS events already fired.
+    }
+    return {
+      ok: true,
+      tabId: entry.id,
+      url: entry.url,
+      ref: target,
+      element: result,
+      snapshot: await maybeSnapshot(entry, options.snapshot),
+    };
+  }, { action: 'hover', label: `悬停 ${target}` });
 }
 
 async function typeBrowserRef(tabId, ref, text, options = {}) {
@@ -196,7 +362,7 @@ async function typeBrowserRef(tabId, ref, text, options = {}) {
   const clear = options.clear !== false;
   const submit = options.submit === true;
   return withTabAction(tabId, 'act', async (id) => {
-    await flashHighlight(id, target, options.label || target);
+    await flashHighlight(id, target, options.label || '输入', 'move');
     const { entry, result } = await runInTab(id, `(() => {
       const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(target)}) + ']');
       if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
@@ -228,10 +394,11 @@ async function typeBrowserRef(tabId, ref, text, options = {}) {
         else if (form) form.submit();
         else el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true }));
       }
+      const isPassword = el.tagName === 'INPUT' && String(el.type || '').toLowerCase() === 'password';
       return {
         ok: true,
         tag: el.tagName.toLowerCase(),
-        value: ('value' in el ? String(el.value || '') : String(el.textContent || '')).slice(0, 120),
+        value: isPassword ? '••••••' : ('value' in el ? String(el.value || '') : String(el.textContent || '')).slice(0, 120),
       };
     })()`);
     if (!result?.ok) throw new Error(result?.error || '输入失败');
@@ -243,7 +410,239 @@ async function typeBrowserRef(tabId, ref, text, options = {}) {
       element: result,
       snapshot: await maybeSnapshot(entry, options.snapshot),
     };
-  });
+  }, { action: 'type', label: `输入到 ${target}` });
+}
+
+function parseKeyCombo(combo) {
+  const raw = String(combo || '').trim();
+  if (!raw) throw new Error('需要指定按键（例如 Escape、Tab、Enter、Shift+Tab、Meta+K）');
+  const parts = raw.split('+').map((part) => part.trim()).filter(Boolean);
+  if (!parts.length) throw new Error('按键格式无效');
+  const modifiers = [];
+  let keyCode = parts[parts.length - 1];
+  for (let i = 0; i < parts.length - 1; i += 1) {
+    const mod = parts[i].toLowerCase();
+    if (mod === 'shift') modifiers.push('shift');
+    else if (mod === 'ctrl' || mod === 'control') modifiers.push('control');
+    else if (mod === 'alt' || mod === 'option') modifiers.push('alt');
+    else if (mod === 'meta' || mod === 'cmd' || mod === 'command') modifiers.push('meta');
+    else if (mod === 'mod') modifiers.push(process.platform === 'darwin' ? 'meta' : 'control');
+  }
+  const aliases = {
+    esc: 'Escape',
+    escape: 'Escape',
+    return: 'Enter',
+    enter: 'Enter',
+    tab: 'Tab',
+    space: 'Space',
+    ' ': 'Space',
+    backspace: 'Backspace',
+    delete: 'Delete',
+    up: 'Up',
+    arrowup: 'Up',
+    down: 'Down',
+    arrowdown: 'Down',
+    left: 'Left',
+    arrowleft: 'Left',
+    right: 'Right',
+    arrowright: 'Right',
+    home: 'Home',
+    end: 'End',
+    pageup: 'PageUp',
+    pagedown: 'PageDown',
+  };
+  const normalized = aliases[keyCode.toLowerCase()] || keyCode;
+  const domKeyMap = {
+    Up: 'ArrowUp',
+    Down: 'ArrowDown',
+    Left: 'ArrowLeft',
+    Right: 'ArrowRight',
+    Space: ' ',
+  };
+  return {
+    raw,
+    keyCode: normalized,
+    domKey: domKeyMap[normalized] || normalized,
+    modifiers: [...new Set(modifiers)],
+  };
+}
+
+async function pressBrowserKey(tabId, key, options = {}) {
+  const parsed = parseKeyCombo(key);
+  const targetRef = String(options.ref || '').trim();
+  return withTabAction(tabId, 'act', async (id) => {
+    if (targetRef) {
+      await flashHighlight(id, targetRef, `按键 ${parsed.raw}`, 'move');
+      await runInTab(id, `(() => {
+        const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(targetRef)}) + ']');
+        if (el && typeof el.focus === 'function') el.focus();
+      })()`);
+    } else {
+      await showBrowserCursorAction(id, { label: `按下 ${parsed.raw}`, kind: 'move' });
+      if (shouldAnimateOverlay()) await sleep(120);
+    }
+    const entry = resolveBrowserTab(id);
+    const contents = getTabWebContents(entry);
+    if (!contents) throw new Error('浏览器标签尚未就绪');
+    if (typeof contents.sendInputEvent === 'function') {
+      contents.sendInputEvent({
+        type: 'keyDown',
+        keyCode: parsed.keyCode,
+        modifiers: parsed.modifiers,
+      });
+      if (parsed.keyCode.length === 1 && !parsed.modifiers.includes('control') && !parsed.modifiers.includes('meta')) {
+        contents.sendInputEvent({
+          type: 'char',
+          keyCode: parsed.keyCode,
+          modifiers: parsed.modifiers,
+        });
+      }
+      contents.sendInputEvent({
+        type: 'keyUp',
+        keyCode: parsed.keyCode,
+        modifiers: parsed.modifiers,
+      });
+      await sleep(80);
+    } else {
+      await runInTab(id, `(() => {
+        const target = document.activeElement || document.body || document.documentElement;
+        const init = {
+          key: ${JSON.stringify(parsed.domKey)},
+          bubbles: true,
+          cancelable: true,
+          shiftKey: ${parsed.modifiers.includes('shift') ? 'true' : 'false'},
+          ctrlKey: ${parsed.modifiers.includes('control') ? 'true' : 'false'},
+          altKey: ${parsed.modifiers.includes('alt') ? 'true' : 'false'},
+          metaKey: ${parsed.modifiers.includes('meta') ? 'true' : 'false'},
+        };
+        target.dispatchEvent(new KeyboardEvent('keydown', init));
+        target.dispatchEvent(new KeyboardEvent('keyup', init));
+      })()`);
+    }
+    return {
+      ok: true,
+      tabId: entry.id,
+      url: entry.url,
+      key: parsed.raw,
+      modifiers: parsed.modifiers,
+      snapshot: await maybeSnapshot(entry, options.snapshot === true),
+    };
+  }, { action: 'press', label: `按下 ${parsed.raw}` });
+}
+
+async function dragBrowserRefs(tabId, sourceRef, targetRef, options = {}) {
+  const fromRef = String(sourceRef || '').trim();
+  const toRef = String(targetRef || '').trim();
+  if (!fromRef || !toRef) throw new Error('拖拽需要提供 sourceRef 和 targetRef');
+  return withTabAction(tabId, 'act', async (id) => {
+    await flashHighlight(id, fromRef, '开始拖拽', 'drag');
+    const { entry, contents, result } = await runInTab(id, `(() => {
+      const src = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(fromRef)}) + ']');
+      const dst = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(toRef)}) + ']');
+      if (!src) return { ok: false, error: '找不到拖拽起点元素，请重新 snapshot' };
+      if (!dst) return { ok: false, error: '找不到拖拽目标元素，请重新 snapshot' };
+      src.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+      const sr = src.getBoundingClientRect();
+      const dr = dst.getBoundingClientRect();
+      const sx = Math.round(sr.left + sr.width / 2);
+      const sy = Math.round(sr.top + sr.height / 2);
+      const dx = Math.round(dr.left + dr.width / 2);
+      const dy = Math.round(dr.top + dr.height / 2);
+      const dt = typeof DataTransfer !== 'undefined' ? new DataTransfer() : undefined;
+      src.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, cancelable: true, clientX: sx, clientY: sy, buttons: 1 }));
+      src.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, clientX: sx, clientY: sy, buttons: 1 }));
+      if (dt) src.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, clientX: sx, clientY: sy, dataTransfer: dt }));
+      return {
+        ok: true,
+        sx, sy, dx, dy,
+        sourceName: String(src.getAttribute('aria-label') || src.innerText || '').trim().slice(0, 40),
+        targetName: String(dst.getAttribute('aria-label') || dst.innerText || '').trim().slice(0, 40),
+      };
+    })()`);
+    if (!result?.ok) throw new Error(result?.error || '拖拽失败');
+    await showBrowserCursorAction(id, {
+      ref: toRef,
+      label: `拖到「${result.targetName || toRef}」`,
+      kind: 'drag',
+    });
+    if (shouldAnimateOverlay()) await sleep(VISUAL_GLIDE_MS);
+    try {
+      if (typeof contents.sendInputEvent === 'function') {
+        contents.sendInputEvent({ type: 'mouseDown', x: result.sx, y: result.sy, button: 'left', clickCount: 1 });
+        contents.sendInputEvent({ type: 'mouseMove', x: Math.round((result.sx + result.dx) / 2), y: Math.round((result.sy + result.dy) / 2), modifiers: ['leftButtonDown'] });
+        contents.sendInputEvent({ type: 'mouseMove', x: result.dx, y: result.dy, modifiers: ['leftButtonDown'] });
+        contents.sendInputEvent({ type: 'mouseUp', x: result.dx, y: result.dy, button: 'left', clickCount: 1 });
+      }
+    } catch {
+      // Continue with DOM drop dispatch.
+    }
+    await runInTab(id, `(() => {
+      const src = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(fromRef)}) + ']');
+      const dst = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(toRef)}) + ']');
+      if (!dst) return;
+      const dx = ${result.dx};
+      const dy = ${result.dy};
+      const dt = typeof DataTransfer !== 'undefined' ? new DataTransfer() : undefined;
+      dst.dispatchEvent(new PointerEvent('pointermove', { bubbles: true, cancelable: true, clientX: dx, clientY: dy, buttons: 1 }));
+      dst.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, cancelable: true, clientX: dx, clientY: dy, buttons: 1 }));
+      if (dt) {
+        dst.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, clientX: dx, clientY: dy, dataTransfer: dt }));
+        dst.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, clientX: dx, clientY: dy, dataTransfer: dt }));
+        dst.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, clientX: dx, clientY: dy, dataTransfer: dt }));
+      }
+      dst.dispatchEvent(new PointerEvent('pointerup', { bubbles: true, cancelable: true, clientX: dx, clientY: dy }));
+      dst.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, cancelable: true, clientX: dx, clientY: dy }));
+      if (src && dt) src.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, clientX: dx, clientY: dy, dataTransfer: dt }));
+    })()`);
+    return {
+      ok: true,
+      tabId: entry.id,
+      url: entry.url,
+      sourceRef: fromRef,
+      targetRef: toRef,
+      snapshot: await maybeSnapshot(entry, options.snapshot),
+    };
+  }, { action: 'drag', label: `拖拽 ${fromRef} → ${toRef}` });
+}
+
+function resolveViewportSpec(options = {}) {
+  if (options.reset === true || String(options.preset || '').toLowerCase() === 'reset') {
+    return null;
+  }
+  const presetKey = String(options.preset || '').trim().toLowerCase();
+  if (presetKey && Object.hasOwn(VIEWPORT_PRESETS, presetKey)) {
+    return { ...VIEWPORT_PRESETS[presetKey] };
+  }
+  const width = Number(options.width);
+  const height = Number(options.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height)) {
+    throw new Error('请提供 width 和 height（像素），或 preset（desktop/laptop/tablet/mobile/reset）');
+  }
+  const clampedW = Math.min(2560, Math.max(320, Math.round(width)));
+  const clampedH = Math.min(1800, Math.max(320, Math.round(height)));
+  return { width: clampedW, height: clampedH, label: `${clampedW}×${clampedH}` };
+}
+
+async function setBrowserViewport(tabId, options = {}) {
+  const spec = resolveViewportSpec(options);
+  const label = spec ? `设置视口 ${spec.label}` : '恢复自适应视口';
+  return withTabAction(tabId, 'act', async (id) => {
+    requestSetBrowserViewport(id, spec);
+    await showBrowserCursorAction(id, { label, kind: 'move' });
+    await sleep(160);
+    const { entry, result } = await runInTab(id, `(() => ({
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    }))()`);
+    return {
+      ok: true,
+      tabId: entry.id,
+      url: entry.url,
+      viewport: spec,
+      actual: result,
+    };
+  }, { action: 'viewport', label });
 }
 
 async function selectBrowserRef(tabId, ref, values, options = {}) {
@@ -252,7 +651,7 @@ async function selectBrowserRef(tabId, ref, values, options = {}) {
   const list = Array.isArray(values) ? values.map((item) => String(item)) : [String(values ?? '')];
   if (!list.length || list.every((item) => !item)) throw new Error('需要 values');
   return withTabAction(tabId, 'act', async (id) => {
-    await flashHighlight(id, target, options.label || target);
+    await flashHighlight(id, target, options.label || `选择「${list[0]}」`, 'click');
     const { entry, result } = await runInTab(id, `(() => {
       const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(target)}) + ']');
       if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
@@ -278,13 +677,14 @@ async function selectBrowserRef(tabId, ref, values, options = {}) {
       selected: result.selected,
       snapshot: await maybeSnapshot(entry, options.snapshot),
     };
-  });
+  }, { action: 'select', label: `选择 ${list.join(', ')}` });
 }
 
 async function scrollBrowser(tabId, options = {}) {
+  const ref = String(options.ref || '').trim();
+  const direction = String(options.direction || 'down').toLowerCase();
+  const dirLabel = { down: '向下滚动', up: '向上滚动', left: '向左滚动', right: '向右滚动' }[direction] || '滚动页面';
   return withTabAction(tabId, 'act', async (id) => {
-    const ref = String(options.ref || '').trim();
-    const direction = String(options.direction || 'down').toLowerCase();
     const amount = Math.min(4_000, Math.max(1, Number(options.amount) || 600));
     const delta = {
       down: [0, amount],
@@ -292,21 +692,25 @@ async function scrollBrowser(tabId, options = {}) {
       right: [amount, 0],
       left: [-amount, 0],
     }[direction] || [0, amount];
-    if (ref) await flashHighlight(id, ref, ref);
+    if (ref) await flashHighlight(id, ref, '滚动到目标', 'move');
+    else {
+      await showBrowserCursorAction(id, { label: `${dirLabel} ${amount}px`, kind: 'move' });
+      if (shouldAnimateOverlay()) await sleep(120);
+    }
     const { entry, result } = await runInTab(id, `(() => {
       const ref = ${JSON.stringify(ref)};
       if (ref) {
         const el = document.querySelector('[data-pi-ref=' + JSON.stringify(ref) + ']');
         if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
-        el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
+        el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
         return { ok: true, mode: 'ref', x: window.scrollX, y: window.scrollY };
       }
-      window.scrollBy(${delta[0]}, ${delta[1]});
+      window.scrollBy({ left: ${delta[0]}, top: ${delta[1]}, behavior: 'smooth' });
       return { ok: true, mode: 'window', x: window.scrollX, y: window.scrollY, direction: ${JSON.stringify(direction)} };
     })()`);
     if (!result?.ok) throw new Error(result?.error || '滚动失败');
     return { ok: true, tabId: entry.id, url: entry.url, ...result };
-  });
+  }, { action: 'scroll', label: ref ? `滚动到 ${ref}` : dirLabel });
 }
 
 async function waitBrowser(tabId, options = {}) {
@@ -314,7 +718,13 @@ async function waitBrowser(tabId, options = {}) {
   const ref = String(options.ref || '').trim();
   const urlIncludes = String(options.urlIncludes || '').trim();
   const textIncludes = String(options.textIncludes || '').trim();
+  const waitDesc = textIncludes
+    ? `等待「${textIncludes.slice(0, 24)}」`
+    : urlIncludes
+      ? `等待跳转 ${urlIncludes.slice(0, 28)}`
+      : `等待元素 ${ref}`;
   return withTabAction(tabId, 'wait', async (id) => {
+    await showBrowserCursorAction(id, { label: waitDesc, kind: 'move', idleMs: Math.min(timeoutMs + 1000, 12_000) });
     const started = Date.now();
     let lastError = '等待超时';
     while (Date.now() - started < timeoutMs) {
@@ -336,7 +746,7 @@ async function waitBrowser(tabId, options = {}) {
         return { ok: true, url: location.href, title: document.title || '' };
       })()`);
       if (result?.ok) {
-        if (ref) await flashHighlight(id, ref, ref);
+        if (ref) await flashHighlight(id, ref, '已出现', 'move');
         return {
           ok: true,
           tabId: entry.id,
@@ -346,10 +756,10 @@ async function waitBrowser(tabId, options = {}) {
         };
       }
       lastError = result?.error || lastError;
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      await sleep(200);
     }
     throw new Error(`${lastError}（${timeoutMs}ms）`);
-  });
+  }, { action: 'wait', label: waitDesc });
 }
 
 async function installDialogBridge(tabId) {
@@ -405,7 +815,7 @@ async function handleBrowserDialog(tabId, options = {}) {
       promptText,
       pending: result?.pending || [],
     };
-  });
+  }, { action: 'dialog', label: accept ? '确认对话框' : '取消对话框' });
 }
 
 async function listBrowserDialogs(tabId) {
@@ -467,19 +877,29 @@ async function evaluateBrowserScript(tabId, expression, options = {}) {
       preview: result.preview,
       note: options.note ? String(options.note).slice(0, 200) : undefined,
     };
-  });
+  }, { action: 'evaluate', label: options.note ? `执行脚本：${options.note}` : '执行页面脚本' });
 }
 
 module.exports = {
+  VIEWPORT_PRESETS,
   clearBrowserHighlights,
   clickBrowserRef,
+  dragBrowserRefs,
   evaluateBrowserScript,
+  getElementRect,
   handleBrowserDialog,
   highlightBrowserRef,
+  hoverBrowserRef,
   installDialogBridge,
   listBrowserDialogs,
+  parseKeyCombo,
+  pressBrowserKey,
+  resolveViewportSpec,
   scrollBrowser,
   selectBrowserRef,
+  setBrowserOverlayVisible,
+  setBrowserViewport,
+  showBrowserCursorAction,
   typeBrowserRef,
   waitBrowser,
 };

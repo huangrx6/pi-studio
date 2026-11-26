@@ -330,6 +330,12 @@ test('tool-selection saves and migrations commit their value and version togethe
       'browser_download',
       'browser_highlight',
       'workbench_refresh',
+      'browser_hover',
+      'browser_press',
+      'browser_drag',
+      'browser_viewport',
+      'browser_console',
+      'browser_network',
     ]);
     assert.deepEqual(readSetting(AGENT_TOOLS_KEY).value, {
       enabled: ['read', 'write'],
@@ -381,13 +387,19 @@ test('agent tool recovery repairs the latest payload and keeps explicit empty se
     'browser_download',
     'browser_highlight',
     'workbench_refresh',
+    'browser_hover',
+    'browser_press',
+    'browser_drag',
+    'browser_viewport',
+    'browser_console',
+    'browser_network',
   ]);
   assert.deepEqual(Object.keys(migrated.sources), ['read']);
   assert.deepEqual(readSetting(AGENT_TOOLS_KEY).value, migrated);
-  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 7);
+  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 8);
 
   db.setSetting(AGENT_TOOLS_KEY, { enabled: [], sources: {} });
-  db.setSetting(AGENT_TOOLS_VERSION_KEY, 7);
+  db.setSetting(AGENT_TOOLS_VERSION_KEY, 8);
   assert.deepEqual(readAgentToolSelection(db), { enabled: [], sources: {} });
   assert.deepEqual(readSetting(AGENT_TOOLS_KEY).value, { enabled: [], sources: {} });
 
@@ -411,8 +423,14 @@ test('agent tool recovery repairs the latest payload and keeps explicit empty se
     'browser_download',
     'browser_highlight',
     'workbench_refresh',
+    'browser_hover',
+    'browser_press',
+    'browser_drag',
+    'browser_viewport',
+    'browser_console',
+    'browser_network',
   ]);
-  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 7);
+  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 8);
   const updatedAt = readRawSetting(AGENT_TOOLS_KEY).updated_at;
   readAgentToolSelection(db);
   assert.equal(readRawSetting(AGENT_TOOLS_KEY).updated_at, updatedAt);

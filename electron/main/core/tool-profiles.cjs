@@ -11,14 +11,16 @@ const { getStudioDatabase } = require('./studio-db.cjs');
 
 const SETTING_KEY = 'studio.agent.tools';
 const SETTING_VERSION_KEY = 'studio.agent.tools.version';
-const SETTING_VERSION = 7;
+const SETTING_VERSION = 8;
 const MCP_RULES_KEY = 'studio.mcp.methodRules.v1';
 const TOOL_PROFILES_KEY = 'studio.agent.toolProfiles.v1';
 
 const DEFAULT_AGENT_TOOLS = Object.freeze([
   'read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'todo', 'tool_search', 'workbench_refresh',
   'browser_tabs', 'browser_open', 'browser_navigate', 'browser_snapshot', 'browser_screenshot',
-  'browser_click', 'browser_type', 'browser_scroll', 'browser_wait', 'browser_select',
+  'browser_click', 'browser_hover', 'browser_type', 'browser_press', 'browser_drag',
+  'browser_scroll', 'browser_wait', 'browser_select', 'browser_viewport',
+  'browser_console', 'browser_network',
   'browser_dialog', 'browser_download', 'browser_highlight',
   'mcp__*',
 ]);
@@ -179,11 +181,50 @@ function readAgentToolSelection(db = getStudioDatabase()) {
         if (selection.enabled.length < MAX_AGENT_TOOLS) selection.enabled.push('workbench_refresh');
       }
     }
+    if (version < 8) {
+      const devtoolsParityTools = [
+        'browser_hover',
+        'browser_press',
+        'browser_drag',
+        'browser_viewport',
+        'browser_console',
+        'browser_network',
+      ];
+      for (const name of devtoolsParityTools) {
+        if (selection.enabled.some((pattern) => matches(pattern, name))) continue;
+        if (selection.enabled.length >= MAX_AGENT_TOOLS) break;
+        selection.enabled.push(name);
+      }
+    }
     const migrated = normalizeSelection(selection);
     try {
       db.transaction(() => {
         db.setSetting(SETTING_KEY, migrated);
         db.setSetting(SETTING_VERSION_KEY, SETTING_VERSION);
+        // Also upgrade existing main-default profile in studio.agent.toolProfiles.v1 if present.
+        if (version < 8) {
+          const store = db.getSetting(TOOL_PROFILES_KEY, null);
+          const mainProfile = store?.profiles?.[MAIN_DEFAULT_PROFILE_ID];
+          if (mainProfile && Array.isArray(mainProfile.enabled) && mainProfile.enabled.some((pattern) => matches(pattern, 'browser_open'))) {
+            let changed = false;
+            const nextEnabled = [...mainProfile.enabled];
+            for (const name of ['browser_hover', 'browser_press', 'browser_drag', 'browser_viewport', 'browser_console', 'browser_network']) {
+              if (nextEnabled.some((pattern) => matches(pattern, name))) continue;
+              if (nextEnabled.length >= MAX_AGENT_TOOLS) break;
+              nextEnabled.push(name);
+              changed = true;
+            }
+            if (changed) {
+              db.setSetting(TOOL_PROFILES_KEY, {
+                ...store,
+                profiles: {
+                  ...store.profiles,
+                  [MAIN_DEFAULT_PROFILE_ID]: { ...mainProfile, enabled: nextEnabled },
+                },
+              });
+            }
+          }
+        }
       });
     } catch {
       // Next read retries idempotent migration.

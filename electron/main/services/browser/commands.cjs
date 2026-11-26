@@ -73,6 +73,32 @@ async function requestFocusBrowserTab(tabId) {
   return tab;
 }
 
+function requestRevealBrowserTab(tabId) {
+  const tab = tabId ? getBrowserTab(tabId) : null;
+  broadcast({ type: 'reveal', tabId: tab?.id || String(tabId || '') });
+}
+
+function requestCloseBrowserTab(tabId) {
+  const tab = getBrowserTab(tabId);
+  if (!tab) throw new Error(`找不到浏览器标签：${tabId}`);
+  broadcast({ type: 'close-tab', tabId: tab.id });
+  return tab;
+}
+
+function requestSetBrowserViewport(tabId, viewport) {
+  broadcast({
+    type: 'viewport',
+    tabId: String(tabId || ''),
+    viewport: viewport && Number.isFinite(viewport.width) && Number.isFinite(viewport.height)
+      ? {
+        width: Math.round(viewport.width),
+        height: Math.round(viewport.height),
+        label: String(viewport.label || `${Math.round(viewport.width)}×${Math.round(viewport.height)}`),
+      }
+      : null,
+  });
+}
+
 function acknowledgeBrowserCommand(payload = {}) {
   const id = String(payload.requestId || '');
   if (!id) return { ok: false };
@@ -95,7 +121,10 @@ function acknowledgeBrowserCommand(payload = {}) {
 
 module.exports = {
   acknowledgeBrowserCommand,
+  requestCloseBrowserTab,
   requestFocusBrowserTab,
   requestOpenBrowserTab,
+  requestRevealBrowserTab,
+  requestSetBrowserViewport,
   settleCommand,
 };

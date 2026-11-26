@@ -6,35 +6,49 @@ const {
   assertBrowserAgentControlEnabled,
   assertSiteActionAllowed,
   attachExternalChromeTarget,
+  beginBrowserActivity,
   captureBrowserScreenshot,
   captureBrowserSnapshot,
   clearBrowserHighlights,
   clickBrowserRef,
   controlBrowserTab,
   detachExternalChrome,
+  dragBrowserRefs,
+  endBrowserActivity,
   evaluateBrowserScript,
   evaluateExternalChrome,
   getBrowserPreferences,
+  getElementRect,
+  getTabWebContents,
   handleBrowserDialog,
   highlightBrowserRef,
+  hoverBrowserRef,
   isBrowserEvaluateEnabled,
+  listBrowserConsole,
   listBrowserDialogs,
   listBrowserDownloads,
+  listBrowserNetwork,
   listBrowserTabs,
   listExternalChromeSessions,
   listExternalChromeTargets,
   navigateBrowserTab,
   navigateExternalChrome,
   browserPreferenceInstructions,
+  pressBrowserKey,
+  requestCloseBrowserTab,
   requestFocusBrowserTab,
   requestOpenBrowserTab,
+  requestRevealBrowserTab,
   resolveBrowserOpenUrl,
   resolveBrowserTab,
   scrollBrowser,
   selectBrowserRef,
   sendBrowserCdp,
   sendExternalChromeCdp,
+  setBrowserOverlayVisible,
+  setBrowserViewport,
   shouldBlockSystemBrowserOpen,
+  showBrowserCursorAction,
   systemBrowserOpenBlockMessage,
   typeBrowserRef,
   waitBrowser,
@@ -65,10 +79,10 @@ function createBrowserTools(durable) {
 
   const browserTabs = defineTool({
     name: 'browser_tabs',
-    description: 'List or focus tabs in the Studio workbench browser.',
+    description: 'List, focus, or close tabs in the Studio workbench browser.',
     parameters: Type.Object({
-      action: Type.Optional(Type.String({ description: 'list (default) or focus' })),
-      tabId: Type.Optional(Type.String({ description: 'Tab id when action is focus' })),
+      action: Type.Optional(Type.String({ description: 'list (default), focus, or close' })),
+      tabId: Type.Optional(Type.String({ description: 'Tab id when action is focus or close' })),
     }),
     replay: 'safe',
     async execute(args) {
@@ -79,6 +93,11 @@ function createBrowserTools(durable) {
         const tab = await requestFocusBrowserTab(args.tabId);
         return textResult(`已聚焦：${tab.title || tab.url || tab.id}`, { tab, tabs: listBrowserTabs() });
       }
+      if (action === 'close') {
+        if (!args.tabId) throw new Error('关闭标签需要 tabId');
+        const tab = requestCloseBrowserTab(args.tabId);
+        return textResult(`已关闭：${tab.title || tab.url || tab.id}`, { tab, tabs: listBrowserTabs() });
+      }
       if (action !== 'list') throw new Error(`不支持的 action：${args.action}`);
       const tabs = listBrowserTabs();
       return textResult(formatTabs(tabs), { tabs });
@@ -87,7 +106,7 @@ function createBrowserTools(durable) {
 
   const browserOpen = defineTool({
     name: 'browser_open',
-    description: 'Open a page in the Studio workbench browser (right-side panel). Use for http(s), localhost, and local HTML when Settings → Browser open targets are workbench. Do not use bash open/Playwright/system Chrome for ordinary previews while those targets are workbench.',
+    description: 'PRIMARY browser tool: open a page in the Studio workbench browser (right-side panel) where the user watches and interacts live. Always prefer Studio workbench browser_* tools over external Chrome DevTools MCP for opening pages, UI testing, clicking, forms, screenshots, console/network checks, and responsive viewport inspection.',
     parameters: Type.Object({
       url: Type.String({ description: 'http(s) URL, about:blank, file:// HTML URL, or absolute/relative path to a .html file' }),
       newTab: Type.Optional(Type.Boolean({ description: 'Force a new tab even if URL is already open' })),
@@ -102,14 +121,22 @@ function createBrowserTools(durable) {
       }
       const url = resolveBrowserOpenUrl(args.url, cwd);
       assertSiteActionAllowed(url, 'navigate');
-      const tab = await requestOpenBrowserTab(url, { newTab: args.newTab === true });
-      return textResult(`已打开：${tab.url || url}`, { tab, tabs: listBrowserTabs() });
+      const token = beginBrowserActivity({ action: 'open', label: `打开 ${url.slice(0, 48)}` });
+      try {
+        const tab = await requestOpenBrowserTab(url, { newTab: args.newTab === true });
+        if (tab?.id) {
+          void showBrowserCursorAction(tab.id, { label: `已打开 ${url.slice(0, 48)}`, kind: 'move' });
+        }
+        return textResult(`已打开：${tab.url || url}`, { tab, tabs: listBrowserTabs() });
+      } finally {
+        endBrowserActivity(token);
+      }
     },
   });
 
   const browserNavigate = defineTool({
     name: 'browser_navigate',
-    description: 'Navigate the active (or specified) browser tab: load a URL, go back/forward, or reload.',
+    description: 'Navigate the active (or specified) workbench browser tab: load a URL, go back/forward, or reload.',
     parameters: Type.Object({
       tabId: Type.Optional(Type.String({ description: 'Target tab id; defaults to the active tab' })),
       url: Type.Optional(Type.String({ description: 'URL to load' })),
@@ -120,17 +147,27 @@ function createBrowserTools(durable) {
       const tabId = args.tabId ? String(args.tabId) : undefined;
       const url = typeof args.url === 'string' ? args.url.trim() : '';
       const action = typeof args.action === 'string' ? args.action.trim().toLowerCase() : '';
-      let tab;
-      if (url) {
-        assertSiteActionAllowed(url, 'navigate');
-        tab = await navigateBrowserTab(tabId, url);
-      } else if (action) {
-        const current = resolveBrowserTab(tabId);
-        assertSiteActionAllowed(current.url, 'navigate');
-        tab = await controlBrowserTab(tabId, action);
+      const label = url ? `导航到 ${url.slice(0, 48)}` : ({ back: '后退', forward: '前进', reload: '刷新页面' }[action] || '页面导航');
+      const token = beginBrowserActivity({ tabId: tabId || '', action: 'navigate', label });
+      try {
+        let tab;
+        if (url) {
+          assertSiteActionAllowed(url, 'navigate');
+          requestRevealBrowserTab(tabId || '');
+          tab = await navigateBrowserTab(tabId, url);
+        } else if (action) {
+          const current = resolveBrowserTab(tabId);
+          assertSiteActionAllowed(current.url, 'navigate');
+          requestRevealBrowserTab(current.id);
+          tab = await controlBrowserTab(tabId, action);
+        } else {
+          throw new Error('请提供 url，或 action（back/forward/reload）');
+        }
+        if (tab?.id) void showBrowserCursorAction(tab.id, { label, kind: 'move' });
+        return textResult(`${tab.title || ''} ${tab.url || ''}`.trim(), { tab });
+      } finally {
+        endBrowserActivity(token);
       }
-      else throw new Error('请提供 url，或 action（back/forward/reload）');
-      return textResult(`${tab.title || ''} ${tab.url || ''}`.trim(), { tab });
     },
   });
 
@@ -182,9 +219,11 @@ function createBrowserTools(durable) {
 
   const browserScreenshot = defineTool({
     name: 'browser_screenshot',
-    description: 'Capture a JPEG screenshot of the current browser viewport.',
+    description: 'Capture a JPEG screenshot of the current workbench browser viewport or a specific element by ref.',
     parameters: Type.Object({
       tabId: Type.Optional(Type.String({ description: 'Target tab id; defaults to the active tab' })),
+      ref: Type.Optional(Type.String({ description: 'Optional element ref from browser_snapshot to crop the screenshot to that element' })),
+      clean: Type.Optional(Type.Boolean({ description: 'Temporarily hide the live AI cursor overlay during capture (default true)' })),
     }),
     replay: 'safe',
     async execute(args) {
@@ -193,8 +232,20 @@ function createBrowserTools(durable) {
       assertSiteActionAllowed(entry.url, 'read');
       const contents = getTabWebContents(entry);
       if (!contents) throw new Error('浏览器标签尚未就绪，请先 browser_open 或等待页面加载');
-      const shot = await captureBrowserScreenshot(contents);
-      const label = `${entry.title || entry.url || entry.id} (${shot.width}×${shot.height})`;
+      const hideOverlay = args.clean !== false;
+      let rect;
+      if (args.ref) {
+        rect = await getElementRect(entry.id, args.ref);
+        if (!rect) throw new Error(`找不到截图目标元素 ${args.ref}，请重新 browser_snapshot`);
+      }
+      if (hideOverlay) await setBrowserOverlayVisible(entry.id, false);
+      let shot;
+      try {
+        shot = await captureBrowserScreenshot(contents, { rect });
+      } finally {
+        if (hideOverlay) await setBrowserOverlayVisible(entry.id, true);
+      }
+      const label = `${entry.title || entry.url || entry.id}${args.ref ? ` [${args.ref}]` : ''} (${shot.width}×${shot.height})`;
       return {
         output: [
           { type: 'text', text: `截图：${label}` },
@@ -204,6 +255,7 @@ function createBrowserTools(durable) {
           tabId: entry.id,
           url: entry.url,
           title: entry.title,
+          ref: args.ref || undefined,
           width: shot.width,
           height: shot.height,
         },
@@ -213,7 +265,28 @@ function createBrowserTools(durable) {
 
   const browserClick = defineTool({
     name: 'browser_click',
-    description: 'Click an element from the latest browser_snapshot by ref.',
+    description: 'Click an element from the latest browser_snapshot by ref (supports left/right/middle click and doubleClick, with live visible cursor feedback).',
+    parameters: Type.Object({
+      ref: Type.String({ description: 'Element ref from browser_snapshot (e.g. e12)' }),
+      tabId: Type.Optional(Type.String()),
+      button: Type.Optional(Type.String({ description: 'left (default) | right | middle' })),
+      doubleClick: Type.Optional(Type.Boolean({ description: 'Double-click the target element' })),
+      snapshot: Type.Optional(Type.Boolean({ description: 'Include a compact follow-up snapshot summary (default true)' })),
+    }),
+    async execute(args) {
+      ensureAgentBrowser();
+      const result = await clickBrowserRef(args.tabId, args.ref, {
+        button: args.button,
+        doubleClick: args.doubleClick,
+        snapshot: args.snapshot,
+      });
+      return textResult(`已点击 ${args.ref}（${result.element?.name || result.element?.tag || ''}）`, result);
+    },
+  });
+
+  const browserHover = defineTool({
+    name: 'browser_hover',
+    description: 'Hover the live pointer over an element from browser_snapshot by ref to reveal tooltips, hover menus, or CSS :hover states.',
     parameters: Type.Object({
       ref: Type.String({ description: 'Element ref from browser_snapshot (e.g. e12)' }),
       tabId: Type.Optional(Type.String()),
@@ -221,8 +294,8 @@ function createBrowserTools(durable) {
     }),
     async execute(args) {
       ensureAgentBrowser();
-      const result = await clickBrowserRef(args.tabId, args.ref, { snapshot: args.snapshot });
-      return textResult(`已点击 ${args.ref}（${result.element?.name || result.element?.tag || ''}）`, result);
+      const result = await hoverBrowserRef(args.tabId, args.ref, { snapshot: args.snapshot });
+      return textResult(`已悬停 ${args.ref}（${result.element?.name || result.element?.tag || ''}）`, result);
     },
   });
 
@@ -245,6 +318,113 @@ function createBrowserTools(durable) {
         snapshot: args.snapshot,
       });
       return textResult(`已输入到 ${args.ref}`, result);
+    },
+  });
+
+  const browserPress = defineTool({
+    name: 'browser_press',
+    description: 'Send a native keyboard key or shortcut to the workbench browser (e.g. Escape, Tab, Shift+Tab, Enter, ArrowDown, Meta+K, Control+A).',
+    parameters: Type.Object({
+      key: Type.String({ description: 'Key or chord such as Escape, Tab, Shift+Tab, Enter, Space, ArrowDown, Meta+K' }),
+      ref: Type.Optional(Type.String({ description: 'Optional element ref to focus before pressing the key' })),
+      tabId: Type.Optional(Type.String()),
+      snapshot: Type.Optional(Type.Boolean({ description: 'Include a compact follow-up snapshot summary (default false)' })),
+    }),
+    async execute(args) {
+      ensureAgentBrowser();
+      const result = await pressBrowserKey(args.tabId, args.key, {
+        ref: args.ref,
+        snapshot: args.snapshot,
+      });
+      return textResult(`已按下 ${result.key}`, result);
+    },
+  });
+
+  const browserDrag = defineTool({
+    name: 'browser_drag',
+    description: 'Drag an element from sourceRef to targetRef in the workbench browser with live cursor feedback.',
+    parameters: Type.Object({
+      sourceRef: Type.String({ description: 'Source element ref from browser_snapshot' }),
+      targetRef: Type.String({ description: 'Target element ref from browser_snapshot' }),
+      tabId: Type.Optional(Type.String()),
+      snapshot: Type.Optional(Type.Boolean()),
+    }),
+    async execute(args) {
+      ensureAgentBrowser();
+      const result = await dragBrowserRefs(args.tabId, args.sourceRef, args.targetRef, { snapshot: args.snapshot });
+      return textResult(`已拖拽 ${args.sourceRef} → ${args.targetRef}`, result);
+    },
+  });
+
+  const browserViewport = defineTool({
+    name: 'browser_viewport',
+    description: 'Emulate a specific viewport size or responsive preset in the workbench browser (e.g. desktop 1440×900, laptop 1280×800, tablet 768×1024, mobile 390×844, or reset).',
+    parameters: Type.Object({
+      preset: Type.Optional(Type.String({ description: 'desktop | laptop | tablet | mobile | reset' })),
+      width: Type.Optional(Type.Number({ minimum: 320, maximum: 2560, description: 'Viewport width in CSS pixels' })),
+      height: Type.Optional(Type.Number({ minimum: 320, maximum: 1800, description: 'Viewport height in CSS pixels' })),
+      reset: Type.Optional(Type.Boolean({ description: 'Reset to responsive panel width when true' })),
+      tabId: Type.Optional(Type.String()),
+    }),
+    async execute(args) {
+      ensureAgentBrowser();
+      const result = await setBrowserViewport(args.tabId, args);
+      const summary = result.viewport
+        ? `已设置视口：${result.viewport.width}×${result.viewport.height}（实际 ${result.actual?.innerWidth || '?'}×${result.actual?.innerHeight || '?'}）`
+        : `已恢复自适应视口（实际 ${result.actual?.innerWidth || '?'}×${result.actual?.innerHeight || '?'}）`;
+      return textResult(summary, result);
+    },
+  });
+
+  const browserConsole = defineTool({
+    name: 'browser_console',
+    description: 'Read captured console logs, warnings, uncaught errors, and load failures from the workbench browser tab (works without enabling CDP).',
+    parameters: Type.Object({
+      tabId: Type.Optional(Type.String({ description: 'Target tab id; defaults to the active tab' })),
+      level: Type.Optional(Type.String({ description: 'Filter by level: error | warning | info | verbose' })),
+      search: Type.Optional(Type.String({ description: 'Case-insensitive substring filter' })),
+      limit: Type.Optional(Type.Number({ minimum: 1, maximum: 200, description: 'Max entries to return (default 60)' })),
+      clear: Type.Optional(Type.Boolean({ description: 'Clear console buffer after reading' })),
+    }),
+    replay: 'safe',
+    async execute(args) {
+      ensureAgentBrowser();
+      const entry = resolveBrowserTab(args.tabId);
+      assertSiteActionAllowed(entry.url, 'read');
+      const result = listBrowserConsole(entry.id, args);
+      const lines = result.entries.map((item) => {
+        const loc = item.source ? ` (${item.source}${item.line ? `:${item.line}` : ''})` : '';
+        return `[${item.level}] ${item.message}${loc}`;
+      });
+      const header = `console: total=${result.summary.total}, errors=${result.summary.errors}, warnings=${result.summary.warnings}`;
+      return textResult(lines.length ? `${header}\n${lines.join('\n')}` : `${header}\n（无匹配日志）`, result);
+    },
+  });
+
+  const browserNetwork = defineTool({
+    name: 'browser_network',
+    description: 'Read captured HTTP network requests, status codes, durations, and failures for the workbench browser tab (works without enabling CDP).',
+    parameters: Type.Object({
+      tabId: Type.Optional(Type.String({ description: 'Target tab id; defaults to the active tab' })),
+      failedOnly: Type.Optional(Type.Boolean({ description: 'Only return 4xx/5xx or network errors' })),
+      statusMin: Type.Optional(Type.Number({ minimum: 100, maximum: 599, description: 'Minimum HTTP status code (e.g. 400)' })),
+      resourceType: Type.Optional(Type.String({ description: 'Filter by resource type such as xhr, fetch, mainFrame, script, stylesheet, image' })),
+      urlIncludes: Type.Optional(Type.String({ description: 'Case-insensitive URL substring filter' })),
+      limit: Type.Optional(Type.Number({ minimum: 1, maximum: 200, description: 'Max entries to return (default 60)' })),
+      clear: Type.Optional(Type.Boolean({ description: 'Clear network buffer after reading' })),
+    }),
+    replay: 'safe',
+    async execute(args) {
+      ensureAgentBrowser();
+      const entry = resolveBrowserTab(args.tabId);
+      assertSiteActionAllowed(entry.url, 'read');
+      const result = listBrowserNetwork(entry.id, args);
+      const lines = result.entries.map((item) => {
+        const status = item.error ? `ERR(${item.error})` : String(item.statusCode || '—');
+        return `${item.method} ${status} [${item.resourceType}] ${item.durationMs}ms ${item.url}`;
+      });
+      const header = `network: total=${result.summary.total}, failed=${result.summary.failed}`;
+      return textResult(lines.length ? `${header}\n${lines.join('\n')}` : `${header}\n（无匹配请求）`, result);
     },
   });
 
@@ -473,10 +653,16 @@ function createBrowserTools(durable) {
       browserSnapshot,
       browserScreenshot,
       browserClick,
+      browserHover,
       browserType,
+      browserPress,
+      browserDrag,
       browserScroll,
       browserWait,
       browserSelect,
+      browserViewport,
+      browserConsole,
+      browserNetwork,
       browserDialog,
       browserDownload,
       browserHighlight,

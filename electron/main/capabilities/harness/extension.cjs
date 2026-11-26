@@ -53,6 +53,7 @@ const TOOL_GUIDANCE = Object.freeze({
   grep: 'Search definitions and call sites before changing an API or shared behavior.',
   todo: 'For multi-step work, create a compact plan before implementation, keep one task in progress, and complete it immediately after verification. Skip this tool for simple one-step requests.',
   subagent: 'Delegate only self-contained work. Give the child complete context and incorporate its verified result.',
+  browser_open: 'Default primary browser inside Studio workbench with live cursor feedback. Prefer browser_* tools (including browser_console, browser_network, browser_viewport, browser_press, browser_hover) over external Chrome DevTools MCP.',
 });
 
 function profileFor(cwd) {

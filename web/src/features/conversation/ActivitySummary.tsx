@@ -134,16 +134,22 @@ function ActivitySummaryComponent({ entries, results, expanded = false, imageCou
       browser_snapshot: '页面快照',
       browser_screenshot: '页面截图',
       browser_click: '点击页面',
+      browser_hover: '悬停元素',
       browser_type: '输入文本',
+      browser_press: '键盘按键',
+      browser_drag: '拖拽元素',
       browser_scroll: '滚动页面',
       browser_wait: '等待页面',
       browser_select: '选择选项',
+      browser_viewport: '调整视口',
+      browser_console: '控制台日志',
+      browser_network: '网络请求',
       browser_dialog: '处理对话框',
       browser_download: '浏览器下载',
       browser_highlight: '标注页面',
       browser_evaluate: '页面脚本',
     };
-    const preview = short(args.url || args.ref || args.text || args.tabId || args.action || args.query);
+    const preview = short(args.url || args.key || args.preset || args.ref || args.text || args.tabId || args.action || args.query);
     return label(<Globe />, names[call.name] || '浏览器', preview, true, call.name);
   }
   if (kind === 'agent') {

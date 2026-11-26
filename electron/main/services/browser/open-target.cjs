@@ -220,8 +220,8 @@ function systemBrowserOpenBlockMessage(command, preferences = getBrowserPreferen
   return [
     '已拦截：设置 → 浏览器 中「拦截外部打开」已开启，且打开位置要求在 Studio 内。',
     `网页链接：${web}；本地链接：${local}。`,
-    '请用 browser_open 打开网页/localhost/可浏览页面；其他本地文件用应用内预览。不要 bash open / Playwright / 用终端启动系统 Chrome。',
-    '已配置的 MCP（例如 Chrome DevTools MCP）不受此 bash 拦截；普通预览仍优先工作台 browser_open。',
+    '请优先使用工作台内置浏览器（browser_open / browser_snapshot / browser_click / browser_hover / browser_type / browser_press / browser_viewport / browser_console / browser_network / browser_screenshot），其他本地文件用应用内预览。不要 bash open / Playwright / 用终端启动系统 Chrome。',
+    '已配置的 MCP（例如 Chrome DevTools MCP）仅在工作台浏览器无法覆盖的深度调试场景作为备选，常规预览、交互操控与验收一律优先工作台 browser_*。',
     '若需要系统打开：到设置 → 浏览器，关闭「拦截外部打开」，或把对应「打开位置」改为系统。',
     command ? `原命令：${String(command).slice(0, 240)}` : '',
   ].filter(Boolean).join('\n');
@@ -238,18 +238,28 @@ function browserPreferenceInstructions(preferences = getBrowserPreferences()) {
   }
   const web = preferWorkbenchForWeb(preferences) ? 'workbench' : 'system';
   const local = preferWorkbenchForLocalHtml(preferences) ? 'workbench' : 'system';
+  const agentControl = preferences?.agentControlEnabled !== false;
   const lines = [
-    'Link opening is controlled only by Studio settings (Settings → Browser), for all web and local links:',
+    'Link opening and browser automation follow Studio settings (Settings → Browser):',
     `- http(s) web links → ${web === 'workbench' ? 'browser_open in the right-side workbench browser' : 'system browser (settings: system)'}`,
     `- local links (localhost, file://, any local path) → ${local === 'workbench' ? 'open inside Studio (browser for browsable pages; in-app preview for other files)' : 'system default app / system browser (settings: system)'}`,
   ];
+  if (agentControl && (web === 'workbench' || local === 'workbench')) {
+    lines.push(
+      'PRIORITY: Always use the built-in Studio workbench browser tools (browser_open, browser_navigate, browser_snapshot, browser_click, browser_hover, browser_type, browser_press, browser_drag, browser_scroll, browser_select, browser_wait, browser_viewport, browser_console, browser_network, browser_screenshot) as the PRIMARY default for web browsing, UI verification, form interaction, keyboard/viewport testing, and console/network inspection so the user can watch live and take over at any moment.',
+    );
+    lines.push(
+      'Do NOT switch to external browser MCP tools (such as Chrome DevTools MCP) when Studio workbench browser_* tools can complete the task; treat external MCP browser tools strictly as a secondary fallback only for capabilities unavailable in the workbench browser (e.g. CPU/memory performance traces or attaching to an external Chrome session).',
+    );
+  } else {
+    lines.push('MCP tools (including a configured Chrome DevTools MCP) remain separate from bash open; follow the Studio settings above.');
+  }
   if (preferences?.linkOpenBlockExternal !== false && (web === 'workbench' || local === 'workbench')) {
     lines.push('Do not use bash open/xdg-open, Playwright, Puppeteer, or launching system Chrome via the shell when the matching open-target preference is workbench. Changing settings is the only way to allow those shell opens.');
   } else if (preferences?.linkOpenBlockExternal === false) {
     lines.push('External open blocking is disabled in settings; still follow the open-target preferences above.');
   }
   lines.push('browser_open accepts http(s), about:blank, file:// pages, or a local page path the workbench browser can load.');
-  lines.push('MCP tools (including a configured Chrome DevTools MCP) are not blocked by this bash intercept; use those MCP tools when the task needs external Chrome DevTools, and use Studio browser_open for ordinary workbench previews.');
   return lines.join(' ');
 }
 

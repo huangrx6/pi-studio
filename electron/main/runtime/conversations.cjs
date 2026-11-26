@@ -114,11 +114,12 @@ const PATH_OUTPUT_INSTRUCTIONS = [
  * every submit still carries the constraint even if sections change later.
  */
 const BROWSER_WORKBENCH_INSTRUCTIONS = [
-  'Opening links: follow Studio browser settings only (Settings → Browser) for all web and local links.',
-  'Workbench means open inside Studio (browser_open for browsable pages; in-app preview for other local files).',
+  'Opening links and browser automation: follow Studio browser settings (Settings → Browser) for all web and local links.',
+  'Workbench means open inside Studio (browser_* tools for browsable pages; in-app preview for other local files).',
+  'ALWAYS prioritize Studio built-in workbench browser tools (browser_open, browser_snapshot, browser_click, browser_hover, browser_type, browser_press, browser_drag, browser_scroll, browser_viewport, browser_console, browser_network, browser_screenshot) over external Chrome DevTools MCP so the user sees live cursor actions inside Studio and can take over immediately.',
+  'Only use external browser MCP tools (such as Chrome DevTools MCP) as a secondary fallback when the workbench browser genuinely lacks a required capability.',
   'Do not use bash open/xdg-open/Playwright/system Chrome for ordinary previews when settings put that link class in the workbench.',
   'To use the system browser or default app, change open-target or external-block settings — chat wording alone does not override them.',
-  'Configured MCP browser tools (for example Chrome DevTools MCP) are separate from bash open and are allowed when those MCP tools are enabled; prefer them or browser_open over launching Chrome via bash.',
 ].join(' ');
 
 function studioAgentInstructions() {
