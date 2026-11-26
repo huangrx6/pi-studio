@@ -98,7 +98,9 @@
  * —— 右移 18px 会让面板左侧空出一条壁纸，所以只保留宽度。
  * 可用宽度不足时由工作台切换为抽屉。 */
 
-.file-panel { width: 0; overflow: hidden; transition: width var(--shell-transition); will-change: width; }
+/* Docked workbench opens in a single layout pass so long conversations do not
+ * reflow on every animation frame; overlay drawer still keeps lightweight clipping. */
+.file-panel { width: 0; overflow: hidden; }
 .file-panel.is-open { width: var(--panel-w); }
 .file-panel.is-open.is-split:not(.is-fullscreen) { width: min(760px, 64vw); }
 .file-panel.is-open.is-fullscreen { width: 100%; }

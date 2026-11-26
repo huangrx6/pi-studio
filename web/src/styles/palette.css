@@ -38,12 +38,6 @@
   /* 存储分类和 Harness 图标使用的独立色。 */
   --scheme-lime: #00818a;
 
-  --launch-shadow: light-dark(rgb(49 41 34 / 19%), rgb(7 5 4 / 55%));
-  --launch-contact-shadow: light-dark(rgb(49 41 34 / 24%), rgb(7 5 4 / 63%));
-  --launch-paper-shadow: rgb(68 44 24 / 48%);
-  --launch-light-spill: light-dark(rgb(255 200 126 / 32%), rgb(255 181 105 / 26%));
-  --launch-bulb-off: rgb(62 51 42);
-
   /* 页面与表面层级：页面背景、卡片表面、侧栏背景保持中性；surface-soft/hover/
   active 表示交互递进，selected-bg 用于选中行。层级从低到高靠明度差而不是阴影
   来区分。

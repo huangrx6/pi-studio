@@ -1,5 +1,10 @@
 /* The window chrome, conversation and loading surfaces share the same silhouette. */
 .pi-mark {
+  /* The cut falls in the empty space between the shared body's legs and its cursor. */
+  --pi-cursor-left: 81.25%;
+  --pi-cursor-top: 65.625%;
+  --pi-body-clip: polygon(0 0, 100% 0, 100% var(--pi-cursor-top), var(--pi-cursor-left) var(--pi-cursor-top), var(--pi-cursor-left) 100%, 0 100%);
+  --pi-cursor-clip: inset(var(--pi-cursor-top) 0 0 var(--pi-cursor-left));
   display: inline-block;
   flex: none;
   width: var(--icon-lg);

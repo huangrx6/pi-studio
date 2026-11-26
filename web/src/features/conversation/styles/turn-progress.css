@@ -27,7 +27,6 @@
   text-align: start;
 }
 .turn-progress button { cursor: pointer; }
-.assistant-turn.is-live:has(.turn-progress) .assistant-orb::after { display: none; }
 .turn-progress-toggle:hover, .turn-progress-record-toggle:hover, .turn-progress-page:hover {
   color: var(--text);
 }

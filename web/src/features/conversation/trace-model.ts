@@ -6,6 +6,7 @@ export type ConversationTraceItem = {
   kind: 'input' | 'model' | 'decision' | 'assistant' | 'tool';
   label: string;
   preview: string;
+  resultPreview?: string;
   detail?: string;
   result?: string;
   schema?: RequestTrace['tools'];
@@ -26,9 +27,36 @@ export type ConversationTraceSummary = {
   items: ConversationTraceItem[];
 };
 type Turn = { kind: 'user'; message: ChatMessage } | { kind: 'assistant'; messages: ChatMessage[] };
-const preview = (text: string) => text.replace(/\s+/g, ' ').trim().slice(0, 500);
+const preview = (text: string, limit = 240) => text.slice(0, limit * 2).replace(/\s+/g, ' ').trim().slice(0, limit);
 function messageText(message: ChatMessage): string {
   return message.content.map(block => block.type === 'text' ? block.text : block.type === 'image' ? `[图片 · ${block.mimeType}]` : '').filter(Boolean).join('\n');
+}
+function quickResultPreview(message: ChatMessage | undefined): string | undefined {
+  if (!message) return undefined;
+  for (const block of message.content) {
+    if (block.type === 'text' && block.text) return preview(block.text, 220);
+    if (block.type === 'image') return `[图片 · ${block.mimeType}]`;
+  }
+  if (message.details) return '结构化结果';
+  return '工具已返回，无文本内容。';
+}
+function quickArgsPreview(args: unknown): string {
+  if (!args || typeof args !== 'object') return '';
+  const entries = Object.entries(args as Record<string, unknown>);
+  if (!entries.length) return '{}';
+  let out = '{';
+  for (let index = 0; index < entries.length && out.length < 240; index++) {
+    const [key, value] = entries[index];
+    const part = typeof value === 'string'
+      ? JSON.stringify(value.length > 140 ? `${value.slice(0, 140)}…` : value)
+      : typeof value === 'number' || typeof value === 'boolean' || value === null
+        ? String(value)
+        : Array.isArray(value)
+          ? `[${value.length}]`
+          : '{…}';
+    out += `${index > 0 ? ',' : ''}${JSON.stringify(key)}:${part}`;
+  }
+  return preview(out.length >= 240 ? `${out}…}` : `${out}}`, 240);
 }
 
 export function buildTraceSummary({ turns, toolResults, requestPlacement, turnActive }: {
@@ -85,16 +113,38 @@ export function buildTraceSummary({ turns, toolResults, requestPlacement, turnAc
           const result = toolResults.get(block.id);
           const durationMs = result?.durationMs;
           const endedAt = result?.timestamp;
-          const detail = JSON.stringify(block.arguments ?? {}, null, 2);
-          items.push({
-            id: `tool:${block.id}`, kind: 'tool', label: block.namespace ? `${block.namespace}/${block.name}` : block.name,
-            preview: preview(JSON.stringify(block.arguments ?? {})), detail,
-            result: result ? messageText(result) || (result.details ? JSON.stringify(result.details, null, 2) : '工具已返回，无文本内容。') : undefined,
-            request, schema: request?.tools?.filter(tool => tool.name === block.name),
+          const args = block.arguments ?? {};
+          let cachedDetail: string | undefined;
+          let cachedResult: string | undefined;
+          let resultComputed = false;
+          const item: ConversationTraceItem = {
+            id: `tool:${block.id}`,
+            kind: 'tool',
+            label: block.namespace ? `${block.namespace}/${block.name}` : block.name,
+            preview: quickArgsPreview(args),
+            resultPreview: quickResultPreview(result),
+            get detail() {
+              if (cachedDetail === undefined) cachedDetail = JSON.stringify(args, null, 2);
+              return cachedDetail;
+            },
+            get result() {
+              if (!resultComputed) {
+                resultComputed = true;
+                cachedResult = result
+                  ? messageText(result) || (result.details ? JSON.stringify(result.details, null, 2) : '工具已返回，无文本内容。')
+                  : undefined;
+              }
+              return cachedResult;
+            },
+            request,
+            schema: request?.tools?.filter(tool => tool.name === block.name),
             status: result?.isError ? 'error' : result ? 'done' : currentMessage && !message.errorMessage ? 'running' : 'unknown',
             at: endedAt !== undefined && durationMs !== undefined ? endedAt - durationMs : message.timestamp,
-            endedAt, durationMs, round,
-          });
+            endedAt,
+            durationMs,
+            round,
+          };
+          items.push(item);
         }
       });
     });

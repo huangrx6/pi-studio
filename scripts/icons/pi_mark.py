@@ -18,18 +18,22 @@ def mark_alpha(size: int) -> Image.Image:
 
 
 def write_app_icons() -> None:
-    # Keep the native icon's 100px macOS margins and its warm porcelain tile.
-    size, tile, mark = 1024, 824, 704
+    # Preserve macOS margins and the approved 25:40 mark-to-tile proportion.
+    size, tile, mark = 1024, 824, 515
     scale = 2
     image = Image.new("RGBA", (size * scale, size * scale))
     margin = (size - tile) * scale // 2
     ImageDraw.Draw(image).rounded_rectangle(
         (margin, margin, size * scale - margin - 1, size * scale - margin - 1),
         radius=tile * scale // 4,
-        fill="#fdfbf7",
+        fill="#242926",
     )
+    # At 16pt, align the fine strokes to the pixel grid and give the cursor
+    # enough coverage to remain visible in the Finder list at both densities.
+    finder = image.resize((128, 128), Image.Resampling.LANCZOS)
+    finder.paste("#f7f7f4", (28, 27), mark_alpha(75))
     inset = (size - mark) * scale // 2
-    image.paste("#252526", (inset, inset), mark_alpha(mark * scale))
+    image.paste("#f7f7f4", (inset, inset), mark_alpha(mark * scale))
     icon = image.resize((size, size), Image.Resampling.LANCZOS)
     icon.save(ASSETS / "icon.png", optimize=True)
 
@@ -42,7 +46,8 @@ def write_app_icons() -> None:
     chunks = []
     for kind, pixels in representations.items():
         data = BytesIO()
-        icon.resize((pixels, pixels), Image.Resampling.LANCZOS).save(data, format="PNG")
+        source = finder if kind in (b"icp4", b"ic11") else icon
+        source.resize((pixels, pixels), Image.Resampling.LANCZOS).save(data, format="PNG")
         chunks.append(kind + struct.pack(">I", data.tell() + 8) + data.getvalue())
     body = b"".join(chunks)
     (ASSETS / "icon.icns").write_bytes(b"icns" + struct.pack(">I", len(body) + 8) + body)
@@ -53,11 +58,11 @@ def write_tray_icons() -> None:
     scale = 8
     size = 18 * scale
     idle = Image.new("RGBA", (size, size))
-    # Shift the top-heavy glyph down half a point so the running dot stays separate at 1×.
-    idle.paste("black", (0, scale // 2), mark_alpha(size))
+    # Leave room above the 16pt glyph for a distinct status dot at 1×.
+    idle.paste("black", (scale, 2 * scale), mark_alpha(16 * scale))
     running = idle.copy()
     ImageDraw.Draw(running).ellipse(
-        (14 * scale, 0.4 * scale, 16.2 * scale, 2.6 * scale), fill="black",
+        (14.5 * scale, 0.25 * scale, 17 * scale, 2.75 * scale), fill="black",
     )
     for name, image in (("trayTemplate", idle), ("trayRunningTemplate", running)):
         for suffix, pixels in (("", 18), ("@2x", 36)):

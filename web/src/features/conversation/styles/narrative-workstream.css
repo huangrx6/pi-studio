@@ -15,11 +15,6 @@
   line-height: var(--leading-body);
 }
 
-/* Avoid duplicate live pulse dot on the Pi orb while the workstream is actively streaming. */
-.assistant-turn.is-live:has(.narrative-stream.is-live, .narrative-pending) .assistant-orb::after {
-  display: none;
-}
-
 .narrative-group {
   display: flex;
   flex-direction: column;

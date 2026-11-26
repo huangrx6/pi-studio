@@ -2,8 +2,18 @@ import { Component, Suspense, lazy, type ReactNode } from 'react';
 import { LoadingState } from './LoadingState';
 import type { FilePreviewProps } from './FilePreview';
 
+let filePreviewPromise: Promise<typeof import('./FilePreview')> | null = null;
+
+export function preloadFilePreview() {
+  filePreviewPromise ??= import('./FilePreview').catch((error) => {
+    filePreviewPromise = null;
+    throw error;
+  });
+  return filePreviewPromise;
+}
+
 const LazyFilePreview = lazy(async () => {
-  const module = await import('./FilePreview');
+  const module = await preloadFilePreview();
   return { default: module.FilePreview };
 });
 

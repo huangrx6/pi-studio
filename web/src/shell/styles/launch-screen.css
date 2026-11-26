@@ -1,4 +1,4 @@
-/* Rendered by the document before the application or its data is ready. */
+/* The document paints this before React or workspace data is ready. */
 .launch-screen {
   position: fixed;
   inset: 0;
@@ -6,136 +6,140 @@
   display: grid;
   place-items: center;
   overflow: hidden;
+  color: var(--text);
   background: var(--surface-chrome);
   user-select: none;
   -webkit-app-region: drag;
 }
 
-/* All hotspots are registered to the 802 × 900 render, including on small windows. */
 .launch-mark {
+  --launch-duration: 2350ms;
+  --write-ease: cubic-bezier(.32,.12,.32,1);
+  --lift-ease: cubic-bezier(.4,0,.25,1);
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+}
+
+.launch-symbol {
+  --unit: calc(100% / 64); /* The source mark has a 64 × 64 viewBox. */
   position: relative;
-  isolation: isolate;
-  height: min(54vh, 88vw, 560px);
-  aspect-ratio: 802 / 900;
-  transform: translateY(-2.5vh);
-}
-
-.launch-mark::before {
-  content: '';
-  position: absolute;
-  inset: 92% -22% -5% -13%;
-  background:
-    radial-gradient(ellipse 18% 17% at 21% 52%, var(--launch-contact-shadow), transparent),
-    radial-gradient(ellipse 18% 17% at 58% 52%, var(--launch-contact-shadow), transparent),
-    radial-gradient(ellipse 49% 36% at 51% 51%, var(--launch-shadow), transparent);
-}
-
-.launch-lamplight,
-.launch-sculpture,
-.launch-enamel {
-  position: absolute;
-  inset: 0;
-}
-
-.launch-lamplight::before,
-.launch-lamplight::after {
-  content: '';
-  position: absolute;
-  background: radial-gradient(ellipse closest-side, var(--launch-light-spill), transparent);
-}
-
-/* Light in the air and bounced light around the feet share the bulb's fade. */
-.launch-lamplight::before {
-  left: 44.6%;
-  top: 12.5%;
-  width: 30%;
-  height: 32%;
-  /* The brightest point sits inside the tilted opening of the shade. */
-  background: radial-gradient(ellipse 47% 77% at 50% 25%, var(--launch-light-spill), transparent);
-  mask-image: linear-gradient(to bottom, transparent 12%, var(--text-1) 29%);
-  transform-origin: 50% 25%;
-  transform: rotate(-24deg);
-}
-
-.launch-lamplight::after {
-  inset: 86% -14% -12%;
-  opacity: .42;
-}
-
-.launch-sculpture { isolation: isolate; }
-
-.launch-workbench {
   display: block;
-  width: 100%;
-  height: 100%;
+  width: 76px;
+  aspect-ratio: 1;
 }
 
-.launch-enamel {
-  background-color: var(--theme-accent);
-  mask: url('../assets/launch-workbench-enamel.webp') center / 100% 100% no-repeat;
-  mix-blend-mode: color;
-}
-
-.launch-sculpture::before {
-  content: '';
-  position: absolute;
-  z-index: 1;
-  left: 52%;
-  top: 39.2%;
-  width: 34%;
-  height: 4%;
-  background: radial-gradient(ellipse closest-side, var(--launch-paper-shadow), transparent);
-}
-
-/* The unlit exposure only covers the bulb and the adjoining patch of porcelain. */
-.launch-sculpture::after {
-  content: '';
+.launch-symbol > .pi-mark,
+.launch-strokes > span,
+.launch-strokes::after {
   position: absolute;
   inset: 0;
-  background: var(--launch-bulb-off);
-  mask: url('../assets/launch-workbench-unlit.webp') center / 100% 100% no-repeat;
-  opacity: 0;
 }
 
-.launch-paper {
-  position: absolute;
-  left: 54%;
-  bottom: 57.8%;
-  width: 29.5%;
-  aspect-ratio: 320 / 156;
-  background: url('../assets/launch-workbench-paper-motion.webp') 100% 0 / 1800% 100% no-repeat;
+.launch-symbol > .pi-mark { width: 100%; }
+
+/* Both layers sample the same SVG. Only the ink revealed behind its mask moves. */
+.launch-strokes.pi-mark {
+  clip-path: var(--pi-body-clip);
+  background: transparent;
+}
+.launch-strokes > span,
+.launch-strokes::after {
+  background: currentColor;
+}
+.launch-strokes::after { content: ''; } /* The finished frame uses the whole body mask. */
+.launch-strokes > .launch-beam {
+  left: calc(.25 * var(--unit));
+  right: calc((64 - 55.5) * var(--unit));
+  bottom: calc((64 - 15.75) * var(--unit));
+  transform-origin: left center;
+}
+.launch-strokes > .launch-leg-left,
+.launch-strokes > .launch-leg-right {
+  top: calc(13 * var(--unit));
+  bottom: calc((64 - 53.75) * var(--unit));
+  transform-origin: center top;
+}
+.launch-strokes > .launch-leg-left { right: 50%; }
+.launch-strokes > .launch-leg-right { left: 50%; }
+.launch-cursor {
+  /* Each offset puts the center of the original cursor (60.375, 50.375) on the nib. */
+  --beam-start: calc((.25 - 60.375) * var(--unit));
+  --beam-end: calc((55.5 - 60.375) * var(--unit));
+  --left-leg: calc((14.5 - 60.375) * var(--unit));
+  --right-leg: calc((42.75 - 60.375) * var(--unit));
+  --cap: calc((13 - 50.375) * var(--unit));
+  --foot: calc((53.75 - 50.375) * var(--unit));
+  --nib-color: color-mix(in srgb, var(--accent) 75%, var(--text));
+  clip-path: var(--pi-cursor-clip);
+}
+
+@media (forced-colors: active) {
+  .launch-strokes.pi-mark {
+    color: CanvasText;
+    background: transparent !important;
+  }
+}
+
+.launch-wordmark {
+  font: var(--weight-medium) var(--text-lg)/1 var(--font);
+  letter-spacing: -.035em;
+  -webkit-font-smoothing: antialiased;
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .launch-lamplight {
-    animation: launch-light-on 370ms cubic-bezier(.2, .65, .3, 1) both;
-  }
-  .launch-sculpture::after {
-    animation: launch-unlit-fade 370ms cubic-bezier(.2, .65, .3, 1) backwards;
-  }
-  .launch-paper {
-    animation:
-      launch-paper-settle 620ms steps(17, end) 45ms backwards,
-      launch-paper-light 370ms cubic-bezier(.2, .65, .3, 1) backwards;
+  .launch-beam { animation: launch-write-beam var(--launch-duration) var(--write-ease) both; }
+  .launch-leg-left { animation: launch-write-left var(--launch-duration) var(--write-ease) both; }
+  .launch-leg-right { animation: launch-write-right var(--launch-duration) var(--write-ease) both; }
+  .launch-strokes::after { animation: launch-set-ink var(--launch-duration) step-end both; }
+  .launch-cursor { animation: launch-write-cursor var(--launch-duration) var(--write-ease) both; }
+  .launch-wordmark {
+    animation: launch-wordmark-in var(--launch-duration) cubic-bezier(.18,.5,.25,1) both;
   }
 }
 
-@keyframes launch-light-on {
+@keyframes launch-write-beam {
+  from { transform: scaleX(0); }
+  24%, to { transform: scaleX(1); }
+}
+@keyframes launch-write-left {
+  from, 34% { transform: scaleY(0); }
+  53%, to { transform: scaleY(1); }
+}
+@keyframes launch-write-right {
+  from, 65% { transform: scaleY(0); }
+  82%, to { transform: scaleY(1); }
+}
+@keyframes launch-set-ink {
   from { opacity: 0; }
-  to { opacity: 1; }
+  82%, to { opacity: 1; }
 }
 
-@keyframes launch-unlit-fade {
-  from { opacity: 1; }
-  to { opacity: 0; }
+@keyframes launch-write-cursor {
+  from { transform: translate(var(--beam-start), var(--cap)); color: var(--nib-color); }
+  24% {
+    transform: translate(var(--beam-end), var(--cap));
+    opacity: 1;
+    animation-timing-function: var(--lift-ease);
+  }
+  29% { opacity: .58; }
+  34% { transform: translate(var(--left-leg), var(--cap)); opacity: 1; }
+  53% {
+    transform: translate(var(--left-leg), var(--foot));
+    opacity: 1;
+    animation-timing-function: var(--lift-ease);
+  }
+  59% { opacity: .58; }
+  65% { transform: translate(var(--right-leg), var(--cap)); opacity: 1; }
+  82% {
+    transform: translate(var(--right-leg), var(--foot));
+    color: var(--nib-color);
+    animation-timing-function: var(--lift-ease);
+  }
+  89%, to { transform: translate(0, 0); color: var(--text); }
 }
 
-@keyframes launch-paper-settle {
-  from { background-position-x: 0%; }
-  to { background-position-x: 100%; }
-}
-
-@keyframes launch-paper-light {
-  from { filter: brightness(.72); }
-  to { filter: brightness(1); }
+@keyframes launch-wordmark-in {
+  from, 60% { transform: translateY(5px); opacity: 0; }
+  87%, to { transform: translateY(0); opacity: 1; }
 }

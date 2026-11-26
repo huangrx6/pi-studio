@@ -223,7 +223,7 @@
                   <tr><td>左侧栏</td><td>新建对话、打开临时聊天、按工作区查找历史会话，或进入设置。</td></tr>
                   <tr><td>会话顶栏</td><td>查看会话标题与 Git 状态。从「进展」「轨迹」和「扩展」打开右侧工作台的对应标签。模型额度按当前模型来源在顶栏显示。</td></tr>
                   <tr><td>对话正文</td><td>阅读消息，展开工具执行步骤，检查本轮文件变更。使用 ⌘ F 搜索会话。</td></tr>
-                  <tr><td>输入区</td><td>选择模型与工具权限，添加文件引用或附件。计划与排队消息会显示在输入框上方。</td></tr>
+                  <tr><td>输入区</td><td>选择模型与工具权限，添加文件引用或附件。排队消息显示在输入框上方。</td></tr>
                   <tr><td>右侧工作台</td><td>打开工作区文件、终端、服务、浏览器或临时聊天。不同工具各用一个标签。</td></tr>
                 </tbody>
               </table>
@@ -265,8 +265,8 @@
           </header>
           <div class="doc-copy">
             <figure class="figure">
-              <img src="assets/screens/conversation-light.png" alt="浅色会话界面中的智能体回复和输入框上方的任务计划" width="2880" height="1840" loading="lazy">
-              <figcaption><span>任务计划</span><span>执行步骤可以在回复中展开，计划进度在输入框上方查看。</span></figcaption>
+              <img src="assets/screens/conversation-light.png" alt="浅色会话界面中的智能体回复和进展面板里的三项任务" width="2880" height="1840" loading="lazy">
+              <figcaption><span>任务计划</span><span>点开会话顶栏的「进展」，可以逐项核对任务。</span></figcaption>
             </figure>
             <p>
               新会话不需要预先选择会话类型。普通输入创建一条 Durable conversation；第一次设置目标时，
@@ -491,7 +491,7 @@
           <div class="doc-copy">
             <p>设置页按来源聚合工具：Pi 核心、内置扩展、用户扩展、项目扩展和 MCP。每个工具会展示稳定名称、用途、来源、路径与当前启用状态。</p>
             <ul>
-              <li>内置 <code>todo</code> 为多步骤请求维护输入框上方的紧凑计划；状态保存在 Durable conversation document，支持依赖、完成、结束、归档和恢复。</li>
+              <li>内置 <code>todo</code> 为多步骤请求维护「进展」面板中的任务列表；状态保存在 Durable conversation document，支持依赖、完成、结束、归档和恢复。</li>
               <li>白名单支持精确名称和 <code>*</code> glob，最多 256 项。</li>
               <li>MCP 工具仍受 MCP exposure 与应用级白名单双重过滤。</li>
               <li>父智能体创建子智能体时，工具集合是父会话 model tools 与子智能体白名单的交集，并始终排除递归 <code>subagent</code>。</li>

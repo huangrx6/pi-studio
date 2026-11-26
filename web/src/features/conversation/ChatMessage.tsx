@@ -4,6 +4,7 @@ import { ChevronDown } from 'lucide-react';
 import type { ChatAttachment, ChatMessage } from '../../types/chat-types';
 import { AttachmentFileDetails } from './AttachmentFileDetails';
 import { LoadingIndicator } from '../../shared/LoadingState';
+import { preloadFilePreview } from '../../shared/DeferredFilePreview';
 import { isComposingKey } from '../../shared/keyboard-navigation';
 import { ConversationImageGallery } from './ConversationImageGallery';
 import { imagesFromBlocks, textBlocks } from './message-content';
@@ -22,8 +23,12 @@ function SentFileCard({ attachment, onOpenFile }: {
 }) {
   const details = <AttachmentFileDetails attachment={attachment} />;
   if (attachment.path && onOpenFile) {
+    const warmPreview = () => { void preloadFilePreview().catch(() => {}); };
     return <button type="button" className="attachment-card is-openable" title={attachment.name}
-      aria-label={`在右侧面板查看 ${attachment.name}`} onClick={() => onOpenFile(attachment.path)}>
+      aria-label={`在右侧面板查看 ${attachment.name}`}
+      onPointerEnter={warmPreview}
+      onFocus={warmPreview}
+      onClick={() => onOpenFile(attachment.path)}>
       {details}
     </button>;
   }
@@ -61,11 +66,24 @@ function UserText({ text }: { text: string }) {
     }
     const node = content.current;
     if (!node) return;
-    const measure = () => setOverflow(node.getBoundingClientRect().height > parseFloat(getComputedStyle(node).lineHeight) * 5 + 1);
+    let raf = 0;
+    let lastWidth = -1;
+    const measure = () => {
+      raf = 0;
+      const width = node.clientWidth;
+      if (width === lastWidth && lastWidth >= 0) return;
+      lastWidth = width;
+      setOverflow(node.getBoundingClientRect().height > parseFloat(getComputedStyle(node).lineHeight) * 5 + 1);
+    };
     measure();
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserver(() => {
+      if (!raf) raf = requestAnimationFrame(measure);
+    });
     observer.observe(node);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [text, maybeLong]);
   return <div ref={container} className={`user-text-disclosure ${overflow && !expanded ? 'is-collapsed' : ''}`}>
     <div id={id} className="user-text-viewport"><div ref={content} className="user-text">

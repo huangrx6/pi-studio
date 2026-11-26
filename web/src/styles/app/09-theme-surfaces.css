@@ -92,9 +92,7 @@ body { background: var(--bg); color: var(--text); }
 }
 .assistant-turn.is-retrying .assistant-turn-status { color: var(--warning); }
 .assistant-turn.is-retrying .assistant-turn-status::before { background: var(--warning); }
-.assistant-turn.is-retrying .assistant-orb { border-color: var(--warning-border); color: var(--warning); box-shadow: none; }
-.assistant-turn.is-retrying .assistant-orb::before { border-color: var(--warning-border); }
-.assistant-turn.is-retrying .assistant-orb::after { background: var(--warning); }
+.assistant-turn.is-retrying .assistant-orb { --assistant-cursor-color: var(--warning); border-color: var(--warning-border); color: var(--warning); box-shadow: none; }
 .extension-toast { background: var(--surface); border-color: var(--border); color: var(--muted); }
 .extension-toast.is-error { border-color: var(--error-border); background: var(--error-soft); color: var(--error); }
 .extension-toast.is-warning { color: var(--warning); background: var(--warning-soft); border-color: var(--warning-border); }

@@ -13,7 +13,7 @@ try {
   const launch = page.getByRole('status', { name: '正在启动', exact: true });
   const readyComposer = page.locator('#root:not([inert]) .new-conversation-welcome');
   await readyComposer.waitFor();
-  await mkdir('.qa/launch', { recursive: true });
+  await mkdir('.qa/pi-cursor-writing', { recursive: true });
   const jpeg = await page.evaluate(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
@@ -55,9 +55,9 @@ try {
   await page.waitForFunction(() => document.querySelector('.background-layer img')?.naturalWidth === 2048);
   assert.deepEqual(await layers.evaluateAll(images => images.map(img => [img.complete, getComputedStyle(img).visibility])), [[false, 'hidden'], [false, 'hidden']]);
   assert.equal(await launch.isVisible(), true);
-  assert.equal((await launch.innerText()).trim(), '');
+  assert.equal((await launch.innerText()).trim(), 'Pi Studio');
   assert.equal(await page.locator('#root').evaluate(root => root.inert), true);
-  await launch.screenshot({ path: '.qa/launch/wallpaper-dark.png' });
+  await launch.screenshot({ path: '.qa/pi-cursor-writing/wallpaper-dark.png' });
   await app.evaluate(() => globalThis.finishWallpaper());
   await readyComposer.waitFor();
   await page.waitForFunction(() => {
@@ -89,6 +89,17 @@ try {
     prefs.backgroundMedia.url = 'pi-media://background/slow.jpg';
     localStorage.setItem('pi-studio:preferences', JSON.stringify(prefs));
   });
+  // Measure the slow-image fallback from shell mount on this disposable reload.
+  await page.addInitScript(() => {
+    const observer = new MutationObserver(() => {
+      if (window.shellMountedAt === undefined && document.querySelector('.app')) window.shellMountedAt = performance.now();
+      if (document.querySelector('#launch-screen[data-leaving]')) {
+        window.launchExitAt = performance.now();
+        observer.disconnect();
+      }
+    });
+    observer.observe(document, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-leaving'] });
+  });
   await page.reload({ waitUntil: 'domcontentloaded' });
   await page.waitForFunction(() => document.querySelector('.background-layer img')?.naturalWidth === 2048);
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().find(win => win.webContents.getURL().endsWith('/index.html'))
@@ -97,6 +108,8 @@ try {
   assert.equal(await launch.getByRole('button').count(), 0);
   await page.locator('.settings-overlay').waitFor();
   assert.equal(await launch.count(), 0);
+  const wait = await page.evaluate(() => window.launchExitAt - window.shellMountedAt);
+  assert.ok(wait >= 3850 && wait < 5600, `slow wallpaper and writing share the four-second wait (${Math.round(wait)}ms)`);
   await app.evaluate(() => globalThis.finishLateWallpaper());
   await page.waitForFunction(() => document.querySelector('.background-layer img')?.complete);
 

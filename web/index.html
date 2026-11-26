@@ -5,22 +5,23 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Pi Studio</title>
     <script src="/launch-appearance.js"></script>
-    <link rel="preload" as="image" href="./src/shell/assets/launch-workbench-enamel.webp" />
-    <link rel="preload" as="image" href="./src/shell/assets/launch-workbench-paper-motion.webp" />
     <link rel="stylesheet" href="./src/styles/tokens.css" />
     <link rel="stylesheet" href="./src/styles/palette.css" />
+    <link rel="stylesheet" href="./src/shared/styles/pi-mark.css" />
     <link rel="stylesheet" href="./src/shell/styles/launch-screen.css" />
   </head>
   <body>
     <section id="launch-screen" class="launch-screen" role="status" aria-label="正在启动">
       <div class="launch-mark" aria-hidden="true">
-        <div class="launch-lamplight"></div>
-        <div class="launch-sculpture">
-          <img class="launch-workbench" src="./src/shell/assets/launch-workbench.webp"
-               width="802" height="900" alt="" draggable="false" fetchpriority="high" />
-          <span class="launch-enamel"></span>
-        </div>
-        <div class="launch-paper"></div>
+        <span class="launch-symbol">
+          <span class="launch-strokes pi-mark">
+            <span class="launch-beam"></span>
+            <span class="launch-leg-left"></span>
+            <span class="launch-leg-right"></span>
+          </span>
+          <span class="launch-cursor pi-mark"></span>
+        </span>
+        <span class="launch-wordmark">Pi Studio</span>
       </div>
     </section>
     <div id="root" inert></div>

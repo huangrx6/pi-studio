@@ -130,7 +130,7 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
     return result.entries;
   }
 
-  /** 打开右侧面板，并用两帧 rAF 触发滑入动画。 */
+  /** 打开右侧面板：停靠模式下单次布局直出，避免逐帧宽度重排导致长对话卡顿。 */
   function openPanel() {
     for (const frame of panelOpenFramesRef.current) cancelAnimationFrame(frame);
     panelOpenFramesRef.current = [];
@@ -138,29 +138,22 @@ export function useAppWorkbenchController(deps: AppWorkbenchDependencies) {
       window.clearTimeout(panelCloseTimerRef.current);
       panelCloseTimerRef.current = null;
     }
-    setPanelEntered(false);
     setFilesOpen(true);
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { setPanelEntered(true); return; }
-    panelOpenFramesRef.current = [requestAnimationFrame(() => {
-      panelOpenFramesRef.current = [requestAnimationFrame(() => { panelOpenFramesRef.current = []; setPanelEntered(true); })];
-    })];
+    setPanelEntered(true);
   }
 
-  /** 关闭面板：先播放退场动画，再真正卸载并复位全屏状态。 */
+  /** 关闭面板：立即卸载并复位全屏状态，释放隐藏工具页的布局与合成开销。 */
   function closePanel() {
     if (!filesOpen) return;
     for (const frame of panelOpenFramesRef.current) cancelAnimationFrame(frame);
     panelOpenFramesRef.current = [];
-    setPanelEntered(false);
-    if (panelCloseTimerRef.current !== null) window.clearTimeout(panelCloseTimerRef.current);
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setFilesOpen(false); setPanelFullscreen(false); panelCloseTimerRef.current = null; return;
-    }
-    panelCloseTimerRef.current = window.setTimeout(() => {
-      setFilesOpen(false);
-      setPanelFullscreen(false);
+    if (panelCloseTimerRef.current !== null) {
+      window.clearTimeout(panelCloseTimerRef.current);
       panelCloseTimerRef.current = null;
-    }, 300);
+    }
+    setPanelEntered(false);
+    setFilesOpen(false);
+    setPanelFullscreen(false);
   }
 
   function openTemporaryChat(options?: { prompt?: string; autoSubmit?: boolean; title?: string }) {

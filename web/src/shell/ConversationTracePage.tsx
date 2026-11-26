@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, memo, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import { useSurfaceActive } from '../shared/surface-visibility';
 import { Activity, AlertCircle, Check, Clock3, Layers, ListTree, Search, Sparkles, SquareMinus, User, Wrench, X } from 'lucide-react';
@@ -21,17 +21,23 @@ function StatusIcon({ status }: { status: ConversationTraceItem['status'] }) {
   return <Check />;
 }
 
-function TraceActivityMap({ items, selectedId, onSelect }: {
+const MAX_ACTIVITY_MAP_CELLS = 180;
+
+const TraceActivityMap = memo(function TraceActivityMap({ items, selectedId, onSelect }: {
   items: ConversationTraceItem[];
   selectedId: string | null;
   onSelect: (item: ConversationTraceItem) => void;
 }) {
+  const mapItems = useMemo(
+    () => (items.length > MAX_ACTIVITY_MAP_CELLS ? items.slice(-MAX_ACTIVITY_MAP_CELLS) : items),
+    [items],
+  );
   const [hover, setHover] = useState<{ item: ConversationTraceItem; x: number; y: number } | null>(null);
   const active = useSurfaceActive();
   useEffect(() => { if (!active) setHover(null); }, [active]);
   const root = useRef<HTMLDivElement>(null);
   const [focusId, setFocusId] = useState<string>();
-  const tabStop = items.some(item => item.id === focusId) ? focusId : selectedId ?? items[0]?.id;
+  const tabStop = mapItems.some(item => item.id === focusId) ? focusId : selectedId ?? mapItems[0]?.id;
   useEffect(() => {
     const selected = root.current?.querySelector<HTMLElement>('[aria-pressed="true"]');
     if (selected) selected.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -43,17 +49,17 @@ function TraceActivityMap({ items, selectedId, onSelect }: {
   return <div className="conversation-trace-activity" aria-label="轨迹活动概览">
     <div className="conversation-trace-activity-labels"><span>输入</span><span>模型</span><span>工具</span></div>
     <div className="conversation-trace-activity-scroll" ref={root} onScroll={() => setHover(null)}>
-      <div className="conversation-trace-activity-grid" style={{ '--activity-count': Math.max(1, items.length) } as CSSProperties}>
-        {items.map((item, index) => <button
+      <div className="conversation-trace-activity-grid" style={{ '--activity-count': Math.max(1, mapItems.length) } as CSSProperties}>
+        {mapItems.map((item, index) => <button
           key={item.id} type="button" className={`trace-activity-cell lane-${lane(item)} is-${item.status}`}
           style={{ gridColumn: index + 1, gridRow: lane(item) === 'input' ? 1 : lane(item) === 'model' ? 2 : 3 }}
           aria-label={`${kindLabels[item.kind]} · 第 ${item.round ?? 1} 轮 · ${item.label}`}
           aria-pressed={selectedId === item.id} tabIndex={tabStop === item.id ? 0 : -1}
           onKeyDown={event => {
-            const next = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: items.length - 1 }[event.key];
+            const next = { ArrowRight: index + 1, ArrowLeft: index - 1, Home: 0, End: mapItems.length - 1 }[event.key];
             if (next === undefined) return;
             event.preventDefault();
-            root.current?.querySelectorAll<HTMLButtonElement>('button')[Math.min(items.length - 1, Math.max(0, next))]?.focus();
+            root.current?.querySelectorAll<HTMLButtonElement>('button')[Math.min(mapItems.length - 1, Math.max(0, next))]?.focus();
           }}
           onMouseEnter={event => showHover(item, event.currentTarget)} onMouseLeave={() => setHover(null)}
           onFocus={event => { setFocusId(item.id); showHover(item, event.currentTarget); }} onBlur={() => setHover(null)}
@@ -68,7 +74,7 @@ function TraceActivityMap({ items, selectedId, onSelect }: {
       <p>{hover.item.preview}</p>
     </div>, document.body)}
   </div>;
-}
+});
 
 // 首批与每次追加都按视口行数算：标准窗口约 50 条，矮屏自动降到 24 条，
 // 再大的窗口也封顶 60，避免一次挂出远超一屏的内容。
@@ -81,7 +87,7 @@ function tracePageSize(viewportHeight: number): number {
   return Math.min(TRACE_PAGE_MAX, Math.max(TRACE_PAGE_MIN, rows * 2 + 8));
 }
 
-export function ConversationTracePage({ summary }: ConversationTracePageProps) {
+export const ConversationTracePage = memo(function ConversationTracePage({ summary }: ConversationTracePageProps) {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState<'all' | 'error' | 'running' | 'unknown'>('all');
   const search = useRef<HTMLInputElement>(null);
@@ -113,14 +119,25 @@ export function ConversationTracePage({ summary }: ConversationTracePageProps) {
   useEffect(() => {
     const root = list.current;
     if (!root) return undefined;
-    const fit = () => setVisibleCount((current) => (
-      Math.min(filtered.length, Math.max(current, tracePageSize(root.clientHeight)))
-    ));
+    let raf = 0;
+    const fit = () => {
+      raf = 0;
+      const target = Math.min(filtered.length, tracePageSize(root.clientHeight));
+      setVisibleCount((current) => {
+        const next = Math.min(filtered.length, Math.max(current, target));
+        return next === current ? current : next;
+      });
+    };
     fit();
     if (typeof ResizeObserver === 'undefined') return undefined;
-    const observer = new ResizeObserver(fit);
+    const observer = new ResizeObserver(() => {
+      if (!raf) raf = requestAnimationFrame(fit);
+    });
     observer.observe(root);
-    return () => observer.disconnect();
+    return () => {
+      observer.disconnect();
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [filtered.length]);
   useEffect(() => {
     setVisibleCount(tracePageSize(list.current?.clientHeight ?? 0));
@@ -206,7 +223,7 @@ export function ConversationTracePage({ summary }: ConversationTracePageProps) {
             <button ref={node => { if (node) rowRefs.current.set(item.id, node); else rowRefs.current.delete(item.id); }} type="button" className={`conversation-trace-item lane-${lane(item)} is-${item.status} ${selectedId === item.id ? 'is-selected' : ''}`} aria-pressed={selectedId === item.id} onClick={() => { detailFocus.current = 0; setSelectedId(item.id); }}>
               <span className="conversation-trace-item-icon"><ItemIcon kind={item.kind} /></span>
               <span className="conversation-trace-item-title">{item.label}</span>
-              <span className="conversation-trace-item-preview">{item.preview || '暂无内容'}{item.result && <span className="trace-result-preview"> → {item.result.slice(0, 220).replace(/\s+/g, ' ')}</span>}</span>
+              <span className="conversation-trace-item-preview">{item.preview || '暂无内容'}{(item.resultPreview ?? item.result) && <span className="trace-result-preview"> → {(item.resultPreview ?? item.result!.slice(0, 220).replace(/\s+/g, ' '))}</span>}</span>
               {durations && <time className="conversation-trace-item-time" title={timeLabel(item.at)}>{item.durationMs !== undefined ? durationLabel(item.durationMs) : timeLabel(item.at)}</time>}
               {item.status !== 'done' && <span className="conversation-trace-item-status" title={statusLabels[item.status]}><StatusIcon status={item.status} />{statusLabels[item.status]}</span>}
             </button>
@@ -224,4 +241,4 @@ export function ConversationTracePage({ summary }: ConversationTracePageProps) {
       </div>
     </div>
   </section>;
-}
+});

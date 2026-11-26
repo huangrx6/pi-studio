@@ -1,4 +1,4 @@
-import { lazy, Suspense, useMemo, type ReactNode } from 'react';
+import { lazy, memo, Suspense, useMemo, type ReactNode } from 'react';
 import { LoadingState } from '../../shared/LoadingState';
 import type { Preferences } from '../../shared/preferences';
 import type { PanelTab } from '../app-types';
@@ -46,12 +46,12 @@ export type SessionWorkbenchPanelProps = {
   onFocusConversation: () => void;
 };
 
-function TracePanel({ trace }: Pick<SessionWorkbenchPanelProps, 'trace'>) {
+const TracePanel = memo(function TracePanel({ trace }: Pick<SessionWorkbenchPanelProps, 'trace'>) {
   const summary = useMemo(() => buildTraceSummary(trace), [trace]);
   return <ConversationTracePage summary={summary} />;
-}
+});
 
-export function SessionWorkbenchPanel({
+export const SessionWorkbenchPanel = memo(function SessionWorkbenchPanel({
   tab, session, preferences, workspaces, modelSelection, progress, trace, subagents, extensions,
   onOpenTemporaryChat, onOpenProgress, onOpenGit, onOpenGitFile, onOpenFile, onFocusConversation,
 }: SessionWorkbenchPanelProps) {
@@ -120,4 +120,4 @@ export function SessionWorkbenchPanel({
     </div>;
   }
   return null;
-}
+});

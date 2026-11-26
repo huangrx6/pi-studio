@@ -25,10 +25,22 @@ import { useWindowChrome } from './shell/useWindowChrome';
 import { useLaunchScreen } from './shell/useLaunchScreen';
 import { useConversationController } from './shell/useConversationController';
 import { MarkdownActions } from './shared/markdown-actions';
+import { preloadFilePreview } from './shared/DeferredFilePreview';
+import { LoadingState } from './shared/LoadingState';
 import { errorText } from './shared/error-text';
 
+let workbenchPanePromise: Promise<typeof import('./shell/right-panel/WorkbenchPane')> | null = null;
+
+function preloadWorkbenchPane() {
+  workbenchPanePromise ??= import('./shell/right-panel/WorkbenchPane').catch((error) => {
+    workbenchPanePromise = null;
+    throw error;
+  });
+  return workbenchPanePromise;
+}
+
 const WorkbenchPane = lazy(async () => {
-  const module = await import('./shell/right-panel/WorkbenchPane');
+  const module = await preloadWorkbenchPane();
   return { default: module.WorkbenchPane };
 });
 
@@ -36,6 +48,18 @@ const WorkbenchPane = lazy(async () => {
 export function App() {
   useWindowChrome();
   const showSettingsToast = useSettingsToast();
+  useEffect(() => {
+    const warm = () => {
+      void preloadWorkbenchPane().catch(() => {});
+      void preloadFilePreview().catch(() => {});
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const id = window.requestIdleCallback(warm, { timeout: 1500 });
+      return () => window.cancelIdleCallback(id);
+    }
+    const timer = window.setTimeout(warm, 600);
+    return () => window.clearTimeout(timer);
+  }, []);
   const foundation = useAppFoundation();
   const conversation = useConversationController(foundation);
   const [sidebarWidth, setSidebarWidth] = useSidebarWidth();
@@ -554,7 +578,7 @@ export function App() {
       : null
   ), [openUpdateDialog, updateProgress, updateSnapshot.latestVersion, updateSnapshot.state]);
 
-  const extensionPicker: ExtensionPanelPickerProps = {
+  const extensionPicker = useMemo<ExtensionPanelPickerProps>(() => ({
     surface: conversationExtensions.surface,
     groups: conversationExtensions.groups,
     cwd: panelWorkspace,
@@ -566,9 +590,29 @@ export function App() {
     onSendPrompt: sendPromptFromExtension,
     onNotify: notifyExtension,
     onManage: () => openSettingsPage('extensions'),
-  };
+  }), [
+    conversationExtensions.groups,
+    conversationExtensions.surface,
+    modelSelection.modelRef,
+    notifyExtension,
+    openExtensionPanel,
+    openSettingsPage,
+    panelWorkspace,
+    quotaSource,
+    sendPromptFromExtension,
+    session?.id,
+  ]);
   const selectedTool = workbench.panelEntered ? workbench.activePanelTab?.kind : undefined;
-  const workspaceHeader = {
+  const headerStatus = useMemo(() => (
+    !panelFullscreen && conversationExtensions.headerItems.length > 0
+      ? <ExtensionSummaries {...extensionPicker} slot="status.chip" items={conversationExtensions.headerItems} />
+      : undefined
+  ), [conversationExtensions.headerItems, extensionPicker, panelFullscreen]);
+  const headerExtensionMenu = useMemo(() => (
+    <ConversationExtensionsMenu {...extensionPicker}
+      open={extensionMenuOpen} onOpenChange={setExtensionMenuOpen} />
+  ), [extensionMenuOpen, extensionPicker, setExtensionMenuOpen]);
+  const workspaceHeader = useMemo(() => ({
     update: headerUpdate,
     gitStatus,
     panelExpanded: workbench.panelEntered,
@@ -577,12 +621,20 @@ export function App() {
     onOpenTrace: openTrace,
     onOpenGit: openGit,
     activeTool: selectedTool === 'progress' || selectedTool === 'trace' ? selectedTool : undefined,
-    status: !panelFullscreen && conversationExtensions.headerItems.length > 0 ?
-      <ExtensionSummaries {...extensionPicker} slot="status.chip" items={conversationExtensions.headerItems} />
-      : undefined,
-    extensionMenu: <ConversationExtensionsMenu {...extensionPicker}
-      open={extensionMenuOpen} onOpenChange={setExtensionMenuOpen} />,
-  };
+    status: headerStatus,
+    extensionMenu: headerExtensionMenu,
+  }), [
+    gitStatus,
+    headerExtensionMenu,
+    headerStatus,
+    headerUpdate,
+    openGit,
+    openPanel,
+    openTrace,
+    selectedTool,
+    workbench.openProgressTab,
+    workbench.panelEntered,
+  ]);
   const openGitChangesRef = useRef<() => void>(() => {});
   openGitChangesRef.current = () => openGit('changes');
   const handleOpenGitChanges = useCallback(() => {
@@ -915,7 +967,7 @@ export function App() {
       />
       </SurfaceActiveContext.Provider>
 
-      {filesOpen && <Suspense fallback={null}><WorkbenchPane
+      {filesOpen && <Suspense fallback={<aside className="file-panel is-open" aria-busy="true"><div className="file-panel-inner"><LoadingState variant="panel">正在打开工作台…</LoadingState></div></aside>}><WorkbenchPane
         controller={workbench}
         settingsOpen={settingsOpen}
         renderToolPanel={tab => <SessionWorkbenchPanel

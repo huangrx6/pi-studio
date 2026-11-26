@@ -42,12 +42,18 @@ export function usePanelTabScroll({ activeId, tabs, resizing, split }: PanelTabS
       root.dataset.overflowStart = String(root.scrollLeft > EDGE_TOLERANCE);
       root.dataset.overflowEnd = String(root.scrollWidth - root.clientWidth - root.scrollLeft > EDGE_TOLERANCE);
     };
+    let raf = 0;
     const measure = () => {
+      raf = 0;
       // Measure against the space for the whole navigation, including the switcher itself.
-      setHasOverflow(tabCount > 1 && track.getBoundingClientRect().width > navigation.clientWidth + EDGE_TOLERANCE);
+      const overflow = tabCount > 1 && track.getBoundingClientRect().width > navigation.clientWidth + EDGE_TOLERANCE;
+      setHasOverflow((current) => (current === overflow ? current : overflow));
       const active = track.querySelector<HTMLElement>('[aria-selected="true"]');
       if (active) revealTab(active, 'auto');
       updateEdges();
+    };
+    const scheduleMeasure = () => {
+      if (!raf) raf = requestAnimationFrame(measure);
     };
 
     const onWheel = (event: WheelEvent) => {
@@ -56,7 +62,7 @@ export function usePanelTabScroll({ activeId, tabs, resizing, split }: PanelTabS
       root.scrollLeft += event.deltaY;
     };
     measure();
-    const observer = new ResizeObserver(measure);
+    const observer = new ResizeObserver(scheduleMeasure);
     observer.observe(navigation);
     observer.observe(track);
     observer.observe(root);
@@ -64,6 +70,7 @@ export function usePanelTabScroll({ activeId, tabs, resizing, split }: PanelTabS
     root.addEventListener('wheel', onWheel, { passive: false });
     return () => {
       observer.disconnect();
+      if (raf) cancelAnimationFrame(raf);
       root.removeEventListener('scroll', updateEdges);
       root.removeEventListener('wheel', onWheel);
     };

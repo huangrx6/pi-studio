@@ -25,7 +25,7 @@ import { ChangesView } from '../../features/conversation/ChangesView';
 import { DiffView } from '../../features/conversation/DiffView';
 import { TurnFilePreview } from '../../features/conversation/TurnFilePreview';
 import { prefersFilePreview } from '../../shared/file-preview';
-import { DeferredFilePreview } from '../../shared/DeferredFilePreview';
+import { DeferredFilePreview, preloadFilePreview } from '../../shared/DeferredFilePreview';
 import { ActionMenu } from '../../shared/ActionMenu';
 import { formatFileSize } from '../../shared/filesize';
 import { SurfaceActiveContext } from '../../shared/surface-visibility';
@@ -160,8 +160,32 @@ export function WorkbenchPane({
   const [treeSearchQuery, setTreeSearchQuery] = useState('');
   const [treeSearchResults, setTreeSearchResults] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size?: number }>>([]);
   const [treeSearchBusy, setTreeSearchBusy] = useState(false);
+  const [activatedToolTabs, setActivatedToolTabs] = useState<Set<string>>(() => (
+    activePanelTabId ? new Set([activePanelTabId]) : new Set()
+  ));
   const panelWorkspace = session?.cwd || workspace;
   const fileView = activePanelTab && ['files', 'file', 'changes', 'diff'].includes(activePanelTab.kind);
+
+  useEffect(() => {
+    void preloadFilePreview().catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const validIds = new Set(panelTabs.filter(isToolPanel).map(tab => tab.id));
+    setActivatedToolTabs((current) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of current) {
+        if (validIds.has(id)) next.add(id);
+        else changed = true;
+      }
+      if (activePanelTab && isToolPanel(activePanelTab) && !next.has(activePanelTab.id)) {
+        next.add(activePanelTab.id);
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [activePanelTab, panelTabs]);
 
   useEffect(() => {
     setExpandedPaths(new Set());
@@ -548,6 +572,7 @@ export function WorkbenchPane({
     {persistentBrowserContent}
     {panelTabs.filter(isToolPanel).map(tab => {
       const selected = activePanelTab?.id === tab.id;
+      if (!selected && !activatedToolTabs.has(tab.id)) return null;
       return <SurfaceActiveContext.Provider key={tab.id} value={selected && panelEntered && !settingsOpen}>
         <div className="workbench-tool-pane" role="tabpanel" hidden={!selected} aria-label={tab.title}>
           {renderToolPanel(tab)}
