@@ -43,8 +43,9 @@ function flag(name) {
 }
 
 function assetsFromIndex(source) {
-  const script = source.match(/<script[^>]+src="(?:\.\/)?([^"]+\.js)"/)?.[1];
-  const style = source.match(/<link[^>]+href="(?:\.\/)?([^"]+\.css)"/)?.[1];
+  // Match the same entry types as the packaged document, skipping the launch script and preloads.
+  const script = source.match(/<script\b(?=[^>]*\stype="module")[^>]*\ssrc="([^"]+\.js)"/)?.[1];
+  const style = source.match(/<link\b(?=[^>]*\srel="stylesheet")[^>]*\shref="([^"]+\.css)"/)?.[1];
   assert.ok(script, 'The production index must reference a JavaScript entry');
   assert.ok(style, 'The production index must reference a CSS entry');
   return {

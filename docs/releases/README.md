@@ -4,6 +4,7 @@ v0.0.1 至 v0.0.5 按五个产品阶段整合了早期版本，后续版本按�
 
 | 版本 | 原版本范围 | 主要变化 |
 | --- | --- | --- |
+| [v0.0.17](../../.github/release-notes/v0.0.17.md) | — | 修复 macOS 安装包启动校验对渲染入口的识别 |
 | [v0.0.16](../../.github/release-notes/v0.0.16.md) | — | 修复 Excalidraw 的画板等待逻辑与 macOS 发布构建失败 |
 | [v0.0.15](../../.github/release-notes/v0.0.15.md) | — | 官方知识库、任务看板与 Excalidraw 更新、智能体方案和会话工作台改进 |
 | [v0.0.14](../../.github/release-notes/v0.0.14.md) | — | 子智能体角色与运行默认值、插件市场、任务看板与 Excalidraw、桌面控制和设备存储设置 |
