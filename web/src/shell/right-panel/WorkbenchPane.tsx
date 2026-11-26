@@ -1,8 +1,8 @@
 import { FileKindIcon } from '../../shared/FileKindIcon';
 import './styles/right-panel.css';
 import './styles/panel-file.css';
-import { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import type { MutableRefObject, ReactNode } from 'react';
+import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import type { MutableRefObject, ReactNode, Ref } from 'react';
 import {
   AppWindow,
   ChevronDown,
@@ -43,6 +43,66 @@ const LazyTerminalPanel = lazy(async () => {
 const RuntimeServicesPanel = lazy(async () => {
   const module = await import('../../features/runtime-services/RuntimeServicesPanel');
   return { default: module.RuntimeServicesPanel };
+});
+
+type TerminalTabSlotProps = {
+  id: string;
+  cwd: string;
+  isActive: boolean;
+  focusRef?: Ref<() => void>;
+  appearance: TerminalAppearance;
+  shellIntegration: boolean;
+  onFontSizeChange: (size: number) => void;
+  onNewTerminal: () => void;
+  onRestartTerminal: (id: string) => void;
+  onOpenFile: (path: string) => void;
+  onOpenUrl: (url: string) => void;
+  onTitle: (id: string, title: string) => void;
+};
+
+const TerminalTabSlot = memo(function TerminalTabSlot({
+  id,
+  cwd,
+  isActive,
+  focusRef,
+  appearance,
+  shellIntegration,
+  onFontSizeChange,
+  onNewTerminal,
+  onRestartTerminal,
+  onOpenFile,
+  onOpenUrl,
+  onTitle,
+}: TerminalTabSlotProps) {
+  const handleRestart = useCallback(() => {
+    onRestartTerminal(id);
+  }, [id, onRestartTerminal]);
+  const handleTitle = useCallback((title: string) => {
+    onTitle(id, title);
+  }, [id, onTitle]);
+
+  return <Suspense fallback={
+    <div className={`terminal-tab-slot ${isActive ? 'is-active' : ''}`}>
+      <LoadingState variant="panel">正在加载终端…</LoadingState>
+    </div>
+  }>
+    <div className={`terminal-tab-slot ${isActive ? 'is-active' : ''}`} aria-hidden={!isActive}>
+      <LazyTerminalPanel
+        active={isActive}
+        focusRef={focusRef}
+        id={id}
+        cwd={cwd}
+        appearance={appearance}
+        shellIntegration={shellIntegration}
+        onFontSizeChange={onFontSizeChange}
+        onNewTerminal={onNewTerminal}
+        onRestartTerminal={handleRestart}
+        onOpenFile={onOpenFile}
+        onOpenUrl={onOpenUrl}
+        onTitle={handleTitle}
+      />
+    </div>
+  </Suspense>;
 });
 
 type TerminalPanelTab = PanelTab & { kind: 'terminal' };
@@ -163,6 +223,9 @@ export function WorkbenchPane({
   const [activatedToolTabs, setActivatedToolTabs] = useState<Set<string>>(() => (
     activePanelTabId ? new Set([activePanelTabId]) : new Set()
   ));
+  const [activatedTerminalTabs, setActivatedTerminalTabs] = useState<Set<string>>(() => (
+    filesOpen && activePanelTab?.kind === 'terminal' ? new Set([activePanelTab.id]) : new Set()
+  ));
   const panelWorkspace = session?.cwd || workspace;
   const fileView = activePanelTab && ['files', 'file', 'changes', 'diff'].includes(activePanelTab.kind);
 
@@ -186,6 +249,27 @@ export function WorkbenchPane({
       return changed ? next : current;
     });
   }, [activePanelTab, panelTabs]);
+
+  useEffect(() => {
+    if (!filesOpen) {
+      setActivatedTerminalTabs((current) => (current.size === 0 ? current : new Set()));
+      return;
+    }
+    const validIds = new Set(panelTabs.filter(tab => tab.kind === 'terminal').map(tab => tab.id));
+    setActivatedTerminalTabs((current) => {
+      let changed = false;
+      const next = new Set<string>();
+      for (const id of current) {
+        if (validIds.has(id)) next.add(id);
+        else changed = true;
+      }
+      if (activePanelTab?.kind === 'terminal' && !next.has(activePanelTab.id)) {
+        next.add(activePanelTab.id);
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [activePanelTab, filesOpen, panelTabs]);
 
   useEffect(() => {
     setExpandedPaths(new Set());
@@ -449,37 +533,52 @@ export function WorkbenchPane({
     </div>;
   }
 
+  const handleTerminalRestart = useCallback((id: string) => {
+    void restartTerminal(id);
+  }, [restartTerminal]);
+
+  const handleTerminalOpenFile = useCallback((path: string) => {
+    void openFile(path.replace(/:\d+(?::\d+)?$/u, ''), session?.id, 'external');
+  }, [openFile, session?.id]);
+
+  const handleTerminalOpenUrl = useCallback((url: string) => {
+    openBrowserTab(url);
+  }, [openBrowserTab]);
+
+  const handleTerminalTitle = useCallback((id: string, title: string) => {
+    setPanelTabs((current) => {
+      const index = current.findIndex((item) => item.id === id);
+      if (index < 0 || current[index].customTitle || current[index].title === title) return current;
+      return current.map((item, itemIndex) => (itemIndex === index ? { ...item, title } : item));
+    });
+  }, [setPanelTabs]);
+
   function renderTerminalTab(tab: TerminalPanelTab, isActive: boolean) {
-    return <Suspense key={`${tab.id}:${tab.restart ?? 0}`} fallback={
-      <div className={`terminal-tab-slot ${isActive ? 'is-active' : ''}`}>
-        <LoadingState variant="panel">正在加载终端…</LoadingState>
-      </div>
-    }>
-      <div className={`terminal-tab-slot ${isActive ? 'is-active' : ''}`} aria-hidden={!isActive}>
-        <LazyTerminalPanel
-          active={isActive}
-          focusRef={isActive ? focusActiveTerminal : undefined}
-          id={tab.id}
-          cwd={tab.cwd || session?.cwd || workspace}
-          appearance={terminalAppearance}
-          shellIntegration={terminalShellIntegration}
-          onFontSizeChange={onTerminalFontSize}
-          onNewTerminal={openTerminalTab}
-          onRestartTerminal={() => { void restartTerminal(tab.id); }}
-          onOpenFile={(path) => { void openFile(path.replace(/:\d+(?::\d+)?$/u, ''), session?.id, 'external'); }}
-          onOpenUrl={(url) => openBrowserTab(url)}
-          onTitle={(title) => setPanelTabs((current) => current.map((item) => (
-            item.id === tab.id && !item.customTitle ? { ...item, title } : item
-          )))}
-        />
-      </div>
-    </Suspense>;
+    return <TerminalTabSlot
+      key={`${tab.id}:${tab.restart ?? 0}`}
+      id={tab.id}
+      cwd={tab.cwd || session?.cwd || workspace}
+      isActive={isActive}
+      focusRef={isActive ? focusActiveTerminal : undefined}
+      appearance={terminalAppearance}
+      shellIntegration={terminalShellIntegration}
+      onFontSizeChange={onTerminalFontSize}
+      onNewTerminal={openTerminalTab}
+      onRestartTerminal={handleTerminalRestart}
+      onOpenFile={handleTerminalOpenFile}
+      onOpenUrl={handleTerminalOpenUrl}
+      onTitle={handleTerminalTitle}
+    />;
   }
 
   function renderTerminalStack(isActive: boolean) {
     const terminalTabs = panelTabs.filter((tab): tab is TerminalPanelTab => tab.kind === 'terminal');
     return <div className={`terminal-tab-stack ${isActive ? 'is-active' : 'is-background'}`}>
-      {terminalTabs.map((tab) => renderTerminalTab(tab, isActive && tab.id === activePanelTabId))}
+      {terminalTabs.map((tab) => {
+        const tabActive = isActive && tab.id === activePanelTabId;
+        if (!tabActive && !activatedTerminalTabs.has(tab.id)) return null;
+        return renderTerminalTab(tab, tabActive);
+      })}
     </div>;
   }
 
@@ -551,12 +650,17 @@ export function WorkbenchPane({
             ? { ...tab, browserLibrary: undefined }
             : tab
         ))}
-        onUrlChange={(next) => setPanelTabs((current) => current.map((tab) => tab.id === browserTab.id ? { ...tab, url: next } : tab))}
-        onTitleChange={(title) => setPanelTabs((current) => current.map((tab) => (
-          tab.id === browserTab.id && !tab.customTitle
-            ? { ...tab, title: title || '浏览器' }
-            : tab
-        )))}
+        onUrlChange={(next) => setPanelTabs((current) => {
+          const index = current.findIndex((tab) => tab.id === browserTab.id);
+          if (index < 0 || current[index].url === next) return current;
+          return current.map((tab, itemIndex) => (itemIndex === index ? { ...tab, url: next } : tab));
+        })}
+        onTitleChange={(title) => setPanelTabs((current) => {
+          const nextTitle = title || '浏览器';
+          const index = current.findIndex((tab) => tab.id === browserTab.id);
+          if (index < 0 || current[index].customTitle || current[index].title === nextTitle) return current;
+          return current.map((tab, itemIndex) => (itemIndex === index ? { ...tab, title: nextTitle } : tab));
+        })}
         onCommandHandled={(requestId) => setPanelTabs((current) => current.map((tab) => (
           tab.id === browserTab.id && tab.commandRequestId === requestId
             ? { ...tab, commandRequestId: undefined }

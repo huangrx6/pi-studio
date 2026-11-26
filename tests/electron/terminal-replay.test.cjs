@@ -92,3 +92,21 @@ test('empty data does not consume steps and invalid budgets cannot disable bound
     assert.throws(() => createTerminalReplay({ cols: 80, rows: 24, maxSteps }), RangeError);
   }
 });
+
+test('multi-chunk data trimming drops leading chunks cleanly and preserves surrogate boundaries', () => {
+  const replay = createTerminalReplay({ cols: 80, rows: 24, maxChars: 10_000 });
+  for (let i = 0; i < 8; i++) replay.append(`${String(i).repeat(2_048)}`);
+  const snap = replay.snapshot();
+  assert.equal(snap.truncated, true);
+  assert.equal(snap.steps.length, 1);
+  assert.equal(snap.steps[0].data.length, 10_000);
+  assert.equal(snap.steps[0].data.endsWith('7'.repeat(2_048)), true);
+
+  // Split a surrogate pair across two chunks that exceed CHUNK_MERGE_CHARS.
+  const cross = createTerminalReplay({ cols: 80, rows: 24, maxChars: 4_096 });
+  cross.append(`${'a'.repeat(4_095)}\ud83d`);
+  cross.append(`\ude00${'b'.repeat(4_095)}`);
+  const crossSnap = cross.snapshot();
+  assert.equal(crossSnap.truncated, true);
+  assert.equal(crossSnap.steps[0].data, 'b'.repeat(4_095));
+});

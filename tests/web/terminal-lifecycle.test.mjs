@@ -108,6 +108,7 @@ function harness(platform = 'darwin') {
     reset() { this.output = []; }
     refresh() { assert.equal(this.disposed, undefined); this.refreshes++; }
     focus() { this.focuses++; }
+    blur() { this.blurs = (this.blurs ?? 0) + 1; }
     onData(fn) { this.input = fn; return { dispose: () => { this.inputDisposed = true; } }; }
     dispose() { this.disposed = true; }
   }
@@ -405,5 +406,42 @@ test('output arriving behind a resize barrier is parsed before the size changes'
   assert.equal(term.callbacks.length, 1, 'a new barrier follows the new data');
   term.callbacks.shift()();
   assert.equal(term.cols, 100); assert.equal(h.resizes.length, before + 1);
+  h.unmount();
+});
+
+test('inactive background terminal defers xterm writes and flushes once restored', async () => {
+  const h = harness();
+  h.resolve(); await settle(); h.render();
+  const term = h.terms[0];
+  h.emit({ id: 'a', type: 'data', sequence: 1, data: 'active-1' });
+  assert.deepEqual(term.output, ['active-1']);
+
+  h.render({ active: false });
+  h.emit({ id: 'a', type: 'data', sequence: 2, data: 'bg-1' });
+  h.emit({ id: 'a', type: 'data', sequence: 3, data: 'bg-2' });
+  assert.deepEqual(term.output, ['active-1'], 'background tab must not write to hidden DOM renderer');
+
+  h.render({ active: true });
+  h.tick();
+  assert.deepEqual(term.output, ['active-1', 'bg-1bg-2']);
+  h.unmount();
+});
+
+test('inactive background terminal overflowing buffer cleanly resyncs on return instead of erroring', async () => {
+  const h = harness();
+  h.resolve(); await settle(); h.render();
+  h.render({ active: false });
+  h.emit({ id: 'a', type: 'data', sequence: 1, data: 'x'.repeat(600_000) });
+  h.emit({ id: 'a', type: 'data', sequence: 2, data: 'y'.repeat(600_000) });
+  assert.equal(h.terms[0].output.length, 0);
+
+  h.render({ active: true });
+  h.tick();
+  h.render();
+  assert.equal(h.creates.length, 2, 'overflowed background tab reconnects to replay latest snapshot');
+  h.resolve(1, { sequence: 2, replay: replay('latest-bounded-replay') });
+  await settle(); h.render();
+  assert.deepEqual(h.terms[1].output, ['latest-bounded-replay']);
+  assert.doesNotMatch(h.text(), /同步中断/);
   h.unmount();
 });

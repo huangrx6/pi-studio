@@ -44,6 +44,7 @@ import './styles/terminal-panel.css';
 
 const MAX_PENDING_EVENTS = 256;
 const MAX_PENDING_CHARS = 1_000_000;
+const MAX_FIT_RETRIES = 4;
 
 function terminalFontFamily() {
   // Symbols precede the generic monospace fallback, which otherwise swallows
@@ -175,6 +176,7 @@ export function TerminalPanel({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const fitRef = useRef<(() => void) | null>(null);
   const updateRendererRef = useRef<((visible: boolean) => void) | null>(null);
+  const resumeActiveRef = useRef<(() => void) | null>(null);
   const serializeRef = useRef<SerializeAddon | null>(null);
   const commandsRef = useRef(new CommandTracker());
   const commandMarksRef = useRef<Array<{ decoration?: { dispose: () => void } }>>([]);
@@ -519,14 +521,17 @@ export function TerminalPanel({
 
     const fitTerminal = () => {
       frame = 0;
-      if (disposed || restoring || document.hidden || !host.isConnected || host.clientWidth <= 0 || host.clientHeight <= 0) return;
+      if (disposed || restoring || document.hidden || !activeRef.current || !host.isConnected || host.clientWidth <= 0 || host.clientHeight <= 0) return;
       let fitSequence = restoredSequence;
+      let fitRetries = 0;
       const applyFit = () => {
-        if (disposed || failed || restoring || document.hidden || !host.isConnected || host.clientWidth <= 0 || host.clientHeight <= 0) { fitPending = false; return; }
+        if (disposed || failed || restoring || document.hidden || !activeRef.current || !host.isConnected || host.clientWidth <= 0 || host.clientHeight <= 0) { fitPending = false; return; }
         // Output received after the first barrier is queued behind it. Wait for
-        // that output too instead of parsing it after this geometry change.
-        if (ready && fitSequence !== restoredSequence) {
+        // that output too instead of parsing it after this geometry change,
+        // bounded so continuous server logs cannot starve resizing forever.
+        if (ready && fitSequence !== restoredSequence && fitRetries < MAX_FIT_RETRIES) {
           fitSequence = restoredSequence;
+          fitRetries += 1;
           try { term.write('', applyFit); } catch { fitPending = false; }
           return;
         }
@@ -550,11 +555,11 @@ export function TerminalPanel({
       } else applyFit();
     };
     const scheduleFit = () => {
-      if (disposed || document.hidden || frame || fitPending) return;
+      if (disposed || document.hidden || !activeRef.current || frame || fitPending) return;
       frame = requestAnimationFrame(fitTerminal);
     };
     const applyAppearance = () => {
-      if (disposed || document.hidden) { appearanceDirty = true; return; }
+      if (disposed || document.hidden || !activeRef.current) { appearanceDirty = true; return; }
       appearanceDirty = false;
       term.options.theme = themedTerminal(appearanceRef.current.themeId) ?? terminalTheme();
       term.options.fontFamily = fontFamilyOf(appearanceRef.current.fontFamily);
@@ -563,14 +568,73 @@ export function TerminalPanel({
       term.refresh(0, term.rows - 1);
       scheduleFit();
     };
+    const backgroundOutput: string[] = [];
+    let backgroundChars = 0;
+    let backgroundNeedsResync = false;
+    let atBottom = true;
+    const bufferBackgroundOutput = (output: string) => {
+      if (!output || backgroundNeedsResync) return;
+      if (backgroundChars + output.length > MAX_PENDING_CHARS) {
+        backgroundNeedsResync = true;
+        backgroundOutput.length = 0;
+        backgroundChars = 0;
+        return;
+      }
+      backgroundOutput.push(output);
+      backgroundChars += output.length;
+    };
+    const failSynchronization = () => {
+      failed = true;
+      ready = false;
+      pending.length = 0;
+      pendingChars = 0;
+      backgroundOutput.length = 0;
+      backgroundChars = 0;
+      backgroundNeedsResync = false;
+      stopWatchingFocus();
+      setConnecting(false);
+      setError('终端输出同步中断，请重新连接以恢复最近内容。');
+    };
+    const enqueueOutput = (output: string) => {
+      if (!output || disposed || failed) return;
+      // Main-process batching already merges high-frequency PTY chunks. Write
+      // immediately so attach/replay and sequence checks stay deterministic.
+      if (output.length > MAX_PENDING_CHARS) {
+        failSynchronization();
+        return;
+      }
+      try {
+        term.write(output);
+      } catch {
+        failSynchronization();
+      }
+    };
+    const resumeActive = () => {
+      if (disposed || failed || document.hidden || !activeRef.current) return;
+      updateRenderer(true);
+      if (backgroundNeedsResync) {
+        backgroundNeedsResync = false;
+        backgroundOutput.length = 0;
+        backgroundChars = 0;
+        setRetryRevision((value) => value + 1);
+        return;
+      }
+      if (appearanceDirty) applyAppearance();
+      if (backgroundOutput.length > 0) {
+        const queued = backgroundOutput.length === 1 ? backgroundOutput[0] : backgroundOutput.join('');
+        backgroundOutput.length = 0;
+        backgroundChars = 0;
+        enqueueOutput(queued);
+      }
+      scheduleFit();
+    };
+    resumeActiveRef.current = resumeActive;
     const onVisibility = () => {
       if (document.hidden) {
         cancelAnimationFrame(frame);
         frame = 0;
       } else {
-        updateRendererRef.current?.(activeRef.current);
-        if (appearanceDirty) applyAppearance();
-        scheduleFit();
+        resumeActive();
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
@@ -598,29 +662,6 @@ export function TerminalPanel({
     });
     fitTerminal();
 
-    const failSynchronization = () => {
-      failed = true;
-      ready = false;
-      pending.length = 0;
-      pendingChars = 0;
-      stopWatchingFocus();
-      setConnecting(false);
-      setError('终端输出同步中断，请重新连接以恢复最近内容。');
-    };
-    const enqueueOutput = (output: string) => {
-      if (!output || disposed || failed) return;
-      // Main-process batching already merges high-frequency PTY chunks. Write
-      // immediately so attach/replay and sequence checks stay deterministic.
-      if (output.length > MAX_PENDING_CHARS) {
-        failSynchronization();
-        return;
-      }
-      try {
-        term.write(output);
-      } catch {
-        failSynchronization();
-      }
-    };
     const applyEvent = (event: TerminalEvent) => {
       if (disposed || failed || event.id !== id) return;
       if (!ready) {
@@ -647,14 +688,20 @@ export function TerminalPanel({
           // Applying an ANSI continuation after missing output corrupts the
           // screen/parser. Keep the last intact display and offer a fresh attach.
           if (chunk.sequence !== restoredSequence + 1) {
-            if (output) enqueueOutput(output);
+            if (output) {
+              if (activeRef.current) enqueueOutput(output);
+              else bufferBackgroundOutput(output);
+            }
             failSynchronization();
             return;
           }
           restoredSequence = chunk.sequence;
           output += chunk.data;
         }
-        enqueueOutput(output);
+        // Hidden background tabs release WebGL and fall back to DOM rendering;
+        // deferring writes avoids background ANSI/DOM work while a dev server runs.
+        if (activeRef.current) enqueueOutput(output);
+        else bufferBackgroundOutput(output);
       } else {
         setStatus(event.status);
         setExitCode(event.exitCode);
@@ -677,7 +724,11 @@ export function TerminalPanel({
         } else if (navigationTarget === null) {
           commandCursorRef.current = null;
         }
-        setIsAtBottom(buffer.viewportY >= buffer.baseY);
+        const nextAtBottom = buffer.viewportY >= buffer.baseY;
+        if (nextAtBottom !== atBottom) {
+          atBottom = nextAtBottom;
+          setIsAtBottom(nextAtBottom);
+        }
       })
       : { dispose: () => {} };
     const resizeObserver = new ResizeObserver(scheduleFit);
@@ -755,6 +806,7 @@ export function TerminalPanel({
       titleSubscription.dispose();
       serializeRef.current = null;
       if (updateRendererRef.current === updateRenderer) updateRendererRef.current = null;
+      if (resumeActiveRef.current === resumeActive) resumeActiveRef.current = null;
       try { webgl?.dispose(); } catch { /* 已经释放 */ }
       term.dispose();
       terminalRef.current = null;
@@ -780,8 +832,7 @@ export function TerminalPanel({
     }
     if (!entered || document.hidden) return;
     const frame = requestAnimationFrame(() => {
-      updateRendererRef.current?.(active);
-      fitRef.current?.();
+      resumeActiveRef.current?.();
       // Restoring a tab can also open a header dialog. Keep its keyboard focus.
       if (!document.activeElement?.closest('[role="dialog"]')) focusTerminal();
     });
