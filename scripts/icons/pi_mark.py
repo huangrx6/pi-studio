@@ -37,7 +37,9 @@ def write_app_icons() -> None:
     ImageDraw.Draw(image).rounded_rectangle(
         (margin, margin, size * scale - margin - 1, size * scale - margin - 1),
         radius=tile * scale // 4,
-        fill="#101012",
+        fill="#202126",
+        outline="#393b42",
+        width=16 * scale,
     )
     # At 16pt, align the fine strokes to the pixel grid and give the cursor
     # enough coverage to remain visible in the Finder list at both densities.
