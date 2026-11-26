@@ -1,10 +1,11 @@
-import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useId, useMemo, useState } from 'react';
 import {
   BookOpen,
   Bot,
   ChevronDown,
   Globe,
   Image as ImageIcon,
+  ListTree,
   Maximize2,
   Pencil,
   Search,
@@ -352,6 +353,8 @@ function NarrativeWorkstreamComponent({
   onOpenFile,
   onOpenChangeDiff,
 }: NarrativeWorkstreamProps) {
+  const contentId = useId();
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const phases = useMemo(
     () => buildNarrativePhases(entries, results, toolImages, cwd),
     [cwd, entries, results, toolImages],
@@ -359,31 +362,51 @@ function NarrativeWorkstreamComponent({
 
   if (phases.length === 0) return null;
 
+  const [firstPhase] = phases;
+  // A single tool group already has a disclosure. Flat thought rows only
+  // need a shared control when there is more than one of them.
+  const hasSummary = phases.length > 1 || (firstPhase.toolCount === 0 && firstPhase.steps.length > 1);
+  const keepOpen = policy === 'keep-open' || density === 'detailed';
+  const isOpen = userOpen ?? (live || keepOpen);
   const activePhaseId = live
     ? ([...phases].reverse().find((phase) => phase.status === 'running') ?? phases.at(-1))?.id
     : undefined;
+  const groups = (!hasSummary || isOpen) && phases.map((phase) => (
+    <PhaseGroup
+      key={phase.id}
+      phase={phase}
+      results={results}
+      defaultOpen={live ? phase.id === activePhaseId : keepOpen}
+      live={live}
+      onOpenFile={onOpenFile}
+      onOpenChangeDiff={onOpenChangeDiff}
+    />
+  ));
 
   return (
     <section
       className={`narrative-stream${live ? ' is-live' : ''}`}
       aria-label="执行进展"
     >
-      {phases.map((phase) => {
-        const defaultOpen = live
-          ? phase.id === activePhaseId
-          : (policy === 'keep-open' || density === 'detailed');
-        return (
-          <PhaseGroup
-            key={phase.id}
-            phase={phase}
-            results={results}
-            defaultOpen={defaultOpen}
-            live={live}
-            onOpenFile={onOpenFile}
-            onOpenChangeDiff={onOpenChangeDiff}
-          />
-        );
-      })}
+      {hasSummary && (
+        <button
+          type="button"
+          className="narrative-group-trigger narrative-stream-summary"
+          aria-controls={contentId}
+          aria-expanded={isOpen}
+          onClick={() => setUserOpen(!isOpen)}
+        >
+          <span className="narrative-icon" aria-hidden="true"><ListTree /></span>
+          <span className="narrative-group-title">执行过程</span>
+          <span className="narrative-stream-count">{entries.length} 步</span>
+          <ChevronDown className="narrative-chevron" aria-hidden="true" />
+        </button>
+      )}
+      <div
+        className={`narrative-stream-content${hasSummary ? ' is-grouped' : ''}`}
+        id={contentId}
+        hidden={hasSummary && !isOpen}
+      >{groups}</div>
     </section>
   );
 }

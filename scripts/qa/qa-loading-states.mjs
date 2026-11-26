@@ -48,7 +48,7 @@ function holdStartup(theme, palette) {
 async function checkLaunchWriting(mark) {
   // Coordinates use the master mark's 64-unit viewBox, so this checks the painted
   // cursor center against the growing ink even when the UI changes display size.
-  const frames = await mark.evaluate(el => {
+  const { frames, waitingRepeats } = await mark.evaluate(el => {
     const symbol = el.querySelector('.launch-symbol').getBoundingClientRect();
     const scale = 64 / symbol.width;
     const beam = el.querySelector('.launch-beam');
@@ -56,7 +56,10 @@ async function checkLaunchWriting(mark) {
     const right = el.querySelector('.launch-leg-right');
     const cursor = el.querySelector('.launch-cursor');
     const word = el.querySelector('.launch-wordmark');
-    const duration = cursor.getAnimations()[0].effect.getTiming().duration;
+    const cursorAnimations = cursor.getAnimations();
+    const writing = cursorAnimations.find(animation => animation.animationName === 'launch-write-cursor');
+    const waiting = cursorAnimations.find(animation => animation.animationName === 'launch-waiting-cursor');
+    const duration = writing.effect.getTiming().duration;
     const animations = el.getAnimations({ subtree: true });
     animations.forEach(animation => animation.pause());
     const frames = {};
@@ -74,7 +77,7 @@ async function checkLaunchWriting(mark) {
         wordOpacity: Number(getComputedStyle(word).opacity),
       };
     }
-    return frames;
+    return { frames, waitingRepeats: waiting.effect.getTiming().iterations === Infinity };
   });
   const near = (actual, expected, message) => assert.ok(Math.abs(actual - expected) < 0.1, `${message}: ${actual} vs ${expected}`);
   for (const [t, x, y] of [[0, .25, 13], [24, 55.5, 13], [34, 14.5, 13], [53, 14.5, 53.75], [65, 42.75, 13], [82, 42.75, 53.75], [89, 60.375, 50.375]]) {
@@ -100,7 +103,10 @@ async function checkLaunchWriting(mark) {
   assert.equal(frames[89].cursorOpacity, 1);
   assert.equal(frames[89].wordOpacity, 1);
   assert.deepEqual(frames[95], frames[89], 'the finished signature holds');
-  assert.deepEqual(frames[125], frames[100], 'a slow startup keeps the finished mark');
+  const { cursorOpacity: initialOpacity, ...finishedMark } = frames[100];
+  const { cursorOpacity: laterOpacity, ...waitingMark } = frames[125];
+  assert.deepEqual(waitingMark, finishedMark, 'a slow startup keeps the finished mark in place');
+  assert.ok(waitingRepeats && laterOpacity < initialOpacity, 'the cursor keeps pulsing while startup waits');
 }
 
 async function openWorkspace(page) {
@@ -162,11 +168,13 @@ async function checkAlternateStartup(browser, origin, scenario) {
         await page.locator('.workspace-choice').waitFor({ state: 'attached' });
         assert.equal(await launch.getAttribute('data-leaving'), null);
         if (scenario === 'switch-reduced') await page.emulateMedia({ reducedMotion: 'reduce' });
-        else if (scenario === 'cancel') await launch.locator('.launch-cursor').evaluate(el => el.getAnimations()[0].cancel());
+        else if (scenario === 'cancel') await launch.locator('.launch-cursor').evaluate(el => {
+          el.getAnimations().find(animation => animation.animationName === 'launch-write-cursor').cancel();
+        });
         else {
           await launch.locator('.launch-cursor').evaluate(el => {
             window.launchQa.pauseFade = true;
-            el.getAnimations()[0].finish();
+            el.getAnimations().find(animation => animation.animationName === 'launch-write-cursor').finish();
           });
           await page.waitForFunction(() => window.launchQa.fadeAt !== undefined);
           await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -210,6 +218,8 @@ try {
     if (theme === 'dark') {
       await page.emulateMedia({ reducedMotion: 'reduce' });
       assert.equal(await launch.evaluate(el => el.getAnimations({ subtree: true }).filter(a => a.playState === 'running').length), 0);
+      // Give Chromium a paint after detaching the animated cursor layer.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       const firstFrame = await mark.screenshot();
       await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       assert.ok(firstFrame.equals(await mark.screenshot()), 'the reduced-motion mark stays still');
@@ -233,11 +243,12 @@ try {
     await launch.evaluate(observeLaunch);
     await mark.evaluate((el, fast) => {
       const animations = el.getAnimations({ subtree: true });
-      const cursor = el.querySelector('.launch-cursor').getAnimations()[0];
+      const cursor = el.querySelector('.launch-cursor').getAnimations()
+        .find(animation => animation.animationName === 'launch-write-cursor');
       window.launchQa.duration = cursor.effect.getTiming().duration;
       for (const animation of animations) {
         if (fast) { animation.pause(); animation.currentTime = 0; }
-        else animation.finish();
+        else if (animation.effect.getTiming().iterations !== Infinity) animation.finish();
       }
       cursor.finished.then(() => { window.launchQa.writtenAt = performance.now(); });
     }, fast);

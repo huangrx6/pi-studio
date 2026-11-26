@@ -70,7 +70,7 @@
   --right-leg: calc((42.75 - 60.375) * var(--unit));
   --cap: calc((13 - 50.375) * var(--unit));
   --foot: calc((53.75 - 50.375) * var(--unit));
-  --nib-color: color-mix(in srgb, var(--accent) 75%, var(--text));
+  color: color-mix(in srgb, var(--scheme-ocean) 75%, var(--text));
   clip-path: var(--pi-cursor-clip);
 }
 
@@ -92,7 +92,11 @@
   .launch-leg-left { animation: launch-write-left var(--launch-duration) var(--write-ease) both; }
   .launch-leg-right { animation: launch-write-right var(--launch-duration) var(--write-ease) both; }
   .launch-strokes::after { animation: launch-set-ink var(--launch-duration) step-end both; }
-  .launch-cursor { animation: launch-write-cursor var(--launch-duration) var(--write-ease) both; }
+  .launch-cursor {
+    animation:
+      launch-write-cursor var(--launch-duration) var(--write-ease) both,
+      launch-waiting-cursor 1.4s ease-in-out var(--launch-duration) infinite;
+  }
   .launch-wordmark {
     animation: launch-wordmark-in var(--launch-duration) cubic-bezier(.18,.5,.25,1) both;
   }
@@ -116,7 +120,7 @@
 }
 
 @keyframes launch-write-cursor {
-  from { transform: translate(var(--beam-start), var(--cap)); color: var(--nib-color); }
+  from { transform: translate(var(--beam-start), var(--cap)); }
   24% {
     transform: translate(var(--beam-end), var(--cap));
     opacity: 1;
@@ -133,10 +137,14 @@
   65% { transform: translate(var(--right-leg), var(--cap)); opacity: 1; }
   82% {
     transform: translate(var(--right-leg), var(--foot));
-    color: var(--nib-color);
     animation-timing-function: var(--lift-ease);
   }
-  89%, to { transform: translate(0, 0); color: var(--text); }
+  89%, to { transform: translate(0, 0); }
+}
+
+@keyframes launch-waiting-cursor {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .3; }
 }
 
 @keyframes launch-wordmark-in {

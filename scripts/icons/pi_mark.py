@@ -3,6 +3,7 @@
 from io import BytesIO
 from pathlib import Path
 import struct
+from xml.etree import ElementTree
 
 import cairosvg
 from PIL import Image, ImageDraw
@@ -17,6 +18,16 @@ def mark_alpha(size: int) -> Image.Image:
     return Image.open(BytesIO(png)).convert("RGBA").getchannel("A")
 
 
+def app_mark(size: int) -> Image.Image:
+    svg = ElementTree.parse(SOURCE).getroot()
+    svg.set("fill", "#f7f7f4")
+    cursor = svg.find(".//*[@id='cursor']")
+    assert cursor is not None, "The Pi mark must contain a cursor"
+    cursor.set("fill", "#4b8dff")
+    png = cairosvg.svg2png(bytestring=ElementTree.tostring(svg), output_width=size, output_height=size)
+    return Image.open(BytesIO(png)).convert("RGBA")
+
+
 def write_app_icons() -> None:
     # Preserve macOS margins and the approved 25:40 mark-to-tile proportion.
     size, tile, mark = 1024, 824, 515
@@ -26,14 +37,14 @@ def write_app_icons() -> None:
     ImageDraw.Draw(image).rounded_rectangle(
         (margin, margin, size * scale - margin - 1, size * scale - margin - 1),
         radius=tile * scale // 4,
-        fill="#242926",
+        fill="#101012",
     )
     # At 16pt, align the fine strokes to the pixel grid and give the cursor
     # enough coverage to remain visible in the Finder list at both densities.
     finder = image.resize((128, 128), Image.Resampling.LANCZOS)
-    finder.paste("#f7f7f4", (28, 27), mark_alpha(75))
+    finder.alpha_composite(app_mark(75), (28, 27))
     inset = (size - mark) * scale // 2
-    image.paste("#f7f7f4", (inset, inset), mark_alpha(mark * scale))
+    image.alpha_composite(app_mark(mark * scale), (inset, inset))
     icon = image.resize((size, size), Image.Resampling.LANCZOS)
     icon.save(ASSETS / "icon.png", optimize=True)
 

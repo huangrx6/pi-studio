@@ -15,7 +15,9 @@ export function useLaunchScreen(viewReady: boolean, wallpaperUrl: string | undef
     const reveal = async () => {
       // This animation starts at first paint. A ready workspace waits only for
       // the part of the writing and its final hold that is still on screen.
-      const writing = screen.querySelector('.launch-cursor')?.getAnimations()[0];
+      const writing = screen.querySelector('.launch-cursor')?.getAnimations().find(
+        animation => animation instanceof CSSAnimation && animation.animationName === 'launch-write-cursor',
+      );
       if (writing && !reducedMotion.matches) {
         await writing.finished.catch(() => {}); // Reduced motion cancels the CSS animation.
       }
