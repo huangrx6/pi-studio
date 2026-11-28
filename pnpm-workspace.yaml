@@ -3,6 +3,9 @@ packages:
 # Local macOS releases build both Intel and Apple Silicon bundles.
 supportedArchitectures:
   cpu: [current, arm64, x64]
+# Use the bounded binary probe when macOS signing inspects bundled resources.
+overrides:
+  '@electron/osx-sign@1.3.1>isbinaryfile': 5.0.7
 # Skip the Win7-only folder lookup on Studio's supported Windows versions.
 # Upstream fix: electron-userland/electron-builder#9564.
 patchedDependencies:
