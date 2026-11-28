@@ -834,13 +834,8 @@ private final class VirtualStageManager {
       let onscreen = (row[kCGWindowIsOnscreen as String] as? Bool) ?? false
       let alpha = (row[kCGWindowAlpha as String] as? Double) ?? 1.0
       let title = (row[kCGWindowName as String] as? String) ?? ""
-      let b = row[kCGWindowBounds as String] as? [String: Any] ?? [:]
-      let rect = CGRect(
-        x: (b["X"] as? CGFloat) ?? CGFloat((b["X"] as? Double) ?? 0),
-        y: (b["Y"] as? CGFloat) ?? CGFloat((b["Y"] as? Double) ?? 0),
-        width: (b["Width"] as? CGFloat) ?? CGFloat((b["Width"] as? Double) ?? 0),
-        height: (b["Height"] as? CGFloat) ?? CGFloat((b["Height"] as? Double) ?? 0)
-      )
+      guard let bounds = row[kCGWindowBounds as String] as? NSDictionary,
+            let rect = CGRect(dictionaryRepresentation: bounds) else { return nil }
       return (pid,rect,onscreen,alpha,title,(row[kCGWindowSharingState as String] as? Int ?? 0) != 0)
     }
     return nil
@@ -985,13 +980,8 @@ private final class VirtualStageManager {
       let layer = (row[kCGWindowLayer as String] as? Int) ?? 0
       // Skip system cursor / Dock / menu-bar chrome layers above normal app popups.
       if layer >= 1000 { continue }
-      guard let b = row[kCGWindowBounds as String] as? [String: Any] else { continue }
-      let rect = CGRect(
-        x: (b["X"] as? CGFloat) ?? CGFloat((b["X"] as? Double) ?? 0),
-        y: (b["Y"] as? CGFloat) ?? CGFloat((b["Y"] as? Double) ?? 0),
-        width: (b["Width"] as? CGFloat) ?? CGFloat((b["Width"] as? Double) ?? 0),
-        height: (b["Height"] as? CGFloat) ?? CGFloat((b["Height"] as? Double) ?? 0)
-      )
+      guard let bounds = row[kCGWindowBounds as String] as? NSDictionary,
+            let rect = CGRect(dictionaryRepresentation: bounds) else { continue }
       guard rect.width >= 12 && rect.height >= 12 && rect.contains(point) else { continue }
       let ownerPid = (row[kCGWindowOwnerPID as String] as? Int32) ?? 0
       if wid == mainWindowId {
