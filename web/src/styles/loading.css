@@ -12,8 +12,8 @@
 .loading-placeholder,
 .loading-state { animation: loading-appear var(--motion-expand) var(--loading-delay) backwards; }
 @keyframes loading-appear {
-  from { opacity: 0; transform: translateY(3px); }
-  to { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .loading-state {
@@ -23,7 +23,7 @@
   align-items: center;
   gap: var(--space-1);
   color: var(--loading);
-  font-size: var(--text-sm);
+  font-size: var(--text-description);
   font-weight: var(--weight-regular);
   line-height: var(--leading-normal);
 }

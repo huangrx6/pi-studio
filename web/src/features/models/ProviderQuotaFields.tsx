@@ -116,7 +116,7 @@ function QuotaMappingFields({ config, providerId, apiKey, onChange }: {
       <InfoHint label="每个余额或周期单独添加一项。返回字段路径支持数组下标，或用 limits[period=week].remaining 匹配周期，多个条件用 & 连接。" /></div>
       <button type="button" className="settings-outline" disabled={inspecting || !providerId.trim() || !config.endpoint.trim()} onClick={inspect}>读取接口字段</button>
     </div>
-    <p className="provider-editor-note">每个余额或周期添加一项，最多选择两项显示在扩展卡片中。</p>
+    <p className="provider-editor-note">每个余额或周期添加一项，最多选择两项显示在额度摘要中。</p>
     {inspecting && <LoadingState>正在读取接口字段</LoadingState>}
     {inspectMessage && <small role="status">{inspectMessage}</small>}
     {suggestions.length > 0 && <Select label="选择接口返回字段" placeholder="选择接口返回字段…" value="" options={suggestions.map(item => ({ value: item.path, label: item.path }))}
@@ -137,7 +137,7 @@ function QuotaMappingFields({ config, providerId, apiKey, onChange }: {
         </div>
         <div className="quota-field-footer"><label className="quota-summary-option">
           <input type="checkbox" checked={field.summary} disabled={!field.summary && summaryCount >= 2} onChange={e => update(i, { summary: e.target.checked })} />
-          显示在扩展卡片中
+          显示在额度摘要中
         </label><button type="button" className="icon-button" title="移除此字段" aria-label={`移除额度字段 ${i + 1}`} disabled={fields.length === 1} onClick={() => onChange(fields.filter((_, n) => n !== i))}><Trash2 /></button></div>
       </div>)}
     </div>

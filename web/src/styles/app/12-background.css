@@ -37,17 +37,14 @@
 .app > .sidebar,
 .app > .content-region { z-index: 1; }
 
-/* Cards and persistent work surfaces share one glass layer. They do not add another
- * backdrop blur; the shell already softens the media, which keeps long pages cheap. */
-
-/* Full work panes need a quieter but more legible glass layer than inset cards. */
+/* File workspaces follow the canvas behind the conversation. */
 .app.has-custom-background :is(
   .file-toolbar,
   .file-code,
   .changes-view,
   .diff-view
  ) {
-  background: var(--surface-raised);
+  background: var(--canvas-surface, var(--surface-canvas));
   border-color: var(--border);
 }
 /* 这些视图与对话区共用同一层画布：背景交给 23-wallpaper-inside 统一透出，
@@ -71,16 +68,13 @@
   border-color: var(--transparent);
 }
 
-/* 所有单值控件共用同一块玻璃表面：输入框、多行文本、自定义下拉、步进器和分段轨。
-   自定义下拉是 <button>，漏掉它就会在背景图下变成唯一一块不透明黑底。 */
+/* 壁纸上的表单控件使用与普通主题相同的底色。 */
 .app.has-custom-background :is(
   .settings-content input:not([type="checkbox"]):not([type="radio"], [type="range"]),
   .settings-content select,
   .settings-content textarea:not(:where(.quota-sample-input)),
   .settings-content .pi-select-trigger,
   .settings-content .settings-stepper,
-  .settings-segments,
-  .settings-tabs,
   .dialog-body input:not([type="checkbox"], [type="range"]),
   .dialog-body select,
   .dialog-body textarea:not(:where(.quota-sample-input)),
@@ -90,31 +84,21 @@
   .settings-search,
   .search-field
 ) {
-  background: var(--surface-floating);
+  background: var(--surface-raised);
   border-color: var(--border-strong);
 }
 
-/* 悬停、展开与聚焦保持同一块玻璃底，只把边框换成焦点色；否则控件会在交互瞬间
-   跳回不透明表面。 */
+/* 聚焦和展开时由控件描边提示状态。 */
 .app.has-custom-background .settings-content :is(
   .pi-select-trigger,
   .settings-stepper
 ):is(:hover, :focus-visible, :focus-within, .is-open) {
-  background: var(--surface-floating);
-}
-
-/* 下拉面板会盖在照片上，读文字优先：用更实的卡片玻璃，而不是控件层。 */
-.app.has-custom-background .pi-select-menu {
-  background: var(--surface-floating);
-  border-color: var(--border-strong);
+  background: var(--surface-raised);
 }
 
 .app.has-custom-background .composer-editor {
   background: var(--transparent);
 }
-
-/* Hover and selection are neutral glass states shared by every control. Accent moves
- * to the icon, check mark and border instead of painting a second opaque rectangle. */
 
 .app.has-custom-background :is(.workspace-choice, .composer-mode):is(
   :hover,
@@ -135,33 +119,6 @@
 }
 
 
-.app.has-custom-background :is(
-  .model-capability-options > label
-).is-selected {
-  background: var(--background-accent-surface);
-  border-color: var(--accent-border);
-}
-
-/* Menus, dialogs and detail layers stay nearly opaque. They float above arbitrary
- * media and must remain readable even when the shell wash is intentionally low. */
-.app.has-custom-background :is(
-  .model-popover,
-  .composer-picker,
-  .detail-dialog,
-  .settings-dialog,
-  .pi-select-menu,
-  .file-actions-menu,
-  .sidebar-action-menu,
-  .popover-surface,
-  .confirm-card,
-  .extension-custom-card,
-  .action-menu,
-  .changes-jump
-) {
-  background: var(--surface-floating);
-  border-color: var(--border-strong);
-}
-
 /* Shared media preview and errors; the appearance feature owns its layout. */
 .background-media-preview {
   position: relative;
@@ -174,4 +131,4 @@
   background: var(--surface-soft);
 }
 .background-media-preview-content { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: center center; }
-.background-media-preview-kind { position: absolute; right: var(--space-2); bottom: var(--space-2); padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--radius-round); background: var(--overlay-surface); color: var(--muted); font-size: var(--text-xs); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.background-media-preview-kind { position: absolute; right: var(--space-2); bottom: var(--space-2); padding: 3px 7px; border: 1px solid var(--border); border-radius: var(--radius-round); background: var(--overlay-surface); color: var(--muted); font-size: var(--text-caption); }

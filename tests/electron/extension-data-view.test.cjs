@@ -90,20 +90,16 @@ function ipcRendererTarget(id = 1) {
   });
 }
 
-function hostSnapshot({ permission = true, available = true } = {}) {
-  const sourceId = 'builtin:studio-metrics/live';
+function metricsExtension(id, permission = true) {
+  if (id !== 'builtin:studio-metrics') return undefined;
   return {
-    extensions: [{
-      id: 'builtin:studio-metrics',
-      scope: 'builtin',
-      available,
-      dataSourceIds: [sourceId],
-      manifest: {
-        id: 'studio-metrics',
-        permissions: permission ? ['ui.panels', 'ui.data'] : ['ui.panels'],
-        contributes: { dataSources: [{ id: 'live' }] },
-      },
-    }],
+    id,
+    scope: 'builtin',
+    manifest: {
+      id: 'studio-metrics',
+      permissions: permission ? ['ui.panels', 'ui.data'] : ['ui.panels'],
+      contributes: { dataSources: [{ id: 'live' }] },
+    },
   };
 }
 
@@ -310,6 +306,24 @@ test('closes every subscription for a destroyed renderer or extension', async ()
   assert.equal(disposed, 2);
 });
 
+test('only active built-in device providers can retain their subscriptions across a workspace reload', async () => {
+  const service = new ExtensionDataViewService({ normalizeContentList });
+  let enabled = true;
+  const provider = { read: () => [], retainOnReload: () => enabled };
+  for (const scope of ['builtin', 'user', 'project']) {
+    await service.open({ target: target(), sourceId: scope + ':power/control', owner: { manifestId: 'power', scope } }, provider);
+  }
+  await service.closeAll({ reloading: true });
+  assert.deepEqual([...service.subscriptions.values()].map(sub => sub.owner.scope), ['builtin']);
+  enabled = false;
+  await service.closeAll({ reloading: true });
+  assert.equal(service.subscriptions.size, 0);
+  enabled = true;
+  await service.open({ target: target(), sourceId: 'builtin:power/control', owner: { manifestId: 'power', scope: 'builtin' } }, provider);
+  await service.closeAll();
+  assert.equal(service.subscriptions.size, 0);
+});
+
 test('registered services close subscriptions for one extension or all extensions', async () => {
   const first = target(41);
   const second = target(42);
@@ -433,7 +447,7 @@ test('IPC validates ui.data, opens the runtime provider and closes on renderer d
       },
     },
     resolveRuntime: async () => runtime,
-    extensionHostSnapshot: () => hostSnapshot(),
+    availableExtensionRow: metricsExtension,
   });
 
   const opened = await handlers.get('pi:extension-data-view-open')({
@@ -444,6 +458,10 @@ test('IPC validates ui.data, opens the runtime provider and closes on renderer d
   });
   assert.equal(opened.snapshot.content[0].text, 'live metrics');
   assert.equal(opened.snapshot.sourceId, 'builtin:studio-metrics/live');
+  for (const sourceId of ['builtin:studio-metrics/unknown', 'builtin:other/live']) {
+    await assert.rejects(handlers.get('pi:extension-data-view-open')({ sender: renderer }, { sourceId }),
+      error => error.code === 'DATA_SOURCE_FORBIDDEN');
+  }
 
   renderer.destroyed = true;
   renderer.emit('destroyed');
@@ -479,7 +497,7 @@ test('IPC forwards the current model and session context into live data provider
         'builtin:studio-metrics/live': provider,
       },
     }),
-    extensionHostSnapshot: () => hostSnapshot(),
+    availableExtensionRow: metricsExtension,
     conversationSnapshot: async () => ({
       id: 'session-context',
       durableSessionId: '42',
@@ -522,7 +540,7 @@ test('IPC rejects data sources whose extension lacks ui.data', async () => {
         },
       },
     }),
-    extensionHostSnapshot: () => hostSnapshot({ permission: false }),
+    availableExtensionRow: id => metricsExtension(id, false),
   });
 
   await assert.rejects(
@@ -552,7 +570,7 @@ test('IPC prefers the host provider over a colliding runtime fallback', async ()
       },
     },
     resolveRuntime: async () => runtime,
-    extensionHostSnapshot: () => hostSnapshot(),
+    availableExtensionRow: metricsExtension,
     extensionDataSource: (sourceId) => (
       sourceId === 'builtin:studio-metrics/live'
         ? {

@@ -11,7 +11,7 @@
   min-width: 0;
   margin: var(--space-3) 0 var(--space-4);
   color: var(--text-2);
-  font-size: max(var(--text-13), calc(var(--chat-font-size, 15px) * 0.9));
+  font-size: var(--chat-text-detail);
   line-height: var(--leading-body);
 }
 
@@ -128,7 +128,7 @@
 .narrative-stream-count {
   flex: none;
   color: var(--text-3);
-  font-size: var(--text-xs);
+  font-size: var(--chat-text-caption);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -158,17 +158,19 @@
   min-width: 0;
 }
 
+.narrative-branch[hidden] {
+  display: none;
+}
+
 .narrative-step-thought {
   margin: 2px 0 var(--space-1);
+  padding: 0 0 0 24px;
+  height: calc(1em * var(--leading-relaxed) * 2);
   color: var(--text-3);
-  font-size: var(--text-13);
+  font-size: var(--text-body);
   line-height: var(--leading-relaxed);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
-  padding-left: 24px;
 }
 
 .narrative-earlier-btn {
@@ -178,7 +180,7 @@
   background: transparent;
   color: var(--text-3);
   font-family: var(--font);
-  font-size: var(--text-xs);
+  font-size: var(--text-label);
   cursor: pointer;
   transition: color var(--transition-fast);
 }
@@ -293,7 +295,7 @@
 
 .narrative-step-detail.is-mono {
   font-family: var(--mono);
-  font-size: var(--text-13);
+  font-size: var(--text-code);
 }
 
 .narrative-inline-diff {
@@ -302,7 +304,7 @@
   gap: 5px;
   flex: none;
   font-family: var(--mono);
-  font-size: var(--text-13);
+  font-size: var(--text-code);
   font-variant-numeric: tabular-nums;
 }
 
@@ -314,7 +316,7 @@
 }
 
 .narrative-inline-diff.is-clickable:hover {
-  background: var(--conversation-hover-surface, var(--surface-hover));
+  background: var(--surface-hover);
 }
 
 .narrative-inline-diff.is-clickable:focus-visible {
@@ -358,7 +360,7 @@
   border: 1px solid var(--divider);
   border-left: 2px solid color-mix(in srgb, var(--accent) 46%, var(--divider));
   border-radius: var(--radius-control);
-  background: var(--conversation-reading-surface, var(--surface-soft));
+  background: var(--surface-raised);
 }
 
 .narrative-thought-md {
@@ -367,7 +369,7 @@
 
 .narrative-thought-md .markdown {
   color: var(--text-2);
-  font-size: max(var(--text-13), calc(var(--chat-font-size, 15px) * 0.9));
+  font-size: var(--chat-text-detail);
   line-height: var(--leading-relaxed);
 }
 
@@ -386,9 +388,8 @@
 .narrative-thought-md .markdown code {
   padding: 1px 6px;
   border-radius: var(--radius-tag);
-  background: color-mix(in srgb, var(--text-1) 6%, transparent);
+  background: var(--inline-code-bg);
   color: color-mix(in srgb, var(--accent-foreground) 72%, var(--text-1));
-  font-size: 0.88em;
 }
 
 .narrative-thought-md .markdown strong {
@@ -399,7 +400,7 @@
 .narrative-muted-note {
   margin: 0;
   color: var(--text-3);
-  font-size: var(--text-xs);
+  font-size: var(--text-description);
 }
 
 /* Inline screenshot strip under verification steps */
@@ -419,7 +420,7 @@
   overflow: hidden;
   border: 1px solid var(--divider);
   border-radius: var(--radius-control);
-  background: var(--conversation-reading-surface, var(--surface-soft));
+  background: var(--surface-raised);
   cursor: zoom-in;
   transition: transform var(--transition-fast), border-color var(--transition-fast);
 }
@@ -473,9 +474,9 @@
   padding: 0 var(--space-2);
   border: 1px solid var(--divider);
   border-radius: var(--radius-control);
-  background: var(--conversation-inset-surface, var(--surface-soft));
+  background: var(--surface-soft);
   color: var(--text-2);
-  font-size: var(--text-xs);
+  font-size: var(--text-caption);
   cursor: pointer;
 }
 
@@ -493,7 +494,7 @@
   padding-top: var(--space-3);
   border-top: 1px solid var(--divider);
   color: color-mix(in srgb, var(--live) 72%, var(--text));
-  font-size: max(var(--text-13), calc(var(--chat-font-size, 15px) * 0.9));
+  font-size: var(--chat-text-detail);
   line-height: var(--leading-normal);
 }
 

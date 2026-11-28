@@ -1013,7 +1013,8 @@ test('built-in responsibilities use independent runtimes and explicit dependency
   assert.equal(metricsPanels['metrics-chip'].color, 'info');
   assert.equal(metricsPanels['metrics-chip'].content[0].sourceId, 'builtin:studio-metrics/summary');
   assert.equal(metricsPanels['metrics-chip'].details, 'metrics-detail');
-  assert.equal(metricsPanels['metrics-chip'].visibility, 'while-active');
+  assert.equal(metricsPanels['metrics-chip'].visibility ?? 'always', 'always');
+  assert.equal(metricsPanels['metrics-detail'].slot, 'status.detail');
   const known = new Set(BUILTIN_MANIFESTS.map((manifest) => `builtin:${manifest.id}`));
   for (const manifest of BUILTIN_MANIFESTS) {
     for (const requirement of manifest.requires || []) {

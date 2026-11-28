@@ -1,3 +1,4 @@
+import { openToolPanel } from './fixtures/tool-panel.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -48,8 +49,14 @@ try {
   const state = await page.evaluate(() => window.piApi.state());
   assert.ok(Array.isArray(state.workspaces), 'The installed renderer must load Studio state');
 
-  await page.evaluate(async cwd => {
-    const id = 'windows-installer-qa';
+  const tools = await openToolPanel(app, page, () => page.evaluate(async cwd => {
+    await window.piApi.setToolWindowContext({key:'studio', title:'安装包验证', cwd});
+    await window.piApi.openToolWindow({kind:'terminal'});
+  }, profile));
+  await tools.locator('.terminal-panel').waitFor();
+  await tools.evaluate(async cwd => {
+    const state = await window.toolWindowApi.state();
+    const id = state.groups.find(group => group.context.key === state.key).active;
     window.__windowsPtyOutput = '';
     window.piApi.onTerminalEvent(event => {
       if (event.id === id && event.type === 'data') window.__windowsPtyOutput += event.data;
@@ -57,8 +64,11 @@ try {
     await window.piApi.terminalCreate({ id, cwd, cols: 96, rows: 24 });
     await window.piApi.terminalWrite(id, 'echo PI_STUDIO_%PI_STUDIO_TERMINAL%_OK\r');
   }, profile);
-  await page.waitForFunction(() => window.__windowsPtyOutput.includes('PI_STUDIO_1_OK'), undefined, { timeout: 30_000 });
-  await page.evaluate(() => window.piApi.terminalClose('windows-installer-qa'));
+  await tools.waitForFunction(() => window.__windowsPtyOutput.includes('PI_STUDIO_1_OK'), undefined, { timeout: 30_000 });
+  await tools.evaluate(async () => {
+    const state = await window.toolWindowApi.state();
+    await window.toolWindowApi.command(state.key, {kind:'close', id:state.groups.find(group => group.context.key === state.key).active});
+  });
   console.log(`Windows x64 v${version}: installed app, renderer, terminal, and update files verified`);
 } finally {
   try {

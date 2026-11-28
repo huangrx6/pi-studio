@@ -76,7 +76,7 @@ try {
     });
   }, blockedUrl);
 
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   const navigation = page.locator('.settings-navigation');
   await navigation.getByRole('button', { name: '使用量', exact: true }).click();
   const failure = page.locator('.settings-content .deferred-settings-state[role="alert"]');
@@ -99,27 +99,27 @@ try {
   await failure.getByRole('button', { name: '打开通用设置', exact: true }).click();
   await page.locator('.settings-content').getByRole('heading', { name: '通用', exact: true }).waitFor();
   assert.equal(await failure.count(), 0, 'changing pages resets only the failed page boundary');
-  await navigation.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await composer.waitFor({ state: 'visible' });
   await assertDraft(composer, 'draft survives opening general settings and returning');
 
   // Removing the network failure does not clear React.lazy's cached rejection.
   // Re-entering the failed page must remain recoverable, not blank the app.
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await navigation.getByRole('button', { name: '使用量', exact: true }).click();
   await failure.waitFor();
-  await failure.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.keyboard.press('Escape');
   await composer.waitFor({ state: 'visible' });
-  await assertDraft(composer, 'failure fallback returns directly to the intact draft');
+  await assertDraft(composer, 'Escape on the failed page restores the draft');
 
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await navigation.getByRole('button', { name: '快捷键', exact: true }).click();
   await page.locator('.settings-content').getByRole('heading', { name: '快捷键', exact: true }).waitFor();
   await page.getByRole('list', { name: '快捷键绑定' }).getByRole('button', { name: /^命令面板：/ }).waitFor();
   assert.equal(await failure.count(), 0, 'another deferred page can load after the first page fails');
   assert.equal(await page.locator('.shortcut-row').count() > 0, true, 'the other page rendered its real controls');
   await page.screenshot({ path: path.join(output, '02-other-lazy-page.png'), animations: 'disabled' });
-  await navigation.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await composer.waitFor({ state: 'visible' });
   await assertDraft(composer, 'draft survives navigating to another deferred page');
 

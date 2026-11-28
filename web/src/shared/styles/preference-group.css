@@ -11,7 +11,7 @@
 }
 .preference-group-head > div:first-child { flex: 1 1 12rem; min-width: 0; }
 .preference-group-head h2, .preference-disclosure-heading { margin: 0; }
-.preference-group-head p { margin: var(--space-1) 0 0; color: var(--muted); font: var(--settings-description-font); }
+.preference-group-head p { margin: var(--space-1) 0 0; color: var(--muted); font: var(--font-description); }
 .preference-group-actions { margin-inline-start: auto; display: flex; flex-wrap: wrap; max-width: 100%; align-items: center; gap: var(--space-2); }
 .preference-group-body { padding-inline: var(--settings-group-inset); }
 .preference-group-body:empty { display: none; }
@@ -38,7 +38,7 @@
 .preference-disclosure .preference-disclosure-heading { min-height: var(--space-6); }
 .preference-current-value {
   color: var(--muted);
-  font: var(--settings-preference-body-font);
+  font: var(--font-body);
   text-align: end;
   overflow-wrap: anywhere;
 }
@@ -72,12 +72,12 @@
   min-height: var(--settings-row-height);
   padding-block: var(--settings-field-gap);
   border-top: 1px solid var(--divider);
-  font: var(--settings-preference-body-font);
+  font: var(--font-body);
 }
 .preference-row-copy { min-width: 0; overflow-wrap: anywhere; }
 .preference-row:has(.preference-row-copy p) { padding-block: var(--settings-row-padding); }
-.preference-row-copy h3 { margin: 0; font: var(--settings-label-font); color: var(--text); }
-.preference-row-copy p { margin: var(--space-1) 0 0; font: var(--settings-description-font); color: var(--muted); }
+.preference-row-copy h3 { margin: 0; font: var(--font-label); color: var(--text); }
+.preference-row-copy p { margin: var(--space-1) 0 0; font: var(--font-description); color: var(--muted); }
 .preference-row-control {
   display: flex; align-items: center; justify-content: flex-end;
   min-width: 0; max-width: 100%; gap: var(--space-2); flex-wrap: wrap;

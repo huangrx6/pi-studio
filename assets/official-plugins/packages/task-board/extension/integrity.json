@@ -9,8 +9,8 @@
     },
     {
       "path": "pi-studio.extension.json",
-      "sha256": "63a638e6d06026a037e7c3fb6a2efb0e120d8604ef0ee54257d941a868041cc9",
-      "size": 2394
+      "sha256": "f5b12e3556338d4f577b5ef96c264a8e5233c70dfcb3a44b461f8e533639a1c2",
+      "size": 2396
     },
     {
       "path": "store.mjs",
@@ -19,23 +19,23 @@
     },
     {
       "path": "ui/app.js",
-      "sha256": "737bce4c03b1673d1a634bce303edcd000ecfbbcbd07b62f4564ef994829fd28",
-      "size": 46484
+      "sha256": "f8772a70b017f137592de3e1e0c9623b46301661c88ac068d7f0b63939ff2c88",
+      "size": 47450
     },
     {
       "path": "ui/controls.js",
-      "sha256": "0f1efc25b4e82a691c6a6faf572b9c8389d989a77c22e26a23d84b125ba4b1c4",
-      "size": 16846
+      "sha256": "bb1cac375cb91b363a601ced44147890e3c57842fa9907903e4e840702802ce6",
+      "size": 16852
     },
     {
       "path": "ui/index.html",
-      "sha256": "339ee23ccec0bd4bbfcd4b2316e0938d6248109028a5a1b0f2210c8a20ac9150",
-      "size": 393
+      "sha256": "d58495c212ef32b0014e9a68acb20b01bad1ffe24a47c6127cbdf67c1f8ef6ea",
+      "size": 491
     },
     {
       "path": "ui/styles.css",
-      "sha256": "31b42b5220e41290a52b33e46c5a79b5ad67e60d1f23c013e0d05149e3724c97",
-      "size": 22815
+      "sha256": "11baba00429afba07daba5e1f0f9dbe9f02124908421adaa00acec685a1f05d4",
+      "size": 26485
     }
   ]
 }

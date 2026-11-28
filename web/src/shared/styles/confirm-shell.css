@@ -5,24 +5,47 @@ dialog.confirm-native-dialog.native-dialog-motion { background: transparent; }
 dialog.confirm-native-dialog .confirm-card { padding: var(--settings-group-gap); border-radius: var(--radius-panel); }
 .confirm-native-dialog .confirm-head { gap: var(--space-3); }
 .confirm-native-dialog .confirm-card .confirm-heading h2 {
-  font: var(--weight-semibold) var(--text-lg)/var(--leading-tight) var(--font);
+  font: var(--font-heading);
   overflow-wrap: anywhere;
 }
 .confirm-native-dialog .confirm-close { width: var(--settings-icon-hit); height: var(--settings-icon-hit); }
 .confirm-native-dialog .confirm-body { margin-top: var(--space-3); }
-.confirm-native-dialog .confirm-text { font: var(--settings-preference-body-font); }
-.confirm-native-dialog .confirm-actions { flex-wrap: wrap; margin-top: var(--settings-group-gap); }
+.confirm-native-dialog .confirm-text { font: var(--font-body); }
+.confirm-native-dialog .confirm-actions { flex-wrap: wrap; margin-top: var(--space-5); }
 .confirm-native-dialog .confirm-actions > button {
-  min-height: var(--settings-control-height);
+  min-width: 0;
+  min-height: var(--control-sm);
   height: auto;
-  padding: var(--space-1) var(--space-4);
-  font: var(--settings-label-font);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+}
+.confirm-native-dialog .confirm-cancel {
+  border-color: var(--border);
+  background: transparent;
+  color: var(--text-2);
+}
+.confirm-native-dialog .confirm-cancel:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.confirm-native-dialog .confirm-accept:not(.is-danger) {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+.confirm-native-dialog .confirm-accept:not(.is-danger):hover:not(:disabled) {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+  opacity: 0.88;
 }
 
 .confirm-explanation,
 .confirm-risk {
   margin: var(--space-3) 0 0;
-  font: var(--settings-description-font);
+  font: var(--font-description);
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -58,7 +81,7 @@ dialog.confirm-native-dialog .confirm-card { padding: var(--settings-group-gap);
   padding-top: var(--space-3);
   border-top: 1px solid var(--divider);
   color: var(--muted);
-  font: var(--settings-description-font);
+  font: var(--font-description);
 }
 
 .confirm-remember > span {
@@ -78,15 +101,81 @@ dialog.confirm-native-dialog .confirm-card { padding: var(--settings-group-gap);
   max-width: 100%;
   height: var(--settings-control-height);
   padding-inline: 10px 8px;
-  font: var(--settings-preference-body-font);
-}
-
-.app.has-custom-background .confirm-remember .pi-select-trigger {
-  border-color: var(--background-border-strong);
-  background: var(--background-control-surface);
+  font: var(--font-label);
 }
 
 @media (max-width: 640px) {
   .confirm-remember { grid-template-columns: minmax(0, 1fr); align-items: stretch; }
   .confirm-remember-select { width: 100%; }
+}
+
+.confirm-card-desktop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.confirm-desktop-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.confirm-desktop-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  border-radius: var(--radius-tag);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.confirm-desktop-badge svg {
+  width: var(--icon-sm);
+  height: var(--icon-sm);
+}
+
+.confirm-desktop-kicker {
+  flex: 1;
+  font: var(--weight-medium) var(--text-caption)/var(--leading-tight) var(--font);
+  color: var(--muted);
+}
+
+.confirm-desktop-body h2 {
+  margin: 0;
+  font: var(--font-heading);
+  color: var(--text);
+}
+
+.confirm-desktop-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.confirm-desktop-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.confirm-desktop-always {
+  min-height: var(--settings-control-height);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-round);
+  background: var(--surface-raised);
+  color: var(--text);
+  font: var(--font-label);
+  cursor: pointer;
+}
+
+.confirm-desktop-always:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
 }

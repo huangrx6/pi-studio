@@ -1,4 +1,4 @@
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { useLayoutEffect, useRef, type KeyboardEvent } from 'react';
 import { isComposingKey } from './keyboard-navigation';
 import './styles/modal-motion.css';
 
@@ -9,7 +9,7 @@ export function useModalDialog() {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const composingEscape = useRef(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const dialog = dialogRef.current!;
     const previous = document.activeElement as HTMLElement | null;
     // Chromium can dispatch a trusted native cancel even when Escape belongs to IME.

@@ -8,7 +8,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 
 .messages { gap: 36px; }
 .message.user { align-items: flex-end; }
-.user-bubble { border: 0; border-radius: var(--radius-panel); background: var(--conversation-control-surface, var(--surface-soft)); box-shadow: none; }
+.user-bubble { border-radius: var(--radius-panel); }
 /* 助手回合：头像放在左上角，正文与输入框同宽（不再为轨道让出 44px 缩进），
    footer 与 composer 共用同一个内容宽度。 */
 .assistant-turn { position: relative; display: block; animation: assistant-turn-in .32s cubic-bezier(.22,.8,.2,1) both; }
@@ -16,28 +16,26 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .assistant-turn-rail::after { display: none; }
 .assistant-turn-head { display: flex; align-items: center; gap: 8px; min-height: 24px; margin-bottom: 10px; padding-left: 30px; }
 .assistant-turn-main { min-width: 0; }
-.assistant-orb { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: var(--radius-tag); background: transparent; color: var(--text-1); font: var(--weight-semibold) var(--text-base)/1 var(--font); box-shadow: none; }
-.assistant-orb .pi-mark { width: 18px; }
+.assistant-orb { display: grid; place-items: center; width: 22px; height: 22px; border: 0; border-radius: var(--radius-tag); background: transparent; color: var(--text-1); font: var(--weight-semibold) var(--text-body)/1 var(--font); box-shadow: none; }
+.assistant-orb .pi-mark { width: calc(var(--icon-md) + 2px); }
 .assistant-turn.is-live .assistant-orb { border: 0; background: transparent; color: var(--accent-foreground); box-shadow: none; }
-.assistant-turn-name { color: var(--text); font-family: var(--font); font-size: var(--text-base); font-weight: var(--weight-semibold); letter-spacing: .01em; line-height: 22px; }
-.assistant-turn-status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--text-13); font-weight: var(--weight-medium); line-height: 20px; }
+.assistant-turn-name { color: var(--text); font-family: var(--font); font-size: var(--text-label); font-weight: var(--weight-semibold); letter-spacing: .01em; line-height: 22px; }
+.assistant-turn-status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: var(--text-caption); font-weight: var(--weight-medium); line-height: 20px; }
 .assistant-turn.is-live .assistant-turn-status { color: var(--accent-foreground); }
 .assistant-turn.is-live .assistant-turn-status::before { content: ''; width: 5px; height: 5px; flex: none; border-radius: 50%; background: currentColor; }
-.assistant-turn-meta { color: var(--faint); font-size: var(--text-13); letter-spacing: .02em; }
-.assistant-turn-head time { margin-left: auto; color: var(--faint); font-size: var(--text-13); font-variant-numeric: tabular-nums; }
+.assistant-turn-meta { color: var(--faint); font-size: var(--text-caption); letter-spacing: .02em; }
+.assistant-turn-head time { margin-left: auto; color: var(--faint); font-size: var(--text-caption); font-variant-numeric: tabular-nums; }
 .assistant-step + .assistant-step { margin-top: 16px; }
-.assistant-step > .markdown { font-size: var(--chat-font-size, 15px); line-height: var(--chat-line-height); line-height: round(up, calc(var(--chat-font-size, 15px) * var(--chat-line-height)), 1px); }
+.assistant-step > .markdown { font-size: var(--chat-font-size); line-height: var(--chat-line-height); line-height: round(up, calc(var(--chat-font-size) * var(--chat-line-height)), 1px); }
 .assistant-step > .markdown > p:first-child { margin-top: 0; }
 .markdown h1, .markdown h2 { font-family: inherit; font-weight: var(--weight-semibold); letter-spacing: -.35px; }
-.markdown h1 { font-size: var(--text-title); }
-.markdown h2 { font-size: var(--text-xl); }
 .markdown h3 { font-weight: var(--weight-bold); }
 @keyframes assistant-turn-in { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { .assistant-turn { animation: none; } }
 
 .assistant-turn:not(.is-live) .assistant-turn-status::before { content: ''; width: 5px; height: 5px; flex: none; border-radius: 50%; background: var(--success); }
 .assistant-turn-meta { display: inline-flex; align-items: center; gap: 5px; margin-left: 1px; }
-.assistant-turn-meta > span { display: inline-flex; align-items: center; gap: 3px; height: 17px; padding: 0 5px; border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--faint); font-size: var(--text-xs); letter-spacing: 0; }
+.assistant-turn-meta > span { display: inline-flex; align-items: center; gap: 3px; height: 17px; padding: 0 5px; border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--faint); font-size: var(--text-caption); letter-spacing: 0; }
 .assistant-turn-meta .turn-dot { width: 3px; height: 3px; border-radius: 50%; background: var(--surface-active); }
 .assistant-turn-meta svg { width: var(--icon-2xs); height: var(--icon-2xs); opacity: .7; }
 .assistant-turn-meta .turn-metric-tools { color: var(--faint); background: var(--surface-soft); }
@@ -46,12 +44,12 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 /* Run log + warm reply sheet: activity is a compact aside, the answer is the artifact. */
 .assistant-response { position: relative; margin: 10px 0 0; padding: 15px 18px 17px 20px; border: 1px solid var(--border-strong); border-radius: var(--radius-control); background: var(--surface-soft); box-shadow: var(--shadow-card); }
 .assistant-response::before { content: ''; position: absolute; left: -1px; top: 15px; bottom: 15px; width: 2px; border-radius: 0 var(--radius-tag) var(--radius-tag) 0; background: var(--border); }
-.assistant-response .markdown { font-size: var(--text-base); line-height: var(--chat-line-height); }
+.assistant-response .markdown { font-size: var(--chat-font-size); line-height: var(--chat-line-height); }
 .assistant-response .markdown h1, .assistant-response .markdown h2 { color: var(--text); }
 .assistant-response .markdown h2 { margin-top: 24px; }
 .assistant-response .markdown pre { border-color: var(--border-strong); background: var(--surface-soft); }
 .assistant-response .markdown code { background: var(--surface-soft); }
-.response-kicker { display: flex; align-items: center; gap: 6px; margin-bottom: 9px; color: var(--faint); font: var(--text-xs) var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+.response-kicker { display: flex; align-items: center; gap: 6px; margin-bottom: 9px; color: var(--faint); font: var(--text-caption) var(--mono); letter-spacing: .14em; text-transform: uppercase; }
 .response-kicker::before { content: ''; width: 13px; height: 1px; background: var(--border); }
 @media (max-width: 700px) { .assistant-response { padding: 13px 14px; } }
 
@@ -75,12 +73,6 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 
 .chat-actions { margin-right: -8px; }
 
-/* Optical top line: match the native window controls. */
-/* 标题栏内容统一由共享标题行的 align-items:center 对齐；右侧操作不再单独做
-垂直位移，否则右侧面板收起后，打开按钮会脱离左侧开关和标题的中心线。 */
-
-.sidebar-top-toggle { top: 10px; }
-
 /* The reply is raw prose. No card, no tint, no decorative frame. */
 /* 最终回复形态：无卡片、无底色、无装饰边框，只保留与正文一致的字号和行高；
 代码块回到表面色背景。前面的回复卡片规则已被本条覆盖。 */
@@ -93,7 +85,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
   gap: 10px;
   margin-bottom: 12px;
   color: var(--muted);
-  font-size: var(--text-sm);
+  font-size: var(--text-description);
   font-weight: var(--weight-medium);
 }
 .assistant-response-divider::before {
@@ -109,7 +101,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
   background: var(--divider);
 }
 .assistant-response::before { display: none; }
-.assistant-response .markdown { font-size: var(--chat-font-size, 15px); line-height: var(--chat-line-height); line-height: round(up, calc(var(--chat-font-size, 15px) * var(--chat-line-height)), 1px); }
+.assistant-response .markdown { font-size: var(--chat-font-size); line-height: var(--chat-line-height); line-height: round(up, calc(var(--chat-font-size) * var(--chat-line-height)), 1px); }
 .assistant-response .markdown pre { border-color: var(--border); background: var(--surface); }
 .assistant-response .markdown code { background: var(--surface-soft); }
 
@@ -186,10 +178,10 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 }
 .outline-preview:hover { border-color: var(--border-hover); }
 .outline-preview:focus-visible { outline: 1px solid var(--focus-color); outline-offset: 2px; }
-.outline-preview-role { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: var(--text-xs); letter-spacing: 0; }
+.outline-preview-role { display: flex; align-items: center; gap: 6px; color: var(--faint); font-size: var(--text-caption); letter-spacing: 0; }
 .outline-preview-role::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 .outline-preview-role > span { margin-left: auto; color: var(--faint); font-variant-numeric: tabular-nums; }
-.outline-preview-text { display: -webkit-box; margin-top: 7px; overflow: hidden; color: var(--muted); font-size: var(--text-sm); line-height: var(--leading-relaxed); -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+.outline-preview-text { display: -webkit-box; margin-top: 7px; overflow: hidden; color: var(--muted); font-size: var(--text-description); line-height: var(--leading-relaxed); -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
 @media (max-height: 560px) {
   .outline-item, .outline-tick { min-height: 8px; height: 8px; }
   .outline-preview { padding-block: 10px; }
@@ -207,9 +199,9 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .attachment-icon svg { width: var(--icon-md); height: var(--icon-md); }
 
 .ref-skill-body { margin: 6px 0 0; border: 1px solid var(--border); border-radius: var(--radius-control); background: var(--surface-soft); }
-.ref-skill-body > pre { max-height: 240px; margin: 0; padding: 0 10px 10px; overflow: auto; color: var(--muted); font: var(--text-xs)/var(--leading-body) var(--mono); white-space: pre-wrap; }
+.ref-skill-body > pre { max-height: 240px; margin: 0; padding: 0 10px 10px; overflow: auto; color: var(--muted); font: var(--text-code)/var(--leading-body) var(--mono); white-space: pre-wrap; }
 .composer-attach-button { display: grid; place-items: center; width: 30px; height: var(--control-sm); flex: none; border-radius: var(--radius-control); color: var(--muted); }
-.composer-attach-button:hover:not(:disabled) { background: var(--surface-soft); color: var(--text); }
+.composer-attach-button:hover:not(:disabled) { background: var(--surface-hover); color: var(--text); }
 .composer-attach-button svg { width: var(--icon-md); height: var(--icon-md); }
 
 /* Retry status must never look like a completed run. */
@@ -226,13 +218,13 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 /* 错误卡是“发生过什么”的提示，不是持续状态：右上角常驻关闭按钮。 */
 
 .shortcut-list { padding: 8px 20px 14px; }
-.shortcut-row { display: flex; align-items: center; justify-content: space-between; min-height: 38px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--text-sm); }
+.shortcut-row { display: flex; align-items: center; justify-content: space-between; min-height: 38px; border-top: 1px solid var(--border); color: var(--muted); font-size: var(--text-description); }
 .shortcut-row:first-child { border-top: 0; }
 .shortcut-row kbd { min-width: 88px; text-align: center; }
 .code-work-view { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin: 7px 0 3px; }
-.code-work-label { margin-right: 3px; color: var(--faint); font: var(--text-xs) var(--mono); letter-spacing: .08em; text-transform: uppercase; }
-.code-work-view code { max-width: 260px; overflow: hidden; padding: 2px 6px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font: var(--text-xs) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
-.messages .markdown, .messages .user-bubble { font-size: var(--chat-font-size, 15px); }
+.code-work-label { margin-right: 3px; color: var(--faint); font: var(--text-code) var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.code-work-view code { max-width: 260px; overflow: hidden; padding: 2px 6px; border: 1px solid var(--border); border-radius: var(--radius-tag); background: var(--surface-soft); color: var(--muted); font: var(--text-code) var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.messages .markdown, .messages .user-bubble { font-size: var(--chat-font-size); }
 
 /* Local outgoing queue: visible, editable, and reorderable before it reaches Pi. */
 /* 本地待发队列：收起时只有一行摘要（与计划胶囊同一套语言），展开后才是逐条
@@ -253,10 +245,10 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
   text-align: left;
 }
 .queued-panel-head:hover { background: var(--surface-hover); }
-.queued-panel-title { display: inline-flex; align-items: center; gap: 5px; flex: none; color: var(--text-3); font-size: var(--text-sm); font-weight: var(--weight-medium); }
+.queued-panel-title { display: inline-flex; align-items: center; gap: 5px; flex: none; color: var(--text-3); font-size: var(--text-subtitle); font-weight: var(--weight-medium); }
 .queued-panel-title svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; }
 .queued-panel-meta { display: inline-flex; align-items: center; gap: 10px; flex: none; color: var(--faint); }
-.queued-panel-meta b { font: var(--text-xs) var(--mono); font-weight: var(--weight-regular); }
+.queued-panel-meta b { font: var(--text-caption) var(--mono); font-weight: var(--weight-regular); }
 .queued-panel-meta svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; transition: transform var(--transition); }
 .queued-panel-meta svg.is-flipped { transform: rotate(180deg); }
 
@@ -289,10 +281,10 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 .queued-grip svg { width: var(--icon-xs); height: var(--icon-xs); }
 /* 一条排队项就是一行：正文截断、附件计数与状态跟在后面，不换行。 */
 .queued-copy { display: flex; align-items: baseline; gap: 8px; flex: 1; min-width: 0; }
-.queued-text { flex: 1; min-width: 0; overflow: hidden; color: var(--text-2); font-size: var(--text-sm); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
-.queued-error { flex: none; max-width: 46%; overflow: hidden; color: var(--error); font-size: var(--text-sm); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
-.queued-state { flex: none; max-width: 46%; overflow: hidden; color: var(--text-2); font-size: var(--text-sm); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
-.queued-meta { flex: none; color: var(--text-3); font-size: var(--text-sm); white-space: nowrap; }
+.queued-text { flex: 1; min-width: 0; overflow: hidden; color: var(--text-2); font-size: var(--text-description); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
+.queued-error { flex: none; max-width: 46%; overflow: hidden; color: var(--error); font-size: var(--text-description); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
+.queued-state { flex: none; max-width: 46%; overflow: hidden; color: var(--text-2); font-size: var(--text-description); line-height: var(--leading-normal); text-overflow: ellipsis; white-space: nowrap; }
+.queued-meta { flex: none; color: var(--text-3); font-size: var(--text-description); white-space: nowrap; }
 .queued-actions { display: flex; align-items: center; gap: 1px; flex: none; opacity: 0; transition: opacity var(--transition); }
 .queued-item:hover .queued-actions,
 .queued-item:focus-within .queued-actions { opacity: 1; }
@@ -303,7 +295,7 @@ Markdown 在这里被重新调大行高，标题改用衬线展示字体。 */
 
 /* 批处理操作放在列表底部：收起态不占版面，展开后与逐条操作分开。 */
 .queued-footer { display: flex; align-items: center; justify-content: flex-end; padding: 4px 6px 6px; border-top: 1px solid var(--divider); }
-.queued-send-all { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: var(--radius-tag); color: var(--text-2); font-size: var(--text-sm); }
+.queued-send-all { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; border-radius: var(--radius-tag); color: var(--text-2); font-size: var(--text-description); }
 .queued-send-all:hover:not(:disabled) { background: var(--surface-hover); color: var(--text-1); }
 .queued-send-all:disabled { color: var(--text-3); cursor: default; }
 .composer textarea.has-queued::placeholder { color: var(--muted); -webkit-text-fill-color: var(--muted); }

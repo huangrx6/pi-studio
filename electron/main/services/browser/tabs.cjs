@@ -4,12 +4,25 @@
  * Renderer owns the <webview> elements and reports webContents IDs after
  * dom-ready. Agent tools and IPC then operate on those guests from main.
  */
+const { AsyncLocalStorage } = require('node:async_hooks');
 const { webContents } = require('electron');
-const { BROWSER_PARTITION } = require('./session.cjs');
+const { getBrowserSession } = require('./session.cjs');
 const { attachWebContentsTelemetry } = require('./telemetry.cjs');
 
 /** @type {Map<string, object>} */
 const tabs = new Map();
+const browserOwner = new AsyncLocalStorage();
+
+function withBrowserOwner(owner, action) {
+  return browserOwner.run(owner, action);
+}
+
+function currentBrowserOwner() { return browserOwner.getStore(); }
+
+function ownerMatches(tab) {
+  const owner = currentBrowserOwner();
+  return tab && (!owner || tab.ownerKey === owner.key);
+}
 /** @type {Map<number, string>} */
 const byWebContentsId = new Map();
 /** @type {Set<(payload: object) => void>} */
@@ -46,18 +59,19 @@ function emit(type, entry) {
 
 function listBrowserTabs() {
   return [...tabs.values()]
+    .filter(ownerMatches)
     .sort((left, right) => left.createdAt - right.createdAt)
     .map(projectTab);
 }
 
 function getBrowserTab(id) {
-  return tabs.get(String(id || '')) || null;
+  const tab = tabs.get(String(id || ''));
+  return ownerMatches(tab) ? tab : null;
 }
 
 function activeBrowserTab() {
-  if (activeId && tabs.has(activeId)) return tabs.get(activeId);
-  const first = tabs.values().next().value;
-  return first || null;
+  return getBrowserTab(activeId) || [...tabs.values()].filter(ownerMatches)
+    .sort((left, right) => right.lastActivated - left.lastActivated)[0] || null;
 }
 
 function resolveBrowserTab(id) {
@@ -102,6 +116,8 @@ function registerBrowserTab(input = {}) {
   }
   const entry = {
     id,
+    ownerKey: input.ownerKey,
+    lastActivated: previous?.lastActivated || 0,
     webContentsId,
     url: typeof input.url === 'string' && input.url ? input.url : previous?.url || 'about:blank',
     title: typeof input.title === 'string' ? input.title : previous?.title || '',
@@ -123,10 +139,16 @@ function updateBrowserTab(id, patch = {}) {
   if (typeof patch.url === 'string' && patch.url) entry.url = patch.url;
   if (typeof patch.title === 'string') entry.title = patch.title;
   if (patch.loading !== undefined) entry.loading = Boolean(patch.loading);
-  if (patch.active === true) activeId = entry.id;
+  if (patch.active === true) { activeId = entry.id; entry.lastActivated = Date.now(); }
   entry.updatedAt = Date.now();
   emit('tab', entry);
   return projectTab(entry);
+}
+
+function adoptBrowserTabs(oldKey, newKey) {
+  for (const tab of tabs.values()) {
+    if (tab.ownerKey === oldKey) tab.ownerKey = newKey;
+  }
 }
 
 function unregisterBrowserTab(id) {
@@ -150,6 +172,7 @@ function unregisterByWebContentsId(webContentsId) {
 function setActiveBrowserTab(id) {
   const entry = resolveBrowserTab(id);
   activeId = entry.id;
+  entry.lastActivated = Date.now();
   emit('tab', entry);
   return projectTab(entry);
 }
@@ -224,24 +247,20 @@ function subscribeBrowserTabs(listener) {
 
 function installBrowserTabWatchers(app) {
   app.on('web-contents-created', (_event, contents) => {
-    if (contents.getType() !== 'webview') return;
-    let partition = '';
-    try {
-      partition = contents.session?.partition || '';
-    } catch {
-      partition = '';
-    }
-    // Guest partition is the reliable check; skip unrelated webviews.
-    if (partition !== BROWSER_PARTITION) return;
+    if (contents.getType() !== 'webview' || contents.session !== getBrowserSession()) return;
+    const id = contents.id;
     attachWebContentsTelemetry(contents);
     contents.on('destroyed', () => {
-      unregisterByWebContentsId(contents.id);
+      unregisterByWebContentsId(id);
     });
   });
 }
 
 module.exports = {
+  currentBrowserOwner,
+  withBrowserOwner,
   activeBrowserTab,
+  adoptBrowserTabs,
   controlBrowserTab,
   getBrowserTab,
   getTabWebContents,

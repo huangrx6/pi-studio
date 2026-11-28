@@ -23,6 +23,7 @@ function harness() {
   const h = {
     initialStateSettled: false,
     setInitialStateSettled(value) { h.initialStateSettled = value; },
+    restoreExpanded(keys) { h.expanded = Array.from(keys); },
     workspacesLoaded: false,
     setWorkspacesLoaded(value) { h.workspacesLoaded = value; },
     workspace: '/A', workspaceRef: { current: '/A' },
@@ -40,7 +41,7 @@ function harness() {
     window: { piApi: { state(cwd) { return new Promise((resolve, reject) => waiting.push({ cwd, resolve, reject })); } } },
   };
   vm.runInNewContext(code, h);
-  return { h, waiting, installed, data: { workspaces: [{ cwd: '/A', name: 'A', sessions: [] }], model: {} } };
+  return { h, waiting, installed, data: { expandedProjects: ['/A'], workspaces: [{ cwd: '/A', name: 'A', sessions: [] }], model: {} } };
 }
 
 test('write-invalidated and superseded list reads cannot unlock or install stale projections', async () => {
@@ -57,6 +58,7 @@ test('write-invalidated and superseded list reads cannot unlock or install stale
   waiting[2].resolve(data); await latest;
   assert.equal(h.initialStateSettled, true);
   assert.equal(h.workspacesLoaded, true);
+  assert.deepEqual(h.expanded, ['/A']);
   assert.equal(installed.length, 1); assert.equal(h.conversationListNeedsRefreshRef.current, false);
   assert.equal(h.notice, false); assert.equal(h.loading, false);
 });

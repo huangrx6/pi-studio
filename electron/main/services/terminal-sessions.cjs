@@ -42,12 +42,8 @@ function normalizeCwd(candidate) {
   const requested = typeof candidate === 'string' && candidate.trim()
     ? path.resolve(candidate)
     : os.homedir();
-  try {
-    if (fs.statSync(requested).isDirectory()) return requested;
-  } catch {
-    // A removed session workspace should not prevent opening a terminal.
-  }
-  return os.homedir();
+  if (!fs.statSync(requested).isDirectory()) throw new Error('终端工作目录不可用');
+  return requested;
 }
 
 function shellForPlatform(platform = process.platform, environment = process.env) {

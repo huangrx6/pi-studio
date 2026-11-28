@@ -30,7 +30,9 @@ const {
 const { activeProjectIds, addDailyUsage, listUsageProjects, migrateUsageProjects, usageWorkspace } = require('./usage-projects.cjs');
 
 const DATABASE_NAME = 'pi-studio.sqlite';
-const SCHEMA_VERSION = 27;
+const { migrateWorktreeLayouts } = require('./worktree-layout-migration.cjs');
+const { migrateInstalledPluginPanels } = require('./installed-plugin-panels.cjs');
+const SCHEMA_VERSION = 34;
 const USAGE_REQUEST_LEDGER_LIMIT = 8_192;
 const USAGE_REQUEST_PRUNE_BATCH = 256;
 const METRIC_REQUEST_HISTORY_LIMIT = 8;
@@ -438,6 +440,53 @@ class StudioDatabase {
           updated_at INTEGER NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS team_bots (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS team_rooms (
+          id TEXT PRIMARY KEY,
+          workspace TEXT NOT NULL REFERENCES workspaces(cwd) ON DELETE CASCADE,
+          name TEXT NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS team_rooms_workspace_idx ON team_rooms(workspace);
+
+        CREATE TABLE IF NOT EXISTS plans (
+          id TEXT PRIMARY KEY,
+          workspace TEXT NOT NULL REFERENCES workspaces(cwd) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          prompt TEXT NOT NULL,
+          schedule TEXT NOT NULL,
+          status TEXT NOT NULL CHECK(status IN ('active', 'paused', 'completed')),
+          next_at INTEGER
+        );
+        CREATE INDEX IF NOT EXISTS plans_due_idx ON plans(next_at) WHERE status = 'active';
+        CREATE TABLE IF NOT EXISTS plan_runs (
+          id TEXT PRIMARY KEY,
+          plan_id TEXT REFERENCES plans(id) ON DELETE SET NULL,
+          workspace TEXT NOT NULL REFERENCES workspaces(cwd) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          prompt TEXT NOT NULL,
+          trigger TEXT NOT NULL CHECK(trigger IN ('scheduled', 'manual')),
+          due_at INTEGER NOT NULL, queued_at INTEGER NOT NULL, started_at INTEGER, finished_at INTEGER,
+          status TEXT NOT NULL CHECK(status IN ('queued', 'running', 'succeeded', 'failed', 'cancelled')),
+          stop_reason TEXT NOT NULL DEFAULT '',
+          detail TEXT NOT NULL DEFAULT '',
+          session_id TEXT
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS plan_runs_active_idx ON plan_runs(plan_id) WHERE status IN ('queued','running');
+        CREATE INDEX IF NOT EXISTS plan_runs_queue_idx ON plan_runs(status, queued_at);
+        CREATE INDEX IF NOT EXISTS plan_runs_history_idx ON plan_runs(queued_at DESC, id DESC);
+        CREATE INDEX IF NOT EXISTS plan_runs_plan_history_idx ON plan_runs(plan_id, queued_at DESC, id DESC);
+
+        CREATE TABLE IF NOT EXISTS team_room_bots (
+          room_id TEXT NOT NULL REFERENCES team_rooms(id) ON DELETE CASCADE,
+          bot_id TEXT NOT NULL REFERENCES team_bots(id) ON DELETE CASCADE,
+          position INTEGER NOT NULL,
+          PRIMARY KEY (room_id, bot_id)
+        );
+
         CREATE TABLE IF NOT EXISTS conversations (
           id TEXT PRIMARY KEY,
           public_id TEXT NOT NULL UNIQUE,
@@ -456,6 +505,19 @@ class StudioDatabase {
         );
         CREATE INDEX IF NOT EXISTS conversations_workspace_idx
           ON conversations(workspace, archived, pinned, updated_at DESC);
+
+        CREATE TABLE IF NOT EXISTS temporary_chats (
+          id TEXT PRIMARY KEY,
+          durable_id INTEGER NOT NULL UNIQUE,
+          title TEXT NOT NULL,
+          created_at INTEGER NOT NULL,
+          updated_at INTEGER NOT NULL,
+          model_ref TEXT NOT NULL,
+          thinking_level TEXT NOT NULL,
+          has_images INTEGER NOT NULL DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS temporary_chats_updated_idx
+          ON temporary_chats(updated_at DESC, id);
 
         CREATE TABLE IF NOT EXISTS model_providers (
           id TEXT PRIMARY KEY,
@@ -844,6 +906,9 @@ class StudioDatabase {
       if (!modelColumns.has('metadata_source')) {
         this.db.exec("ALTER TABLE model_catalog ADD COLUMN metadata_source TEXT NOT NULL DEFAULT 'legacy'");
       }
+      if (!this.db.prepare('PRAGMA table_info(workspaces)').all().some(row => row.name === 'worktree_info')) {
+        this.db.exec('ALTER TABLE workspaces ADD COLUMN worktree_info TEXT');
+      }
       if (!this.db.prepare('PRAGMA table_info(managed_worktrees)').all().some(row => row.name === 'storage_root')) {
         this.db.exec("ALTER TABLE managed_worktrees ADD COLUMN storage_root TEXT NOT NULL DEFAULT ''");
       }
@@ -946,6 +1011,43 @@ class StudioDatabase {
           if (error?.code !== 'SECURE_STORAGE_UNAVAILABLE') throw error;
         }
       }
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS session_layouts (
+          owner TEXT NOT NULL, surface TEXT NOT NULL, layout TEXT NOT NULL,
+          PRIMARY KEY (owner, surface)
+        ) WITHOUT ROWID;
+        CREATE TRIGGER IF NOT EXISTS conversation_layout_cleanup AFTER DELETE ON conversations BEGIN
+          DELETE FROM session_layouts WHERE owner = 'conversation:' || OLD.public_id;
+        END;
+        CREATE TABLE IF NOT EXISTS deleted_temporary_layouts (id TEXT PRIMARY KEY) WITHOUT ROWID;
+        CREATE TRIGGER IF NOT EXISTS temporary_layout_cleanup AFTER DELETE ON temporary_chats BEGIN
+          INSERT OR IGNORE INTO deleted_temporary_layouts VALUES (OLD.id);
+          DELETE FROM session_layouts WHERE owner = 'temporary:' || OLD.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS temporary_layout_create AFTER INSERT ON temporary_chats BEGIN
+          DELETE FROM deleted_temporary_layouts WHERE id = NEW.id;
+        END;
+        CREATE TRIGGER IF NOT EXISTS room_layout_cleanup AFTER DELETE ON team_rooms BEGIN
+          DELETE FROM session_layouts WHERE owner = 'room:' || OLD.id;
+        END;
+      `);
+      if (current < 32) migrateWorktreeLayouts(this);
+      if (current < 33) migrateInstalledPluginPanels(this.db);
+      if (current < 34) {
+        this.db.exec(`
+          INSERT OR IGNORE INTO session_layouts (owner, surface, layout)
+          SELECT 'conversation:' || c.public_id, 'inspector', json_object(
+            'mode', CASE WHEN json_extract(l.layout, '$.panelCollapsed') THEN 'hidden' ELSE 'expanded' END,
+            'tab', json_extract(l.layout, '$.inspector'),
+            'progressPage', json_extract(l.layout, '$.progressPage'),
+            'childKey', json_extract(l.layout, '$.childKey'))
+          FROM session_layouts l JOIN conversations c ON c.public_id = json_extract(l.layout, '$.lastConversationId')
+          WHERE l.surface = 'center' AND l.owner GLOB 'worktree:*'
+            AND json_extract(l.layout, '$.inspector') IN ('progress', 'trace', 'subagents');
+          UPDATE session_layouts SET layout = json_remove(layout, '$.inspector', '$.progressPage', '$.childKey')
+          WHERE surface = 'center' AND owner GLOB 'worktree:*' AND json_type(layout, '$.inspector') IS NOT NULL;
+        `);
+      }
       this.db.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     });
   }
@@ -980,8 +1082,8 @@ class StudioDatabase {
     }
   }
 
-  transaction(callback) {
-    this.db.exec('BEGIN IMMEDIATE');
+  transaction(callback, { deferred = false } = {}) {
+    this.db.exec(deferred ? 'BEGIN DEFERRED' : 'BEGIN IMMEDIATE');
     try {
       const value = callback();
       this.db.exec('COMMIT');
@@ -1390,6 +1492,15 @@ class StudioDatabase {
       .run(path.resolve(pathValue));
   }
 
+  workspaceTreeRecords() {
+    return new Map(this.db.prepare('SELECT cwd, worktree_info FROM workspaces WHERE worktree_info IS NOT NULL')
+      .all().map(row => [row.cwd, JSON.parse(row.worktree_info)]));
+  }
+
+  setWorkspaceTreeRecord(cwd, tree) {
+    this.db.prepare('UPDATE workspaces SET worktree_info = ? WHERE cwd = ?').run(tree ? JSON.stringify(tree) : null, cwd);
+  }
+
   listWorkspaces() {
     return this.db.prepare(`
       SELECT cwd, name, hidden, position, created_at, updated_at
@@ -1446,6 +1557,8 @@ class StudioDatabase {
       const count = Number(this.db.prepare('SELECT COUNT(*) AS count FROM conversations WHERE workspace = ?').get(cwd).count);
       if (count > 0) throw new Error('工作区仍有会话，不能删除');
       this.db.prepare('DELETE FROM project_resource_trust WHERE workspace = ?').run(cwd);
+      this.db.prepare('DELETE FROM session_layouts WHERE owner = ?').run('draft:' + cwd);
+      this.db.prepare("DELETE FROM session_layouts WHERE owner GLOB 'worktree:*' AND json_extract(substr(owner, 10), '$[0]') = ?").run(cwd);
       this.removeProjectExtensionsForWorkspace(cwd);
       this.db.prepare(`
         INSERT OR REPLACE INTO usage_project_names(workspace, name)
@@ -1479,11 +1592,100 @@ class StudioDatabase {
     return removed;
   }
 
+  listTemporaryChats() {
+    return this.db.prepare(`
+      SELECT id, title, created_at AS createdAt, updated_at AS updatedAt,
+             model_ref AS modelRef, thinking_level AS thinkingLevel
+      FROM temporary_chats ORDER BY updated_at DESC, id
+    `).all();
+  }
+
+  adoptDraftTools(workspace, publicId) {
+    this.db.prepare("UPDATE session_layouts SET owner = ? WHERE owner = ? AND surface = 'tools'")
+      .run('conversation:' + publicId, 'draft:' + workspace);
+  }
+
+  getSessionLayout(owner, surface) {
+    const row = this.db.prepare('SELECT layout FROM session_layouts WHERE owner = ? AND surface = ?').get(owner, surface);
+    if (!row) return null;
+    const layout = JSON.parse(row.layout);
+    if (!owner.startsWith('worktree:') || !Array.isArray(layout?.tabs)) return layout;
+    const [cwd] = JSON.parse(owner.slice('worktree:'.length));
+    const sessions = new Set(this.db.prepare('SELECT public_id FROM conversations WHERE workspace = ? AND archived = 0').all(cwd).map(item => item.public_id));
+    layout.tabs = layout.tabs.filter(tab => !tab.sessionId || (tab.kind === 'file' && tab.source === 'workspace') || sessions.has(tab.sessionId));
+    if (layout.active !== 'chat' && !layout.tabs.some(tab => tab.id === layout.active)) layout.active = layout.tabs.at(-1)?.id ?? 'chat';
+    if (layout.lastConversationId && !sessions.has(layout.lastConversationId)) {
+      const next = layout.tabs.find(tab => tab.id === layout.active && tab.kind === 'conversation') ?? layout.tabs.find(tab => tab.kind === 'conversation');
+      layout.lastConversationId = next?.sessionId;
+    }
+    return layout;
+  }
+
+  setSessionLayout(owner, surface, layout) {
+    if (typeof owner !== 'string' || owner.length > 8192 || !/^(studio$|draft:.*$|(worktree|conversation|temporary|room):.+$)/u.test(owner)
+      || (surface === 'inspector' && !owner.startsWith('conversation:'))
+      || !['center', 'tools', 'navigation', 'inspector'].includes(surface)) throw new Error('无效的会话布局');
+    if (owner.startsWith('conversation:') && !this.getConversation(owner.slice('conversation:'.length))) return;
+    if (owner.startsWith('room:') && !this.sessionWorkspace(owner)) return;
+    if (owner.startsWith('temporary:') && this.db.prepare('SELECT 1 FROM deleted_temporary_layouts WHERE id = ?').get(owner.slice('temporary:'.length))) return;
+    if (owner.startsWith('worktree:')) {
+      const scope = json(owner.slice('worktree:'.length), null);
+      if (surface !== 'center' || !Array.isArray(scope) || scope.length !== 3 || typeof scope[0] !== 'string'
+        || !['branch', 'detached', 'directory'].includes(scope[1]) || typeof scope[2] !== 'string') throw new Error('无效的工作树布局');
+      if (!this.getWorkspace(scope[0])) return;
+    }
+    const serialized = JSON.stringify(layout);
+    if (!serialized || serialized.length > 524288) throw new Error('会话布局超出存储限制');
+    this.db.prepare(`INSERT INTO session_layouts(owner, surface, layout) VALUES (?, ?, ?)
+      ON CONFLICT(owner, surface) DO UPDATE SET layout = excluded.layout`).run(owner, surface, serialized);
+  }
+
+  getTemporaryChat(id) {
+    return this.db.prepare(`
+      SELECT id, title, created_at AS createdAt, updated_at AS updatedAt,
+             model_ref AS modelRef, thinking_level AS thinkingLevel,
+             durable_id AS durableId, has_images AS hasImages
+      FROM temporary_chats WHERE id = ?
+    `).get(id);
+  }
+
+  createTemporaryChat({ id, durableId, title, modelRef, thinkingLevel, hasImages }) {
+    const now = Date.now();
+    this.db.prepare(`
+      INSERT INTO temporary_chats
+        (id, durable_id, title, created_at, updated_at, model_ref, thinking_level, has_images)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, durableId, title, now, now, modelRef, thinkingLevel, Number(hasImages));
+  }
+
+  removeTemporaryChatIndex(id, durableId) {
+    this.db.prepare('DELETE FROM temporary_chats WHERE id = ? AND durable_id = ?').run(id, durableId);
+  }
+
+  touchTemporaryChat(id, modelRef, thinkingLevel, hasImages) {
+    this.db.prepare(`
+      UPDATE temporary_chats SET updated_at = ?, model_ref = ?, thinking_level = ?,
+        has_images = MAX(has_images, ?) WHERE id = ?
+    `).run(Date.now(), modelRef, thinkingLevel, Number(hasImages), id);
+  }
+
   listConversations({ includeArchived = true } = {}) {
     const sql = includeArchived
       ? 'SELECT * FROM conversations ORDER BY pinned DESC, updated_at DESC'
       : 'SELECT * FROM conversations WHERE archived = 0 ORDER BY pinned DESC, updated_at DESC';
     return this.db.prepare(sql).all().map(normalizeConversationRow);
+  }
+
+  listWorkspaceRooms() {
+    return this.db.prepare('SELECT workspace, id, name FROM team_rooms ORDER BY rowid').all();
+  }
+
+  sessionWorkspace(sessionId) {
+    if (typeof sessionId !== 'string') return null;
+    if (sessionId.startsWith('room:')) {
+      return this.db.prepare('SELECT workspace FROM team_rooms WHERE id = ?').get(sessionId.slice(5))?.workspace ?? null;
+    }
+    return this.getConversation(sessionId)?.workspace ?? null;
   }
 
   getConversation(id) {
@@ -1608,28 +1810,12 @@ class StudioDatabase {
     }
   }
 
-  /**
-   * Resolve a set of Durable roots and every conversation owned below them.
-   * Durable has no public delete API, so maintenance operations need this
-   * read-only snapshot before they stop work and commit the physical cleanup.
-   */
-  durableConversationTree(rootIds = [], options = {}) {
+  ownedConversationIds(rootIds) {
     const roots = [...new Set(rootIds
       .map((value) => Number(value))
       .filter((value) => Number.isSafeInteger(value) && value > 0))];
-    if (roots.length === 0 || !this.hasDurableConversations()) {
-      return {
-        conversationIds: [],
-        entryIds: [],
-        submissionIds: [],
-        taskIds: [],
-        documentIds: [],
-        publicIds: [],
-        workspaces: [],
-      };
-    }
-    const encodedRoots = JSON.stringify(roots);
-    const conversationIds = this.db.prepare(`
+    if (!roots.length || !this.hasDurableConversations()) return [];
+    return this.db.prepare(`
       WITH RECURSIVE tree(id) AS (
         SELECT value FROM json_each(?)
         UNION
@@ -1638,7 +1824,15 @@ class StudioDatabase {
         JOIN tree AS parent ON child.owner_conversation_id = parent.id
       )
       SELECT id FROM tree ORDER BY id
-    `).all(encodedRoots).map((row) => Number(row.id));
+    `).all(JSON.stringify(roots)).map((row) => Number(row.id));
+  }
+
+  /** Snapshot the records belonging to these roots before physical cleanup. */
+  durableConversationTree(rootIds = [], options = {}) {
+    const conversationIds = this.ownedConversationIds(rootIds);
+    if (!conversationIds.length) {
+      return { conversationIds, entryIds: [], submissionIds: [], taskIds: [], documentIds: [], publicIds: [], workspaces: [] };
+    }
     const encodedConversations = JSON.stringify(conversationIds);
     const encodedTreeConversations = JSON.stringify(conversationIds);
     const ownerTaskIds = conversationIds.length === 0

@@ -378,7 +378,7 @@ try {
   assert.equal(await page.getByRole('button', { name: '发送消息', exact: true }).isDisabled(), false);
   await page.getByRole('button', { name: '取消选择工作区' }).click();
   await openAppearanceSettings();
-  await page.locator('.settings-back-button').click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await page.waitForFunction(() => document.querySelector('.workspace-choice')?.textContent?.includes('选择工作区'));
 
   // 切换到另一个工作区，之前输入的草稿必须保留。
@@ -427,12 +427,12 @@ try {
   await openAppearanceSettings();
   const appearanceCallsBeforeFontSize = await page.evaluate(() => window.__appearanceCalls);
   assert.notEqual(await page.getByRole('region', { name: '对话', exact: true }).locator('details').getAttribute('open'), null);
-  // 字号现在是步进器：键盘激活 + 两次到 16px（鼠标按住会重复加速，不适合断言）。
+  const defaultSize = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--text-body')));
   for (let step = 0; step < 2; step += 1) {
     await page.getByRole('button', { name: '增加字号' }).focus();
     await page.keyboard.press('Enter');
   }
-  await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--chat-font-size') === '16px');
+  await page.waitForFunction(size => document.documentElement.style.getPropertyValue('--chat-font-size') === size, `${defaultSize + 2}px`);
   assert.equal(
     await page.evaluate(() => window.__appearanceCalls),
     appearanceCallsBeforeFontSize,
@@ -442,7 +442,7 @@ try {
     await page.getByRole('button', { name: '减少字号' }).focus();
     await page.keyboard.press('Enter');
   }
-  await page.waitForFunction(() => document.documentElement.style.getPropertyValue('--chat-font-size') === '14px');
+  await page.waitForFunction(() => !document.documentElement.style.getPropertyValue('--chat-font-size'));
   for (const [mode, label] of [['light', '浅色'], ['dark', '深色']]) {
     // setTheme 同时断言原生窗口收到同一个主题值（__nativeTheme）。
     await setTheme(label, mode);
@@ -478,7 +478,7 @@ try {
     await page.locator('.settings-dialog').waitFor();
     await capture(`${mode}-dialog`);
     await page.keyboard.press('Escape');
-    await page.locator('.settings-back-button').click();
+    await page.locator('[data-sidebar-section="conversations"]').click();
     await page.locator('.settings-overlay').waitFor({ state: 'detached' });
 
     // 欢迎页的模型选择器、工作区菜单与模型/推理菜单。
@@ -543,7 +543,7 @@ try {
   await page.locator('.composer-editor').waitFor();
   await openAppearanceSettings();
   await setPalette('海蓝', 'ocean');
-  await page.locator('.settings-back-button').click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
 
   // 切到 980×640 紧凑视口，先截一张欢迎页。
   await page.setViewportSize({ width: 980, height: 640 });
@@ -653,7 +653,7 @@ try {
   await page.locator('.settings-nav-row').filter({ hasText: '归档会话' }).click();
   const archivedCard = page.locator('.archive-session-card').filter({ hasText: '已重命名的会话' });
   await archivedCard.getByRole('button', { name: '取消归档', exact: true }).click();
-  await page.locator('.settings-back-button').click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
 
   // 复制 SessionId：替换 navigator.clipboard.writeText，断言复制的是会话 id。
   await hoverAndClick(renamedShell, '已重命名的会话的更多操作');
@@ -695,7 +695,7 @@ try {
   // 切到浅色主题后，草稿控件与输入框共用纯白表面，避免控制行像另一张卡片。
   await openAppearanceSettings();
   await setTheme('浅色', 'light');
-  await page.locator('.settings-back-button').click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   assert.equal(await page.locator('.composer').evaluate((element) => getComputedStyle(element).backgroundColor), 'rgb(255, 255, 255)');
   await capture('workspace-white-no-label');
 

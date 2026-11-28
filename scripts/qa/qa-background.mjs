@@ -289,7 +289,7 @@ try {
   await page.screenshot({ path: `${output}light-image.png`, animations: 'disabled' });
   await page.locator('.general-background-settings').screenshot({ path: `${output}light-background-controls.png`, animations: 'disabled' });
 
-  await page.getByRole('button', { name: '返回对话' }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await page.locator('.settings-overlay').waitFor({ state: 'detached' });
   await page.locator('.background-layer img').waitFor();
   await page.screenshot({ path: `${output}light-workspace.png`, animations: 'disabled' });
@@ -308,7 +308,7 @@ try {
   await assertNoHorizontalOverflow();
   await page.screenshot({ path: `${output}dark-compact.png`, animations: 'disabled' });
   await page.setViewportSize({ width: 1440, height: 920 });
-  await page.getByRole('button', { name: '返回对话' }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await page.locator('.settings-overlay').waitFor({ state: 'detached' });
   await page.screenshot({ path: `${output}dark-workspace.png`, animations: 'disabled' });
   await openGeneralSettings();

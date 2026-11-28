@@ -1,0 +1,69 @@
+.temporary-chat > .extension-summaries.is-statusbar {
+  flex: none;
+  min-height: var(--statusbar-height);
+  padding-inline: var(--space-3);
+  border-top: 1px solid var(--divider);
+}
+
+.temporary-main-canvas .temporary-chat.is-empty {
+  justify-content: safe center;
+  overflow-y: auto;
+  padding-block: var(--space-4);
+}
+
+.temporary-main-canvas .temporary-chat.is-empty .transcript-viewport {
+  flex: 0 0 auto;
+}
+
+.temporary-main-canvas .temporary-chat.is-empty .temporary-scroll {
+  overflow: visible;
+  padding-block: 0;
+  scrollbar-gutter: auto;
+}
+
+.temporary-main-canvas .temporary-chat.is-empty .temporary-composer-dock {
+  padding-block-end: 0;
+}
+
+.temporary-welcome {
+  display: grid;
+  justify-items: center;
+  width: min(460px, 100%);
+  margin: auto;
+  padding: 0 var(--space-4) var(--space-4);
+  text-align: center;
+}
+
+.temporary-welcome .welcome-art {
+  --welcome-shape: url('../../../../../assets/temporary-chat-contours.svg');
+  position: relative;
+  width: min(228px, 72%, 27vh);
+  aspect-ratio: 200 / 108;
+  margin-bottom: var(--space-1);
+}
+.temporary-welcome .welcome-art::after {
+  background: linear-gradient(125deg, var(--welcome-ink) 18%, color-mix(in srgb, var(--welcome-ink) 68%, transparent) 67%, color-mix(in srgb, var(--welcome-ink) 34%, transparent));
+}
+.temporary-welcome .pi-mark {
+  /* 前层气泡的中心在 200 × 108 画稿的 (84.5, 58)。 */
+  position: absolute;
+  left: 42.25%;
+  top: 53.7%;
+  width: 14%;
+  transform: translate(-50%, -50%);
+  color: color-mix(in srgb, var(--theme-accent) 55%, var(--text-2));
+}
+
+.temporary-welcome h2 {
+  margin: 0;
+  color: var(--text-1);
+  font: var(--weight-semibold) var(--text-display)/var(--leading-tight) var(--font);
+  letter-spacing: -.02em;
+  text-wrap: balance;
+}
+
+@media (max-height: 560px) {
+  .temporary-main-canvas .temporary-chat.is-empty {
+    padding-block: var(--space-3);
+  }
+}

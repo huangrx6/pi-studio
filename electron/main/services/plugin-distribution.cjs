@@ -11,6 +11,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { PLUGIN_INSTALL_DIRECTORY, quarantineDirectory, studioDataDirectory } = require('../core/studio-paths.cjs');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
+const { installedPluginManifest } = require('../core/installed-plugin-panels.cjs');
 const {
   MANIFEST_NAME,
   pluginError,
@@ -55,15 +56,115 @@ function copyTree(source, target) {
   });
 }
 
+function parseSkillFrontmatter(skillMd) {
+  const fmMatch = /^---\s*\r?\n([\s\S]*?)\r?\n---/.exec(skillMd);
+  const frontmatter = fmMatch ? fmMatch[1] : '';
+  const body = fmMatch ? skillMd.slice(fmMatch[0].length) : skillMd;
+  const readField = (key) => {
+    if (!frontmatter) return '';
+    const lines = frontmatter.split(/\r?\n/);
+    for (let i = 0; i < lines.length; i += 1) {
+      const match = new RegExp(`^${key}:\\s*(.*)$`).exec(lines[i]);
+      if (!match) continue;
+      const raw = match[1].trim();
+      if (raw === '>' || raw === '|' || raw === '>-' || raw === '|-') {
+        const block = [];
+        for (let j = i + 1; j < lines.length; j += 1) {
+          if (/^[ \t]+/.test(lines[j])) block.push(lines[j].trim());
+          else if (!lines[j].trim()) block.push('');
+          else break;
+        }
+        return block.join(' ').replace(/\s+/g, ' ').trim();
+      }
+      return raw.replace(/^["']|["']$/g, '').trim();
+    }
+    return '';
+  };
+  return { frontmatter, body, readField };
+}
+
+function readSkillMeta(skillDirectory) {
+  let skillMd = '';
+  try {
+    skillMd = fs.readFileSync(path.join(skillDirectory, 'SKILL.md'), 'utf8');
+  } catch {
+    return { name: path.basename(skillDirectory), description: '' };
+  }
+  const { body, readField } = parseSkillFrontmatter(skillMd);
+  let name = readField('name');
+  if (!name) {
+    const match = /^name:\s*["']?([^"'\n]+)/m.exec(skillMd);
+    if (match?.[1]) name = match[1].trim();
+  }
+  if (!name) {
+    const heading = /^#\s+(.+)$/m.exec(body);
+    if (heading?.[1]) name = heading[1].trim().toLowerCase().replace(/\s+/g, '-').slice(0, 64);
+  }
+  if (!name) name = path.basename(skillDirectory);
+
+  let description = readField('description');
+  if (!description) {
+    const paragraph = body
+      .split(/\r?\n\r?\n/)
+      .map(chunk => chunk.trim())
+      .find(chunk => chunk && !chunk.startsWith('#') && !chunk.startsWith('```'));
+    if (paragraph) description = paragraph.replace(/\s+/g, ' ').slice(0, 280);
+  }
+  return { name, description };
+}
+
 function readSkillName(skillDirectory) {
-  const skillMd = fs.readFileSync(path.join(skillDirectory, 'SKILL.md'), 'utf8');
-  const match = /^---\s*[\s\S]*?^name:\s*["']?([^"'\n]+)["']?/m.exec(skillMd)
-    || /^name:\s*["']?([^"'\n]+)/m.exec(skillMd);
-  if (match?.[1]) return match[1].trim();
-  // Fallback: first heading
-  const heading = /^#\s+(.+)$/m.exec(skillMd);
-  if (heading?.[1]) return heading[1].trim().toLowerCase().replace(/\s+/g, '-').slice(0, 64);
-  return path.basename(skillDirectory);
+  return readSkillMeta(skillDirectory).name;
+}
+
+function extensionProvidesSummary(extensionPath, extensionManifest) {
+  if (!extensionManifest || typeof extensionManifest !== 'object') return null;
+  const contributes = extensionManifest.contributes || {};
+  const rawTools = Array.isArray(contributes.tools) ? contributes.tools : [];
+  const rawPanels = Array.isArray(contributes.panels) ? contributes.panels : [];
+  const rawCommands = Array.isArray(contributes.commands) ? contributes.commands : [];
+  return {
+    path: extensionPath,
+    id: typeof extensionManifest.id === 'string' ? extensionManifest.id : '',
+    name: typeof extensionManifest.name === 'string' ? extensionManifest.name : '',
+    description: typeof extensionManifest.description === 'string' ? extensionManifest.description : '',
+    tools: rawTools.map(tool => String(tool?.name || '')).filter(Boolean),
+    toolDetails: rawTools
+      .filter(tool => tool?.name)
+      .map(tool => ({
+        name: String(tool.name),
+        description: typeof tool.description === 'string' ? tool.description.trim() : '',
+      })),
+    panels: rawPanels
+      .filter(panel => panel?.id)
+      .map(panel => ({
+        id: String(panel.id),
+        title: typeof panel.title === 'string' ? panel.title.trim() : String(panel.id),
+        description: typeof panel.description === 'string' ? panel.description.trim() : '',
+        slot: typeof panel.slot === 'string' ? panel.slot : '',
+        scope: typeof panel.view?.scope === 'string' ? panel.view.scope : '',
+      })),
+    commands: rawCommands
+      .filter(command => command?.id)
+      .map(command => ({
+        id: String(command.id),
+        title: typeof command.title === 'string' ? command.title.trim() : String(command.id),
+        description: typeof command.description === 'string' ? command.description.trim() : '',
+        placement: typeof command.placement === 'string' ? command.placement : '',
+      })),
+  };
+}
+
+function readExtensionSummaryFromDisk(pluginInstallPath, extensionPath) {
+  if (!pluginInstallPath || !extensionPath) return null;
+  try {
+    const manifestPath = path.join(pluginInstallPath, extensionPath, EXTENSION_MANIFEST);
+    if (!fs.existsSync(manifestPath)) return null;
+    const raw = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    return extensionProvidesSummary(extensionPath, installedPluginManifest(raw));
+  } catch {
+    return null;
+  }
 }
 
 function directoryHash(directory) {
@@ -95,8 +196,46 @@ function resourceCollisions(db, manifest, extension) {
   return collisions;
 }
 
+function hydrateProvides(plugin) {
+  const provides = plugin.provides && typeof plugin.provides === 'object' ? plugin.provides : {};
+  const installPath = plugin.installPath || '';
+  if (!installPath || !fs.existsSync(installPath)) return provides;
+
+  const skills = Array.isArray(provides.skills)
+    ? provides.skills.map((skill) => {
+      if (skill?.description) return skill;
+      const meta = skill?.path ? readSkillMeta(path.join(installPath, skill.path)) : null;
+      return meta
+        ? { ...skill, name: skill.name || meta.name, description: meta.description }
+        : skill;
+    })
+    : provides.skills;
+
+  let extension = provides.extension;
+  if (extension && typeof extension === 'object' && (!extension.toolDetails || !extension.panels)) {
+    const hydrated = readExtensionSummaryFromDisk(installPath, extension.path);
+    if (hydrated) {
+      extension = {
+        ...extension,
+        ...hydrated,
+        tools: hydrated.tools.length ? hydrated.tools : (extension.tools || []),
+      };
+    }
+  }
+
+  return {
+    ...provides,
+    ...(skills ? { skills } : {}),
+    ...(extension !== undefined ? { extension } : {}),
+  };
+}
+
 function withIcon(plugin) {
-  return { ...plugin, iconDataUrl: readPluginIcon(plugin.installPath, plugin.icon) };
+  return {
+    ...plugin,
+    provides: hydrateProvides(plugin),
+    iconDataUrl: readPluginIcon(plugin.installPath, plugin.icon),
+  };
 }
 
 function serializeProvides(manifest, extension) {
@@ -111,10 +250,14 @@ function serializeProvides(manifest, extension) {
       exposure: item.exposure,
       envKeys: item.envKeys,
     })),
-    skills: manifest.provides.skills.map((item) => ({
-      path: item.path,
-      name: readSkillName(item.absolute),
-    })),
+    skills: manifest.provides.skills.map((item) => {
+      const meta = readSkillMeta(item.absolute);
+      return {
+        path: item.path,
+        name: meta.name,
+        description: meta.description,
+      };
+    }),
     cli: manifest.provides.cli.map((item) => ({
       id: item.id,
       name: item.name,
@@ -130,7 +273,7 @@ function serializeProvides(manifest, extension) {
       platform: item.platform,
     })),
     extension: extension
-      ? { path: manifest.provides.extension.path, tools: extension.manifest.contributes.tools.map(tool => tool.name) }
+      ? extensionProvidesSummary(manifest.provides.extension.path, extension.manifest)
       : null,
   };
 }
@@ -326,7 +469,8 @@ function installPreparedPlugin(token, options = {}) {
     })),
     skills: manifest.provides.skills.map((skill) => {
       const absolute = path.join(target, skill.path);
-      return { path: skill.path, name: readSkillName(absolute) };
+      const meta = readSkillMeta(absolute);
+      return { path: skill.path, name: meta.name, description: meta.description };
     }),
     cli: manifest.provides.cli.map((cli) => ({
       id: cli.id,
@@ -344,7 +488,7 @@ function installPreparedPlugin(token, options = {}) {
       absoluteBin: cli.kind === 'bundled' ? path.join(target, cli.bin) : '',
     })),
     extension: extension
-      ? { path: manifest.provides.extension.path, tools: extension.manifest.contributes.tools.map(tool => tool.name) }
+      ? extensionProvidesSummary(manifest.provides.extension.path, extension.manifest)
       : null,
   };
 
@@ -608,6 +752,8 @@ module.exports = {
   listInstalledPlugins,
   pluginPathEnvPrefixes,
   disposePreparedPlugin,
+  readSkillMeta,
+  readExtensionSummaryFromDisk,
   pluginsRoot,
   MANIFEST_NAME,
 };

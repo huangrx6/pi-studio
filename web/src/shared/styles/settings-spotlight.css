@@ -53,7 +53,7 @@
 .settings-spotlight .settings-spotlight-copy :is(h2, h3) {
   margin: 0;
   color: var(--text);
-  font-size: var(--settings-section-title-size);
+  font-size: var(--text-subtitle);
   font-weight: var(--weight-semibold);
   line-height: var(--leading-tight);
 }
@@ -62,7 +62,7 @@
   max-width: 43ch;
   margin: 0;
   color: var(--muted);
-  font: var(--settings-description-font);
+  font: var(--font-description);
 }
 
 .settings-spotlight-actions {

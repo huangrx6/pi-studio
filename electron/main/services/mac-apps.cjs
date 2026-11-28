@@ -16,8 +16,10 @@ const APPLICATION_ROOTS = ['/Applications', '/System/Applications', '/System/App
 
 /** 应用图标缓存：appPath → dataURL。 */
 const appIconCache = new Map();
+/** 已安装应用静态映射缓存（不查询进程号）：Array<{ name, displayName, bundleId, executableName, path }>。 */
+let appMappingCache = null;
 
-/** 扫描系统目录里的 .app（按名称去重）。 */
+/** 扫描系统目录里的 .app（按路径去重）。 */
 function applications() {
   const apps = new Map();
   for (const root of APPLICATION_ROOTS) {
@@ -35,6 +37,90 @@ function applications() {
     }
   }
   return [...apps.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/**
+ * 静态扫描本机已安装应用的「中文显示名 / 英文包名 / Bundle ID / 安装路径」映射。
+ * 仅读取磁盘静态元数据（NSBundle + NSFileManager），不查询实时进程号，结果常驻内存直到手动刷新。
+ */
+function installedAppMappings({ refresh = false } = {}) {
+  if (appMappingCache && !refresh) return appMappingCache;
+  const baseApps = applications();
+  if (process.platform !== 'darwin' || !baseApps.length) {
+    appMappingCache = baseApps.map((item) => ({
+      name: item.name,
+      displayName: item.name,
+      bundleId: '',
+      executableName: item.name,
+      path: item.path,
+    }));
+    return appMappingCache;
+  }
+
+  const paths = baseApps.map((item) => item.path);
+  const metaByPath = new Map();
+  try {
+    const script = `
+ObjC.import('Foundation');
+function run(argv) {
+  var list = [];
+  try { list = JSON.parse(String(argv[0] || '[]')); } catch (e) { list = []; }
+  var fm = $.NSFileManager.defaultManager;
+  var out = [];
+  for (var i = 0; i < list.length; i++) {
+    var p = String(list[i] || '');
+    if (!p) continue;
+    var bundleId = '';
+    var execName = '';
+    var displayName = '';
+    try {
+      var b = $.NSBundle.bundleWithPath(p);
+      if (b) {
+        bundleId = String(ObjC.unwrap(b.bundleIdentifier) || '');
+        var info = b.infoDictionary;
+        if (info) {
+          execName = String(ObjC.unwrap(info.objectForKey('CFBundleExecutable')) || '');
+        }
+      }
+    } catch (e) {}
+    try {
+      displayName = String(ObjC.unwrap(fm.displayNameAtPath(p)) || '').replace(/\\.app$/i, '');
+    } catch (e) {}
+    out.push({ path: p, bundleId: bundleId, executableName: execName, displayName: displayName });
+  }
+  return JSON.stringify(out);
+}
+`.trim();
+    const stdout = execFileSync(
+      '/usr/bin/osascript',
+      ['-l', 'JavaScript', '-e', script, JSON.stringify(paths)],
+      { encoding: 'utf8', timeout: 8000, maxBuffer: 4 * 1024 * 1024 },
+    );
+    const parsed = JSON.parse(String(stdout || '[]').trim() || '[]');
+    if (Array.isArray(parsed)) {
+      for (const row of parsed) {
+        if (row && typeof row.path === 'string') metaByPath.set(row.path, row);
+      }
+    }
+  } catch {
+    /* Fall back gracefully to folder basenames if osascript is unavailable. */
+  }
+
+  appMappingCache = baseApps.map((item) => {
+    const meta = metaByPath.get(item.path) || {};
+    const displayName = String(meta.displayName || '').trim() || item.name;
+    const bundleId = String(meta.bundleId || '').trim();
+    const executableName = String(meta.executableName || '').trim() || item.name;
+    return {
+      name: item.name,
+      displayName,
+      bundleId,
+      executableName,
+      path: item.path,
+    };
+  }).sort((a, b) => a.displayName.localeCompare(b.displayName, 'zh-Hans'));
+
+  return appMappingCache;
 }
 
 /**
@@ -125,4 +211,4 @@ function openWithApp(target, appPath) {
   });
 }
 
-module.exports = { applications, applicationsForFile, applicationIcon, openWithApp };
+module.exports = { applications, installedAppMappings, applicationsForFile, applicationIcon, openWithApp };

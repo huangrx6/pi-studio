@@ -125,8 +125,3 @@ export function localHrefPath(href: string) {
   path = path.split(/[?#]/, 1)[0];
   return pathToken(path) ? path : null;
 }
-
-/** True when a whole rendered code span is just a path. */
-export function isPathOnly(text: string) {
-  return pathToken(text) !== null;
-}

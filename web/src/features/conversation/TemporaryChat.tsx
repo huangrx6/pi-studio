@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { ArrowUp, ImagePlus, MessageCirclePlus, Square } from 'lucide-react';
+import { ArrowUp, ImagePlus, Square } from 'lucide-react';
 import { JumpToLatestButton } from '../../shared/JumpToLatestButton';
-import { LoadingIndicator } from '../../shared/LoadingState';
+import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
 import { ChatMessageView } from './ChatMessage';
 import { AssistantTurnView } from './AssistantTurn';
 import { NarrativeLiveStatus } from './NarrativeWorkstream';
@@ -9,26 +9,57 @@ import { groupTranscript } from './turn-content';
 import { ComposerImageAttachment } from './ComposerImageAttachment';
 import { ComposerFeedback } from './ComposerFeedback';
 import { ModelPicker } from '../models/ModelPicker';
-import type { ModelSelection, ThinkingLevel } from '../../types/model-types';
-import { peekTemporary, sendTemporary, subscribeTemporary, temporaryState, updateTemporary, type TemporaryImage } from './temporary-chat-store';
+import { ProviderQuotaStatus } from '../models/ProviderQuotaView';
+import { modelQuotaSource } from '../../types/provider-quota';
+import type { ExtensionUiItem } from '../../types/extension-types';
+import type { SettingsSnapshot } from '../../types/global.d';
+import { createEmptyModelSelection, type ThinkingLevel } from '../../types/model-types';
+import { loadTemporaryRecord, peekTemporary, sendTemporary, subscribeTemporary, temporaryState, updateTemporary, type TemporaryImage } from './temporary-chat-store';
 import { temporaryChatCanSubmit, temporaryChatEnterAction } from './temporary-chat-input';
 import { isNearBottom, nestedScrollableConsumesWheel } from './chat-scroll.ts';
 import { errorText } from '../../shared/error-text';
+import './styles/welcome-art.css';
+import './styles/temporary-chat-canvas.css';
 
-/**
- * Temporary conversations stay in the renderer store and deliberately bypass
- * project persistence. The explicit lifetime is the feature's defining state,
- * so the empty screen keeps that consequence visible while omitting the
- * "help with a workspace" teaching copy.
- */
-export function TemporaryChat({ id, selection, onManage }: { id: string; selection: ModelSelection; onManage: () => void }) {
-  const state = useSyncExternalStore(listener => subscribeTemporary(id, listener), () => temporaryState(id, selection));
+const initialSelection = createEmptyModelSelection();
+
+export function TemporaryChat({ id, onManage, savedScroll, layoutReady, onScrollPosition, quotaItem, quotaProviders }: {
+  id: string;
+  savedScroll?: number; layoutReady?: boolean; onScrollPosition?: (top:number)=>void;
+  onManage: () => void;
+  quotaItem?: ExtensionUiItem;
+  quotaProviders?: SettingsSnapshot['providers'];
+}) {
+  const state = useSyncExternalStore(listener => subscribeTemporary(id, listener), () => temporaryState(id, initialSelection));
   const upload = useRef<HTMLInputElement>(null), scroll = useRef<HTMLDivElement>(null);
   const following = useRef(true), picking = useRef(false);
   const autoScrollFrame = useRef<number | null>(null);
   const programmedScrollTop = useRef<number | null>(null);
   const lastScrollTop = useRef(0);
+  const pendingPosition = useRef<{ report: (top: number) => void; top: number }>();
+  const positionTimer = useRef<ReturnType<typeof setTimeout>>();
+  function flushPosition() {
+    clearTimeout(positionTimer.current);
+    const pending = pendingPosition.current;
+    pendingPosition.current = undefined;
+    if (pending) pending.report(pending.top);
+  }
+  useLayoutEffect(() => {
+    window.addEventListener('pagehide', flushPosition);
+    return () => {
+      window.removeEventListener('pagehide', flushPosition);
+      flushPosition();
+    };
+  }, [id]);
   const initializingModel = useRef(false), modelRequest = useRef(0);
+  const modelOwnerActive = useRef(false);
+  useEffect(() => {
+    modelOwnerActive.current = true;
+    return () => { modelOwnerActive.current = false; };
+  }, []);
+  function ownsModelRequest(request: number) {
+    return modelOwnerActive.current && request === modelRequest.current;
+  }
   const [atBottom, setAtBottom] = useState(true);
   const [stopping, setStopping] = useState(false);
   const { turns, results: toolResults } = useMemo(() => groupTranscript(state.messages), [state.messages]);
@@ -41,14 +72,17 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
     [state.images],
   );
   useEffect(() => {
-    if (state.selection.modelRef || initializingModel.current) return;
+    if (state.historyStatus === 'loading') void loadTemporaryRecord(id);
+  }, [id, state.historyStatus]);
+  useEffect(() => {
+    if (state.historyStatus !== 'ready' || state.selection.modelRef || initializingModel.current) return;
     initializingModel.current = true;
     const request = ++modelRequest.current;
     void window.piApi.temporaryModel()
-      .then(next => { if (request === modelRequest.current) updateTemporary(id, { selection: next }); })
-      .catch(error => { if (request === modelRequest.current) updateTemporary(id, { error: errorText(error) }); })
+      .then(next => { if (ownsModelRequest(request)) updateTemporary(id, { selection: next, modelSettled: true }); })
+      .catch(error => { if (ownsModelRequest(request)) updateTemporary(id, { modelSettled: true, error: errorText(error) }); })
       .finally(() => { initializingModel.current = false; });
-  }, [id, state.selection.modelRef]);
+  }, [id, state.historyStatus, state.selection.modelRef]);
   useEffect(() => {
     if (!state.autoSubmit || !state.draft.trim() || state.busy || !state.selection.modelRef || state.selection.unavailable) return;
     updateTemporary(id, { autoSubmit: false });
@@ -88,6 +122,11 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
     programmedScrollTop.current = null;
     lastScrollTop.current = top;
     setAtBottom(nearBottom);
+    if (layoutReady && state.historyStatus === 'ready' && node.clientHeight > 0 && !pinned && onScrollPosition) {
+      pendingPosition.current = { report: onScrollPosition, top: nearBottom ? -1 : top };
+      clearTimeout(positionTimer.current);
+      positionTimer.current = setTimeout(flushPosition, 160);
+    }
   }
   function scheduleAutoScroll() {
     if (!following.current || autoScrollFrame.current !== null) return;
@@ -99,9 +138,11 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
   useLayoutEffect(() => {
     const node = scroll.current;
     if (!node) return;
-    following.current = true;
+    following.current = savedScroll === undefined || savedScroll < 0;
     programmedScrollTop.current = null;
-    pinToBottom();
+    if (following.current) pinToBottom();
+    else if (layoutReady && state.historyStatus === 'ready') { node.scrollTop = savedScroll!; lastScrollTop.current = node.scrollTop; }
+
     // Observe real size changes, including streaming text, images and panel resizes.
     const observer = new ResizeObserver(() => {
       if (following.current) scheduleAutoScroll();
@@ -111,9 +152,9 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
     observer.observe(node);
     if (node.firstElementChild) observer.observe(node.firstElementChild);
     return () => { observer.disconnect(); cancelAutoScroll(); };
-  }, [id]);
+  }, [id, state.historyStatus, layoutReady]);
   async function addImages(files: File[]) {
-    if (picking.current) return;
+    if (picking.current || state.historyStatus !== 'ready' || state.busy) return;
     picking.current = true;
     try {
       if (!state.selection.modelRef || state.selection.unavailable) {
@@ -122,7 +163,7 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
       if (files.length > 0 && state.selection.supportsImages === false) {
         throw new Error(`${state.selection.label || '当前模型'} 不支持图片输入。请切换到支持图片的模型后再添加图片。`);
       }
-      const current = temporaryState(id, selection);
+      const current = temporaryState(id, initialSelection);
       if (current.images.length + files.length > 8) throw new Error('最多添加 8 张图片');
       const images: TemporaryImage[] = [];
       for (const file of files) {
@@ -138,20 +179,23 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
   }
   async function chooseModel(modelRef: string, thinkingLevel?: ThinkingLevel) {
     const request = ++modelRequest.current;
-    const next = await window.piApi.temporaryModel({ modelRef, thinkingLevel });
-    if (request !== modelRequest.current) return;
+    const next = await window.piApi.temporaryModel({ modelRef, thinkingLevel }).catch(error => {
+      if (ownsModelRequest(request)) updateTemporary(id, { modelSettled: true });
+      throw error;
+    });
+    if (!ownsModelRequest(request)) return;
     if (peekTemporary(id)?.images.length && next.supportsImages === false) {
       updateTemporary(id, { error: `${next.label || next.modelRef} 不支持图片输入。请先移除图片，再切换模型。` });
       return;
     }
-    updateTemporary(id, { selection: next, error: '' });
+    updateTemporary(id, { selection: next, modelSettled: true, error: '' });
   }
   async function stop() {
     if (stopping) return;
     setStopping(true);
     try {
       await window.piApi.temporaryStop(id);
-      updateTemporary(id, { busy: false, error: '' });
+      updateTemporary(id, { error: '' });
     } catch (error) {
       updateTemporary(id, { error: errorText(error) });
     } finally {
@@ -159,6 +203,7 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
     }
   }
   const hasUsableModel = Boolean(state.selection.modelRef) && !state.selection.unavailable;
+  const quotaSource = quotaItem && modelQuotaSource(state.selection, quotaProviders);
   const submissionState = {
     draft: state.draft,
     imageCount: state.images.length,
@@ -167,7 +212,12 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
     busy: state.busy,
   };
   const canSubmit = temporaryChatCanSubmit(submissionState);
-  return <section className="temporary-chat" aria-label="临时聊天" onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void addImages([...event.dataTransfer.files]); } }}>
+  if (state.historyStatus === 'loading') return <LoadingState variant="panel">正在读取临时对话…</LoadingState>;
+  if (state.historyStatus === 'failed') return <section className="temporary-empty" aria-label="读取临时对话">
+    <p role="alert">{state.error}</p>
+    <button type="button" className="secondary-button" onClick={() => updateTemporary(id, { historyStatus: 'loading', error: '' })}>重试</button>
+  </section>;
+  return <section className={`temporary-chat${state.messages.length ? '' : ' is-empty'}`} aria-label="临时聊天" onDragOver={event => { if (event.dataTransfer.types.includes('Files')) event.preventDefault(); }} onDrop={event => { if (event.dataTransfer.files.length) { event.preventDefault(); void addImages([...event.dataTransfer.files]); } }}>
     <div className="transcript-viewport">
       <div className="temporary-scroll" ref={scroll}
         onWheel={event => {
@@ -176,10 +226,9 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
         onTouchMove={pauseFollow}
         onScroll={event => onTranscriptScroll(event.currentTarget)}>
         <div className="chat-column">
-          {!state.messages.length && <div className="temporary-empty">
-            <span className="temporary-empty-mark"><MessageCirclePlus /></span>
-            <h2>临时对话</h2>
-            <p>不绑定工作区 · 关闭标签或退出应用即清除</p>
+          {!state.messages.length && <div className="temporary-welcome">
+            <span className="welcome-art" aria-hidden="true"><span className="pi-mark" /></span>
+            <h2>和路过的念头聊一会儿。</h2>
           </div>}
           {state.messages.length > 0 && <div className="messages temporary-messages">
             {turns.map((turn, index) => {
@@ -231,7 +280,7 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
         onRemove={() => updateTemporary(id, { images: state.images.filter(item => item.id !== image.id) })}
       />)}</div>}
       <div className="composer temporary-composer">
-        <textarea className="temporary-textarea" aria-label="临时聊天消息" placeholder="输入消息…" value={state.draft} onChange={event => updateTemporary(id, { draft: event.target.value })} onKeyDown={event => {
+        <textarea rows={1} className="temporary-textarea" aria-label="临时聊天消息" placeholder="输入消息…" value={state.draft} onChange={event => updateTemporary(id, { draft: event.target.value })} onKeyDown={event => {
           const action = temporaryChatEnterAction({
             ...submissionState,
             draft: event.currentTarget.value,
@@ -261,5 +310,6 @@ export function TemporaryChat({ id, selection, onManage }: { id: string; selecti
         </div>
       </div>
     </div>
+    {quotaItem && quotaSource && <ProviderQuotaStatus key={quotaSource.id} {...quotaSource} item={quotaItem} />}
   </section>;
 }

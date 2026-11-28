@@ -7,18 +7,11 @@ const MAX_ID_LENGTH = 256;
 const MAX_PATH_LENGTH = 4_096;
 
 export const STORED_UI_KEYS = {
-  expanded: 'pi-studio:expanded-workspaces',
   workspaceOrder: 'pi-studio:workspace-order',
   sessionOrder: 'pi-studio:session-order',
-  activeSession: 'pi-studio:active-session',
 } as const;
 
 export type StoredSessionOrder = Record<string, string[]>;
-
-export type StoredActiveSession = {
-  id: string;
-  cwd: string;
-} | null;
 
 function browserStorage(): KeyValueStorage | null {
   try {
@@ -70,10 +63,6 @@ function uniqueStrings(
   return output;
 }
 
-export function normalizeExpandedWorkspaces(value: unknown): string[] {
-  return uniqueStrings(value, MAX_WORKSPACES, safeWorkspacePath);
-}
-
 export function normalizeWorkspaceOrder(value: unknown): string[] {
   return uniqueStrings(value, MAX_WORKSPACES, safeWorkspacePath);
 }
@@ -88,14 +77,6 @@ export function normalizeStoredSessionOrder(value: unknown): StoredSessionOrder 
     output[workspace] = uniqueStrings(rawOrder, MAX_SESSIONS_PER_WORKSPACE, safeId);
   }
   return output;
-}
-
-export function normalizeStoredActiveSession(value: unknown): StoredActiveSession {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
-  const candidate = value as { id?: unknown; cwd?: unknown };
-  const id = safeId(candidate.id);
-  const cwd = safeWorkspacePath(candidate.cwd);
-  return id && cwd ? { id, cwd } : null;
 }
 
 function readNormalized<T>(
@@ -128,17 +109,6 @@ function readNormalized<T>(
   return normalized;
 }
 
-export function loadStoredExpandedWorkspaces(
-  storage: KeyValueStorage | null = browserStorage(),
-): string[] {
-  return readNormalized(
-    storage,
-    STORED_UI_KEYS.expanded,
-    () => [],
-    normalizeExpandedWorkspaces,
-  );
-}
-
 export function loadStoredWorkspaceOrder(
   storage: KeyValueStorage | null = browserStorage(),
 ): string[] {
@@ -158,16 +128,5 @@ export function loadStoredSessionOrder(
     STORED_UI_KEYS.sessionOrder,
     () => ({}),
     normalizeStoredSessionOrder,
-  );
-}
-
-export function loadStoredActiveSession(
-  storage: KeyValueStorage | null = browserStorage(),
-): StoredActiveSession {
-  return readNormalized(
-    storage,
-    STORED_UI_KEYS.activeSession,
-    () => null,
-    normalizeStoredActiveSession,
   );
 }

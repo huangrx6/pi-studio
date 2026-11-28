@@ -26,7 +26,6 @@ const execFileAsync = promisify(execFile);
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 const MAX_FILES = 100;
 const MAX_PATCH_CHARS = 80_000;
-const MAX_STORED_TURNS = 30;
 const GIT_TIMEOUT = 20_000;
 /** 开始快照会阻塞发送，限制得更短；超时就放弃本轮 Git 统计。 */
 const SNAPSHOT_TIMEOUT = 5_000;

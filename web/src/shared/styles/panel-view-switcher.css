@@ -1,0 +1,14 @@
+.panel-view-switcher {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+.panel-view-switcher > button {
+  flex: 1;
+  gap: 5px;
+  padding-inline: clamp(5px, 1.6cqi, 10px);
+  white-space: nowrap;
+}
+.panel-view-switcher svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); }
+.panel-view-switcher [aria-pressed='true'] svg { color: var(--accent); }

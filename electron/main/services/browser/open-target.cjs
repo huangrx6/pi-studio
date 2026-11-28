@@ -136,11 +136,6 @@ function isSystemBrowserOpenCommand(command) {
   return false;
 }
 
-/** @deprecated use isSystemBrowserOpenCommand */
-function isSystemHtmlOpenCommand(command) {
-  return isSystemBrowserOpenCommand(command);
-}
-
 function preferWorkbenchForKind(kind, preferences = getBrowserPreferences()) {
   if (kind === 'web') {
     return String(preferences?.webLinkOpenTarget || 'workbench') !== 'system';
@@ -227,11 +222,6 @@ function systemBrowserOpenBlockMessage(command, preferences = getBrowserPreferen
   ].filter(Boolean).join('\n');
 }
 
-/** @deprecated */
-function systemHtmlOpenBlockMessage(command) {
-  return systemBrowserOpenBlockMessage(command);
-}
-
 function browserPreferenceInstructions(preferences = getBrowserPreferences()) {
   if (preferences && preferences.linkOpenInstructAgent === false) {
     return '';
@@ -247,6 +237,9 @@ function browserPreferenceInstructions(preferences = getBrowserPreferences()) {
   if (agentControl && (web === 'workbench' || local === 'workbench')) {
     lines.push(
       'PRIORITY: Always use the built-in Studio workbench browser tools (browser_open, browser_navigate, browser_snapshot, browser_click, browser_hover, browser_type, browser_press, browser_drag, browser_scroll, browser_select, browser_wait, browser_viewport, browser_console, browser_network, browser_screenshot) as the PRIMARY default for web browsing, UI verification, form interaction, keyboard/viewport testing, and console/network inspection so the user can watch live and take over at any moment.',
+    );
+    lines.push(
+      'HYBRID CONTROL & VIEWPORT: Use browser_snapshot (DOM/a11y ref outline, viewportOnly=true after scrolling long pages, or mode="text" for reading articles/tables) as the primary way to read and target elements; reserve browser_screenshot for visual layout checks, charts/canvas, or user-requested captures. For desktop UI testing or visual verification, call browser_viewport (preset="laptop" 1280×800 or "desktop" 1440×900, and "mobile" 390×844 for mobile checks) so pages render at realistic breakpoints instead of the narrow sidebar width.',
     );
     lines.push(
       'Do NOT switch to external browser MCP tools (such as Chrome DevTools MCP) when Studio workbench browser_* tools can complete the task; treat external MCP browser tools strictly as a secondary fallback only for capabilities unavailable in the workbench browser (e.g. CPU/memory performance traces or attaching to an external Chrome session).',
@@ -268,7 +261,6 @@ module.exports = {
   classifyOpenTarget,
   isLoopbackOrLocalHost,
   isSystemBrowserOpenCommand,
-  isSystemHtmlOpenCommand,
   isWorkbenchBrowsableTarget,
   looksLikeHtmlPath,
   preferWorkbenchForKind,
@@ -278,5 +270,4 @@ module.exports = {
   resolveOpenDestination,
   shouldBlockSystemBrowserOpen,
   systemBrowserOpenBlockMessage,
-  systemHtmlOpenBlockMessage,
 };

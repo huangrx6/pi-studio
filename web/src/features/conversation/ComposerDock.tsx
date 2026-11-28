@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { LoadingIndicator } from '../../shared/LoadingState';
 import type {
-  ChatMessage,
   ComposerAttachment,
   ComposerCommand,
   ComposerMentionOption,
@@ -15,7 +14,6 @@ import type {
 import type { ModelCatalog, ModelSelection } from '../../types/model-types';
 import type { SessionStateForPersistence } from './useMessageDelivery';
 import type { QueuedEditContext, QueuedPrompt } from './composer-types';
-import type { ComposerDraft, ComposerDraftStore } from './composer-drafts';
 import type { ComposerMenuState } from './useComposerSuggestions';
 import { composerCapabilityCategories } from './composer-menu';
 import type { ModelPickerRequest } from '../models/ModelPicker';
@@ -53,6 +51,7 @@ export type ComposerDockProps = {
   isNewConversation: boolean;
   workspace: string;
   workspaces: Array<{ cwd: string; name: string }>;
+  workspacesLoaded: boolean;
   session: SessionStateForPersistence;
   modelSelection: ModelSelection;
   prompt: string;
@@ -61,7 +60,6 @@ export type ComposerDockProps = {
   composerImages: Array<{ src: string; alt: string }>;
   composerImageIndexes: Map<string, number>;
   composerDraftKeyRef: MutableRefObject<string>;
-  composerDraftsRef: MutableRefObject<ComposerDraftStore>;
   composerEditorRef: MutableRefObject<ComposerEditorHandle | null>;
   composerWrapRef: MutableRefObject<HTMLDivElement | null>;
   composerComposingRef: MutableRefObject<boolean>;
@@ -81,7 +79,7 @@ export type ComposerDockProps = {
   attachPastedText: (paste: ReturnType<typeof planComposerPaste>) => Promise<void>;
   removeComposerAttachment: (id: string) => void;
   pickComposerAttachments: () => Promise<void>;
-  openFile: (path: string, sessionId?: string, source?: 'attachment') => Promise<boolean>;
+  openFile: (path: string, sessionId?: string, source?: 'attachment', options?: {title?: string}) => Promise<boolean>;
   send: (input?: string, mode?: 'queue') => Promise<void>;
   stopGeneration: () => Promise<void>;
   sendQueuedNow: (id: string) => Promise<void>;
@@ -134,6 +132,7 @@ function ComposerDockComponent({
   isNewConversation,
   workspace,
   workspaces,
+  workspacesLoaded,
   session,
   modelSelection,
   prompt,
@@ -142,7 +141,6 @@ function ComposerDockComponent({
   composerImages,
   composerImageIndexes,
   composerDraftKeyRef,
-  composerDraftsRef,
   composerEditorRef,
   composerWrapRef,
   composerComposingRef,
@@ -270,7 +268,7 @@ function ComposerDockComponent({
   }
 
   return <div className="composer-dock">
-    {isNewConversation && <NewConversationWelcome loading={stateLoading} />}
+    {isNewConversation && <NewConversationWelcome loading={stateLoading && !workspacesLoaded} />}
     {queuedPrompts.length > 0 && <QueuedMessages
       items={queuedPreviews}
       canSteer={turnActive}
@@ -371,8 +369,8 @@ function ComposerDockComponent({
                 type="button"
                 className="composer-file-content"
                 title={path}
-                aria-label={`在右侧面板查看 ${attachment.name}`}
-                onClick={() => void openFile(path, session?.id, 'attachment')}
+                aria-label={`打开附件 ${attachment.name}`}
+                onClick={() => void openFile(path, session?.id, 'attachment', {title:attachment.name})}
               >{content}</button>
               : <div className="composer-file-content" title={attachment.name}>{content}</div>}
             <button
@@ -521,19 +519,21 @@ function ComposerDockComponent({
               onOpenSettings={() => onOpenSettings('harness-compaction')}
             />}
           </>}
-          model={<ModelPicker
-            contextKey={modelPickerContextKey}
-            selection={modelSelection}
-            scope={session ? 'session' : 'default'}
-            disabled={stateLoading || sessionLoading}
-            hidden={settingsOpen}
-            loadCatalog={() => loadModelCatalog(workspace)}
-            onSelectModel={selectModel}
-            onSelectThinking={selectThinking}
-            onManage={onConfigureModels}
-            request={modelPickerRequest}
-            onRequestHandled={() => setModelPickerRequest(null)}
-          />}
+          model={<>
+            <ModelPicker
+              contextKey={modelPickerContextKey}
+              selection={modelSelection}
+              scope={session ? 'session' : 'default'}
+              disabled={stateLoading || sessionLoading}
+              hidden={settingsOpen}
+              loadCatalog={() => loadModelCatalog(workspace)}
+              onSelectModel={selectModel}
+              onSelectThinking={selectThinking}
+              onManage={onConfigureModels}
+              request={modelPickerRequest}
+              onRequestHandled={() => setModelPickerRequest(null)}
+            />
+          </>}
         />
       </div>
     </div>

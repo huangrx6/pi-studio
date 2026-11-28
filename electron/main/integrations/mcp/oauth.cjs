@@ -7,6 +7,7 @@
  */
 
 const { getStudioDatabase } = require('../../core/studio-db.cjs');
+const { scopedTypography } = require('../../theme.cjs');
 const { app } = require('electron');
 
 const OAUTH_TIMEOUT_MS = 5 * 60_000;
@@ -99,7 +100,11 @@ async function authorizeMcpServer(server, openExternal) {
       const detail = page.ok
         ? '可以关闭这个页面并返回 Pi Studio。'
         : escapeHtml(page.message || '授权服务器没有返回可用凭据。');
-      return `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title><style>body{font:15px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;margin:0;min-height:100vh;display:grid;place-items:center;background:#101010;color:#ededed}main{max-width:520px;padding:36px}strong{display:block;font-size:22px;margin-bottom:8px}p{color:#b8b8b8}</style><main><strong>${title}</strong><p>${detail}</p></main></html>`;
+      return `<!doctype html><html lang="zh-CN" data-platform="${process.platform}"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>${title}</title>
+<style>${scopedTypography(':root')}
+body{font:var(--font-body);margin:0;min-height:100vh;display:grid;place-items:center;background:#101010;color:#ededed}
+main{max-width:520px;padding:36px}h1{font:var(--font-title);margin:0 0 8px}p{color:#b8b8b8}
+</style><main><h1>${title}</h1><p>${detail}</p></main></html>`;
     },
   });
   let authorizationUrl;

@@ -80,7 +80,7 @@ try {
   const composer = page.getByRole('textbox', { name: '发送给 Pi 的消息', exact: true });
   const draft = '设置模型、连接和技能时，请保留当前会话的草稿。';
   await composer.fill(draft);
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await openSettings('模型配置');
   await page.locator('.model-settings').waitFor();
   assert.equal(await content().getByRole('button', { name: '添加模型来源', exact: true }).count(), 1, 'single primary add-provider action');
@@ -91,12 +91,12 @@ try {
   await content().getByRole('button', { name: '新对话默认思考强度', exact: true }).click();
   await page.getByRole('option').filter({ has: page.locator('.pi-select-option-label', { hasText: /^High$/ }) }).click();
   await calls('setDefaultThinkingLevel', 1);
-  await openSettings('返回对话');
+  await page.locator('[data-sidebar-section="conversations"]').click();
   assert.match(await page.locator('.model-label').innerText(), /当前会话模型/);
   assert.equal(await composerValue(composer), draft);
   assert.equal(await callCount('conversationConfigure'), 0);
   result.checks.push('new-conversation model/thinking defaults write explicit workspace scope without changing the open session or draft');
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   const { longProvider, longMcp, longSkill } = await page.evaluate(() => window.__settingsResourcesQa);
   const provider = page.locator('[data-provider-id="qa"]');
   await provider.getByRole('button', { name: /个对话模型，/, expanded: false }).click();
@@ -284,12 +284,12 @@ try {
   await theme('深色', '技能');
   await skillRow(longSkill).scrollIntoViewIfNeeded();
   await capture('06-skills-dark');
-  await openSettings('返回对话');
+  await page.locator('[data-sidebar-section="conversations"]').click();
   assert.equal(await composerValue(composer), draft);
   assert.match(await page.locator('.model-label').innerText(), /当前会话模型/);
   result.checks.push('installed skill scopes and explicit invocation remain visible; changed/untrusted stay unavailable until explicit confirmation; failed trust save remains visible and explicit retry requires confirmation; cancel never writes, confirmed trust/delete mock only; draft preserved');
   // Round 18: mutations that committed in main but could not build their projection.
-  await page.locator('.sidebar-bottom button[title="设置"]').click(); await openSettings('模型配置');
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click(); await openSettings('模型配置');
   async function ensureCatalog(query = '') {
     const expand = provider.getByRole('button', { name: /个对话模型，/, expanded: false }); if (await expand.count()) await expand.click();
     await provider.getByRole('textbox', { name: `搜索 ${longProvider} 的模型`, exact: true }).fill(query); await settle();
@@ -358,13 +358,13 @@ try {
   await page.locator('.skill-hub-item').getByRole('button', { name: '查看技能 市场安装恢复验证技能', exact: true }).click(); await skillInstall.getByRole('button', { name: '安装技能', exact: true }).waitFor(); await skillInstall.getByRole('button', { name: '项目', exact: true }).click(); await skillInstall.getByRole('button', { name: '项目技能工作区', exact: true }).click(); await page.getByRole('option', { name: /第二个隔离工作区/ }).click(); await skillInstall.getByRole('button', { name: '安装技能', exact: true }).waitFor();
   await control('fail', 'settings'); await skillInstall.getByRole('button', { name: '安装技能', exact: true }).click(); await skillInstall.getByRole('button', { name: '重试页面更新', exact: true }).waitFor(); assert.equal(await callCount('installPreparedSkill'), 2); const callbackReads = await callCount('refreshSkills'); await twice(skillInstall.getByRole('button', { name: '重试页面更新', exact: true })); await skillInstall.waitFor({ state: 'detached' }); assert.equal(await callCount('installPreparedSkill'), 2); assert.equal(await callCount('refreshSkills'), callbackReads, 'ready installation retries only App callback/current settings read');
   await page.locator('.skill-hub-item').getByRole('button', { name: '查看技能 市场安装恢复验证技能', exact: true }).click(); await skillInstall.getByRole('button', { name: '安装技能', exact: true }).waitFor(); await control('hold', 'installPreparedSkill'); await control('commitError', 'installPreparedSkill'); await skillInstall.getByRole('button', { name: '安装技能', exact: true }).click(); await pending('installPreparedSkill');
-  await control('openSecondSession'); await nav().waitFor({ state: 'detached' }); await page.locator('.assistant-response').first().waitFor(); await page.locator('.sidebar-bottom button[title="设置"]').click(); await openSettings('技能'); await page.locator('.installed-skills').waitFor(); const readsBeforeOldInstall = await callCount('settings'); await control('release', 'installPreparedSkill'); assert.equal(await skillInstall.count(), 0); await toastStack().getByRole('button', { name: '刷新技能状态', exact: true }).waitFor(); assert.match(await toastStack().getByRole('alert').innerText(), /市场安装恢复验证技能.*已安装/); assert.equal(await callCount('settings'), readsBeforeOldInstall, 'unmounted installer must not call old onInstalled');
-  await control('openFirstSession'); await nav().waitFor({ state: 'detached' }); await page.locator('.sidebar-bottom button[title="设置"]').click(); await openSettings('MCP 服务器'); result.checks.push('marketplace ready result plus current-workspace callback read failure retries callback only; held old-scope installation completion cannot reopen dialog or invoke old callback; commit fact still marks the original target for explicit read recovery');
+  await control('openSecondSession'); await nav().waitFor({ state: 'detached' }); await page.locator('.assistant-response').first().waitFor(); await page.locator('.sidebar-bottom button[aria-label="设置"]').click(); await openSettings('技能'); await page.locator('.installed-skills').waitFor(); const readsBeforeOldInstall = await callCount('settings'); await control('release', 'installPreparedSkill'); assert.equal(await skillInstall.count(), 0); await toastStack().getByRole('button', { name: '刷新技能状态', exact: true }).waitFor(); assert.match(await toastStack().getByRole('alert').innerText(), /市场安装恢复验证技能.*已安装/); assert.equal(await callCount('settings'), readsBeforeOldInstall, 'unmounted installer must not call old onInstalled');
+  await control('openFirstSession'); await nav().waitFor({ state: 'detached' }); await page.locator('.sidebar-bottom button[aria-label="设置"]').click(); await openSettings('MCP 服务器'); result.checks.push('marketplace ready result plus current-workspace callback read failure retries callback only; held old-scope installation completion cannot reopen dialog or invoke old callback; commit fact still marks the original target for explicit read recovery');
 
   // A delayed recovery from workspace A must not overwrite the new workspace projection.
   await control('commitError', 'setMcpEnabled'); await mcpRow('等待连接服务').getByRole('switch').click(); await toastStack().getByRole('button', { name: '刷新 MCP 状态', exact: true }).waitFor();
   const staleMcp = await page.evaluate(() => { const value = window.__settingsResourcesQa.mcpProjection(); value.providers = []; value.mcp = [{ ...value.mcp[0], name: 'OBSOLETE_SCOPE_MCP' }]; return value; }); await control('reply', 'refreshMcp', staleMcp); await control('hold', 'refreshMcp'); await toastStack().getByRole('button', { name: '刷新 MCP 状态', exact: true }).click(); await pending('refreshMcp');
-  await control('openSecondSession'); await nav().waitFor({ state: 'detached' }); await page.locator('.assistant-response').first().waitFor(); await page.locator('.sidebar-bottom button[title="设置"]').click(); await openSettings('MCP 服务器'); await mcpRow('等待连接服务').waitFor(); await control('release', 'refreshMcp'); assert.equal(await content().getByText('OBSOLETE_SCOPE_MCP', { exact: true }).count(), 0); await mcpRow('等待连接服务').waitFor(); await toastStack().getByRole('button', { name: '刷新 MCP 状态', exact: true }).waitFor(); await recover('mcp', 'setMcpEnabled');
+  await control('openSecondSession'); await nav().waitFor({ state: 'detached' }); await page.locator('.assistant-response').first().waitFor(); await page.locator('.sidebar-bottom button[aria-label="设置"]').click(); await openSettings('MCP 服务器'); await mcpRow('等待连接服务').waitFor(); await control('release', 'refreshMcp'); assert.equal(await content().getByText('OBSOLETE_SCOPE_MCP', { exact: true }).count(), 0); await mcpRow('等待连接服务').waitFor(); await toastStack().getByRole('button', { name: '刷新 MCP 状态', exact: true }).waitFor(); await recover('mcp', 'setMcpEnabled');
   await openSettings('模型配置'); await provider.waitFor(); await control('openFirstSession'); await nav().waitFor({ state: 'detached' }); assert.equal(await composerValue(composer), draft);
   result.checks.push('held MCP recovery from workspace A cannot replace workspace B list/providers after native session navigation; completion notice persists until explicit current-scope read recovery, original conversation draft survives return');
 

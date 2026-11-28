@@ -7,7 +7,7 @@
  * 分组：主题与状态 / 会话 / 文件 / 附件 / 模型 / 设置 / 事件订阅。
  */
 
-const { contextBridge, ipcRenderer, webUtils } = require('electron');
+const { contextBridge, ipcRenderer } = require('electron');
 
 // A tray or menu command can arrive before the workspace has mounted and recovered its drafts.
 let workspaceReady = false;
@@ -28,6 +28,18 @@ function navigationEvent(channel) {
 contextBridge.exposeInMainWorld('piApi', {
   // 平台是编译期就确定的事实，交给主进程给，渲染层不用靠 navigator 猜。
   platform: process.platform,
+  setToolWindowContext: (context) => ipcRenderer.invoke('pi:tool-window-context', context),
+  openToolWindow: (request) => ipcRenderer.invoke('pi:tool-window-open', request),
+  onToolWindowAction: navigationEvent('pi:tool-window-action'),
+  setToolWindowAnchor: rect => ipcRenderer.invoke('pi:tool-window-anchor', rect),
+  hideToolWindow: () => ipcRenderer.invoke('pi:tool-window-hide'),
+  toggleToolWindow: () => ipcRenderer.invoke('pi:tool-window-toggle'),
+  toolWindowVisible: () => ipcRenderer.invoke('pi:tool-window-visible'),
+  onToolWindowVisibility: listener => {
+    const handle = (_event, visible) => listener(visible);
+    ipcRenderer.on('pi:tool-window-visibility', handle);
+    return () => ipcRenderer.removeListener('pi:tool-window-visibility', handle);
+  },
   waitForStartup: () => ipcRenderer.invoke('pi:startup-ready'),
   networkSettings: () => ipcRenderer.invoke('pi:network-settings'),
   saveNetworkSettings: (settings) => ipcRenderer.invoke('pi:network-save', settings),
@@ -39,6 +51,8 @@ contextBridge.exposeInMainWorld('piApi', {
     pendingNavigation = undefined;
     deliver?.();
   },
+  temporaryHistory: () => ipcRenderer.invoke('pi:temporary-history'),
+  temporaryRead: (id) => ipcRenderer.invoke('pi:temporary-read', id),
   temporaryModel: (payload) => ipcRenderer.invoke('pi:temporary-model', payload),
   temporaryPrompt: (payload) => ipcRenderer.invoke('pi:temporary-prompt', payload),
   temporaryStop: (id) => ipcRenderer.invoke('pi:temporary-stop', id),
@@ -79,10 +93,28 @@ contextBridge.exposeInMainWorld('piApi', {
   deletePermissionProfile: (payload) => ipcRenderer.invoke('pi:delete-permission-profile', payload),
   confirmResponse: (payload) => ipcRenderer.send('pi:confirm-response', payload),
   state: (cwd) => ipcRenderer.invoke('pi:state', cwd),
+  saveExpandedProjects: (keys) => ipcRenderer.invoke('pi:save-expanded-projects', keys),
+  teamProject: (cwd) => ipcRenderer.invoke('pi:team-project', cwd),
+  planList: () => ipcRenderer.invoke('pi:plan-list'),
+  planWeek: boundaries => ipcRenderer.invoke('pi:plan-week', boundaries),
+  planHistory: (cursor, planId) => ipcRenderer.invoke('pi:plan-history', cursor, planId),
+  planPreview: (rule, id) => ipcRenderer.invoke('pi:plan-preview', rule, id),
+  planSave: input => ipcRenderer.invoke('pi:plan-save', input),
+  planAction: (action, id) => ipcRenderer.invoke('pi:plan-action', action, id),
+  onPlansChanged: listener => {
+    const handler = () => listener();
+    ipcRenderer.on('pi:plans-changed', handler);
+    return () => ipcRenderer.removeListener('pi:plans-changed', handler);
+  },
+  teamCreateBot: (name) => ipcRenderer.invoke('pi:team-create-bot', name),
+  teamCreateRoom: (cwd, name) => ipcRenderer.invoke('pi:team-create-room', cwd, name),
+  teamSetRoomBots: (cwd, roomId, botIds) => ipcRenderer.invoke('pi:team-set-room-bots', cwd, roomId, botIds),
   gitRepositories: (cwd) => ipcRenderer.invoke('pi:git-repositories', cwd),
   gitWorkspaceStatus: (cwd, repository) => ipcRenderer.invoke('pi:git-workspace-status', cwd, repository),
   gitWorkspaceChanges: (cwd, repository) => ipcRenderer.invoke('pi:git-workspace-changes', cwd, repository),
   gitWorktree: (cwd, input) => ipcRenderer.invoke('pi:git-worktree', cwd, input),
+  gitBranches: (cwd, repository) => ipcRenderer.invoke('pi:git-branches', cwd, repository),
+  gitCheckout: (cwd, input) => ipcRenderer.invoke('pi:git-checkout', cwd, input),
   gitRead: (id, input) => ipcRenderer.invoke('pi:git-read', id, input),
   gitWrite: (id, input) => ipcRenderer.invoke('pi:git-write', id, input),
   conversationList: () => ipcRenderer.invoke('pi:conversation-list'),
@@ -107,10 +139,13 @@ contextBridge.exposeInMainWorld('piApi', {
   replySubagentSupervisor: (payload) => ipcRenderer.invoke('pi:conversation-subagent-reply', payload),
   subscribeConversation: (id) => ipcRenderer.invoke('pi:conversation-subscribe', id),
   unsubscribeConversation: (id) => ipcRenderer.invoke('pi:conversation-unsubscribe', id),
+  readLayout: (owner, surface) => ipcRenderer.invoke('pi:layout-get', owner, surface),
+  writeLayout: (owner, surface, value) => ipcRenderer.invoke('pi:layout-set', owner, surface, value),
   files: (cwd, path) => ipcRenderer.invoke('pi:files', { cwd, path }),
   file: (cwd, path) => ipcRenderer.invoke('pi:file', { cwd, path }),
   writeFile: (payload) => ipcRenderer.invoke('pi:file-write', payload),
   filePreview: (cwd, path) => ipcRenderer.invoke('pi:file-preview', { cwd, path }),
+  workspaceCode: request => ipcRenderer.invoke('pi:workspace-code', request),
   onFilesChanged: (listener) => {
     const handler = (_event, keys) => listener(keys);
     ipcRenderer.on('pi:files-changed', handler);
@@ -140,11 +175,6 @@ contextBridge.exposeInMainWorld('piApi', {
   browserDownloadsFolder: () => ipcRenderer.invoke('pi:browser-downloads-folder'),
   browserClearData: () => ipcRenderer.invoke('pi:browser-clear-data'),
   browserTabs: () => ipcRenderer.invoke('pi:browser-tabs'),
-  browserTabRegister: (payload) => ipcRenderer.invoke('pi:browser-tab-register', payload),
-  browserTabUpdate: (payload) => ipcRenderer.invoke('pi:browser-tab-update', payload),
-  browserTabUnregister: (id) => ipcRenderer.invoke('pi:browser-tab-unregister', id),
-  browserTabActivate: (id) => ipcRenderer.invoke('pi:browser-tab-activate', id),
-  browserCommandAck: (payload) => ipcRenderer.invoke('pi:browser-command-ack', payload),
   browserControlState: () => ipcRenderer.invoke('pi:browser-control-state'),
   browserControlPause: (payload) => ipcRenderer.invoke('pi:browser-control-pause', payload),
   browserSitePolicies: () => ipcRenderer.invoke('pi:browser-site-policies'),
@@ -174,39 +204,29 @@ contextBridge.exposeInMainWorld('piApi', {
     ipcRenderer.on('pi:browser-event', handler);
     return () => ipcRenderer.removeListener('pi:browser-event', handler);
   },
-  onBrowserCommand: (listener) => {
-    const handler = (_event, payload) => listener(payload);
-    ipcRenderer.on('pi:browser-command', handler);
-    return () => ipcRenderer.removeListener('pi:browser-command', handler);
-  },
   desktopControlStatus: () => ipcRenderer.invoke('pi:desktop-control-status'),
   desktopControlPreferences: () => ipcRenderer.invoke('pi:desktop-control-preferences'),
   desktopControlSetPreferences: (payload) => ipcRenderer.invoke('pi:desktop-control-set-preferences', payload),
-  desktopControlPermissions: () => ipcRenderer.invoke('pi:desktop-control-permissions'),
+  desktopControlPermissions: (options) => ipcRenderer.invoke('pi:desktop-control-permissions', options),
   desktopControlOpenPermissionSettings: (payload) => ipcRenderer.invoke('pi:desktop-control-open-permission-settings', payload),
+  desktopControlAppMappings: (options) => ipcRenderer.invoke('pi:desktop-control-app-mappings', options),
   desktopControlInstalledApps: () => ipcRenderer.invoke('pi:desktop-control-installed-apps'),
   desktopControlAlwaysAllowAdd: (payload) => ipcRenderer.invoke('pi:desktop-control-always-allow-add', payload),
   desktopControlAlwaysAllowRemove: (payload) => ipcRenderer.invoke('pi:desktop-control-always-allow-remove', payload),
   desktopControlActivity: (payload) => ipcRenderer.invoke('pi:desktop-control-activity', payload),
   desktopControlActivityClear: () => ipcRenderer.invoke('pi:desktop-control-activity-clear'),
-  terminalCreate: (payload) => ipcRenderer.invoke('pi:terminal-create', payload),
-  // Fire-and-forget: waiting for an invoke ack on every keystroke is a major
-  // source of interactive terminal lag in Electron.
-  terminalWrite: (id, data) => { ipcRenderer.send('pi:terminal-write', { id, data }); },
-  terminalResize: (id, cols, rows) => { ipcRenderer.send('pi:terminal-resize', { id, cols, rows }); },
-  terminalClose: (id) => ipcRenderer.invoke('pi:terminal-close', id),
-  // 拖进终端的文件要真实路径：浏览器 File 对象只有文件名。
-  filePathOf: (file) => {
-    try { return webUtils.getPathForFile(file) || ''; } catch { return ''; }
-  },
-  onTerminalEvent: (listener) => {
+  desktopControlPreviewCapture: (payload) => ipcRenderer.invoke('pi:desktop-control-preview-capture', payload),
+  desktopControlFocusWindow: (payload) => ipcRenderer.invoke('pi:desktop-control-focus-window', payload),
+  onDesktopControlPreview: (listener) => {
     const handler = (_event, payload) => listener(payload);
-    ipcRenderer.on('pi:terminal-event', handler);
-    return () => ipcRenderer.removeListener('pi:terminal-event', handler);
+    ipcRenderer.on('pi:desktop-control-preview', handler);
+    return () => ipcRenderer.removeListener('pi:desktop-control-preview', handler);
   },
   runtimeServices: (payload) => ipcRenderer.invoke('pi:runtime-services', payload),
   runtimeServiceStop: (payload) => ipcRenderer.invoke('pi:runtime-service-stop', payload),
   composerResources: (payload) => ipcRenderer.invoke('pi:conversation-resources', payload),
+  searchFileContents: (payload) => ipcRenderer.invoke('pi:search-file-contents', payload),
+  cancelFileContentSearch: (requestId) => ipcRenderer.send('pi:cancel-file-content-search', requestId),
   searchFiles: (payload) => ipcRenderer.invoke('pi:search-files', payload),
   saveAttachment: (payload) => ipcRenderer.invoke('pi:save-attachment', payload),
   pickAttachments: (payload) => ipcRenderer.invoke('pi:pick-attachments', payload),
@@ -354,6 +374,7 @@ contextBridge.exposeInMainWorld('piApi', {
   removeCustomModel: (payload) => ipcRenderer.invoke('pi:remove-custom-model', payload),
   // ---- 主进程 → 渲染进程 的事件订阅（返回取消订阅函数）----
   onConfirmRequest: (listener) => { const handler = (_event, payload) => listener(payload); ipcRenderer.on('pi:confirm-request', handler); return () => ipcRenderer.removeListener('pi:confirm-request', handler); },
+  onConfirmDismissed: (listener) => { const handler = (_event, id) => listener(id); ipcRenderer.on('pi:confirm-dismissed', handler); return () => ipcRenderer.removeListener('pi:confirm-dismissed', handler); },
   onOpenSettings: navigationEvent('pi:open-settings'),
   onOpenUpdate: navigationEvent('pi:open-update'),
   onUpdateState: (listener) => {

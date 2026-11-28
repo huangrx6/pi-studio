@@ -104,6 +104,7 @@ await page.addInitScript(() => {
       window.__conversationListeners.add(listener);
       return () => window.__conversationListeners.delete(listener);
     },
+    modeGet: async () => ({ available: true, mode: 'smart' }),
     composerResources: async () => ({ commands: [], skills: [] }),
     conversationSubmit: args => new Promise(resolve => {
       window.__submitArguments = args;
@@ -113,6 +114,7 @@ await page.addInitScript(() => {
       temporaryListeners.add(listener);
       return () => temporaryListeners.delete(listener);
     },
+    temporaryHistory: async () => [],
     temporaryModel: async () => model,
     temporaryPrompt: ({ id }) => new Promise(() => { window.__temporaryChatId = id; }),
     sessionSubagents: async () => [],
@@ -158,17 +160,19 @@ async function emitStream(text, kind = 'text') {
 }
 
 async function verifyLiveThinkingCode(viewportSelector, updateThinking) {
-  const selector = `${viewportSelector} .activity-thinking.is-live .activity-thinking-body`;
+  const step = page.locator(`${viewportSelector} .narrative-step.is-thinking.is-running`);
   for (const count of [24, 42]) {
-    const lines = Array.from({ length: count }, (_, index) => `     - entry-${index + 1}\n`).join('');
+    const lines = Array.from({ length: count }, (_, index) => `     - 核对当前步骤使用的配置与输入数据 entry-${index + 1}\n`).join('');
     await updateThinking('推理正文\n\n1. 配置示例\n\n   ```yaml\n   entries:\n' + lines);
-    await page.waitForFunction(({ selector, line }) => {
-      const node = document.querySelector(selector);
-      return node?.querySelector('.markdown-code > pre code')?.textContent.includes(line)
-        && node.scrollHeight > node.clientHeight + 120
-        && node.scrollHeight - node.clientHeight - node.scrollTop <= 1;
-    }, { selector, line: `entry-${count}` });
+    const excerpt = step.locator('.narrative-step-thought').filter({ hasText: `entry-${count}` });
+    await excerpt.waitFor();
+    assert.ok(await excerpt.evaluate(node => node.scrollHeight > node.clientHeight
+      && node.scrollHeight - node.clientHeight - node.scrollTop <= 1),
+    'the two-line live preview follows the latest streamed input');
   }
+  await step.getByRole('button', { expanded: false }).click();
+  await step.locator('pre code').filter({ hasText: 'entry-42' }).waitFor();
+  await step.getByRole('button', { expanded: true }).click();
 }
 
 try {
@@ -185,13 +189,25 @@ try {
   assert.ok((await metrics()).distance <= 36, 'opening a session should land at the live edge');
 
   const userCount = await page.locator('.message.user').count();
-  await page.locator('.composer-editor').fill('测试发送后立即贴底');
+  const editor = page.getByRole('textbox', { name: '发送给 Pi 的消息' });
+  await editor.click();
+  await page.keyboard.insertText('测试发送后立即贴底');
   await page.locator('.send-button').click();
   await page.waitForFunction(count => document.querySelectorAll('.message.user').length === count + 1, userCount);
   await page.waitForFunction(() => Boolean(window.__submitArguments));
   await page.waitForTimeout(50);
   assert.ok((await metrics()).distance <= 36, 'the optimistic user message should pin before thinking begins');
   await verifyLiveThinkingCode('.chat-scroll', thinking => emitStream(thinking, 'thinking'));
+
+  // Expanding the complete thought above moves the reader into its history.
+  await page.locator('.chat-scroll').evaluate(node => {
+    node.dispatchEvent(new WheelEvent('wheel', { bubbles: true, deltaY: 360 }));
+    node.scrollTop = node.scrollHeight;
+  });
+  await page.waitForFunction(() => {
+    const node = document.querySelector('.chat-scroll');
+    return node.scrollHeight - node.clientHeight - node.scrollTop <= 1;
+  });
 
   let streamedText = '## 实时回复\n\n';
   for (let index = 0; index < 12; index += 1) {
@@ -258,14 +274,14 @@ try {
   await emitStream(streamedText);
   assert.ok((await metrics()).distance <= 36, 'a wheel consumed by a nested scroller must preserve follow');
 
-  await page.getByRole('button', { name: '临时聊天', exact: true }).click();
+  await page.locator('.sidebar-rail').getByRole('button', { name: '临时对话', exact: true }).click();
   await page.getByRole('textbox', { name: '临时聊天消息', exact: true }).fill('检查临时对话的流式滚动');
   await page.getByRole('button', { name: '发送临时消息', exact: true }).click();
   await page.waitForFunction(() => Boolean(window.__temporaryChatId));
   await verifyLiveThinkingCode('.temporary-scroll', thinking => page.evaluate(text => window.__streamTemporaryThinking(text), thinking));
 
   assert.deepEqual(errors, []);
-  console.log('PASS: code follows in regular and temporary chats; main transcript follows prose, releases on upward gestures, and re-arms at the bottom.');
+  console.log('PASS: live previews follow in regular and temporary chats and expand to show the code; main transcript follows prose, releases on upward gestures, and re-arms at the bottom.');
 } finally {
   await browser.close();
 }

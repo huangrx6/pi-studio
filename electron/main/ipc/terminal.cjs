@@ -24,13 +24,15 @@ function manager() {
 function watchSender(sender) {
   if (watchedSenders.has(sender)) return;
   watchedSenders.add(sender);
-  sender.once('destroyed', () => manager().closeOwner(sender.id));
+  const ownerId = sender.id;
+  sender.once('destroyed', () => terminalSessions?.closeOwner(ownerId));
 }
 
 function registerTerminalIpc() {
   ipcMain.handle('pi:terminal-create', (event, payload = {}) => {
+    const owner = require('../services/tool-window.cjs').assertToolTab(event, payload.id, 'terminal');
     watchSender(event.sender);
-    return manager().create({ ...payload, ownerId: event.sender.id });
+    return manager().create({ ...payload, cwd: owner.cwd || '', ownerId: event.sender.id });
   });
   // Keystrokes and resizes are latency-sensitive. A one-way channel avoids the
   // invoke round-trip that otherwise serializes every character behind a reply.
@@ -58,4 +60,8 @@ function shutdownTerminalSessions() {
   terminalSessions = undefined;
 }
 
-module.exports = { registerTerminalIpc, shutdownTerminalSessions };
+function closeTerminalForOwner(ownerId, id) {
+  return terminalSessions?.close({ ownerId, id });
+}
+
+module.exports = { registerTerminalIpc, shutdownTerminalSessions, closeTerminalForOwner };

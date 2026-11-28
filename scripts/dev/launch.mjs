@@ -16,6 +16,17 @@
  */
 import { spawn } from 'node:child_process';
 import electron from 'electron';
+import { buildComputerUseHelper } from '../build/build-computer-use-helper.mjs';
+
+if (process.platform === 'darwin' && process.env.PI_STUDIO_SKIP_COMPUTER_USE_BUILD !== '1') {
+  try {
+    buildComputerUseHelper({ quiet: false });
+  } catch (error) {
+    console.warn(
+      `[computer-use] Dev helper build skipped: ${error && error.message ? error.message : error}`,
+    );
+  }
+}
 
 // DSH 和部分终端会导出 ELECTRON_RUN_AS_NODE；桌面窗口不能继承它，
 // 否则 Electron 会退化成普通 Node 解释器，不会创建 BrowserWindow。

@@ -1,98 +1,74 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, Cloud, FilePenLine, GitBranch, PanelRightOpen, Plus, Search } from 'lucide-react';
-import { PopoverSurface } from '../../shared/PopoverSurface';
-import { isComposingKey, menuFocusIndex } from '../../shared/keyboard-navigation';
-import type { GitAction, GitWorkspaceStatus } from '../../types/git-types';
-import { useGitAction, useGitRead, useGitRevision } from './useGitTools';
-import { useGitRepositories } from './useWorkspaceRepositories';
-import './styles/git-branch.css';
+import { useState } from 'react';
+import { Check, Cloud, FilePenLine, GitCommitHorizontal, PanelRightOpen, Plus } from 'lucide-react';
+import { BranchIcon } from './git-icons';
+import type { GitWorkspaceStatus } from '../../types/git-types';
+import { errorText } from '../../shared/error-text';
+import { gitChangedEvent } from './useGitTools';
+import { GitContextPicker, useGitPickerData } from './GitContextPicker';
+import { GitDirectory } from './GitSettingsList';
+import { worktreeAvailability, worktreeName } from './worktree-label';
 
-type BranchPickerProps = { status: GitWorkspaceStatus | null; sessionId?: string; onOpenGit?: () => void };
+type BranchPickerProps = { cwd: string; repository: string; status: GitWorkspaceStatus; onOpenGit?: () => void };
+const readBranches = (cwd: string, repository: string) => window.piApi.gitBranches(cwd, repository);
+
 export function GitBranchPicker(props: BranchPickerProps) {
-  const { selected } = useGitRepositories();
-  return selected ? <BranchMenu key={selected.id} {...props} /> : null;
+  const { status, cwd } = props;
+  const branch = status.branch || (status.commit && '游离 ' + status.commit);
+  if (!branch) return null;
+  return <GitContextPicker label="切换分支" value={branch} icon={status.branch ? BranchIcon : GitCommitHorizontal}
+    title={'切换分支 · ' + branch + '\n' + (status.worktree.path || cwd)} placeholder="搜索或创建分支">
+    {(query, close) => <BranchOptions {...props} query={query} close={close} />}
+  </GitContextPicker>;
 }
 
-function BranchMenu({ status, sessionId, onOpenGit }: BranchPickerProps) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const anchor = useRef<HTMLDivElement>(null);
-  const trigger = useRef<HTMLButtonElement>(null);
-  const menu = useRef<HTMLDivElement>(null);
-  const menuId = useId();
-  const revision = useGitRevision();
-  const { data, error, loading } = useGitRead(open ? sessionId : undefined, 'branches', {}, revision);
-  const mutation = useGitAction(sessionId || '');
+function BranchOptions({ status, cwd, repository, onOpenGit, query, close }: BranchPickerProps & { query: string; close: () => void }) {
+  const { data, loading, error } = useGitPickerData(cwd, repository, readBranches);
+  const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
-  useLayoutEffect(() => {
-    if (!open) return;
-    const align = () => {
-      if (menu.current && anchor.current) {
-        const left = anchor.current.getBoundingClientRect().left;
-        menu.current.style.left = Math.min(0, innerWidth - 8 - left - menu.current.offsetWidth) + 'px';
-      }
-    };
-    align();
-    window.addEventListener('resize', align);
-    return () => window.removeEventListener('resize', align);
-  }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    const outside = (e: Event) => { if (!anchor.current?.contains(e.target as Node)) setOpen(false); };
-    document.addEventListener('pointerdown', outside);
-    document.addEventListener('focusin', outside);
-    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('focusin', outside); };
-  }, [open]);
-  if (!status?.available || !sessionId) return null;
-  const branch = status.branch || status.commit;
-  if (!branch) return null;
-  const filter = query.trim();
-  const matches = data?.branches.filter(b => b.name.toLowerCase().includes(filter.toLowerCase())) || [];
-  async function choose(action: GitAction) {
-    if (data && await mutation.act(data, action)) { setOpen(false); trigger.current?.focus(); }
-    else setNotice('error');
-  }
-  return <div className="git-branch-picker" ref={anchor} onKeyDown={e => {
-    if (!open || isComposingKey(e.nativeEvent)) return;
-    if (e.key === 'Escape') { e.stopPropagation(); setOpen(false); trigger.current?.focus(); return; }
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      const buttons = Array.from(menu.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') || []);
-      const index = menuFocusIndex(e.key, buttons.indexOf(document.activeElement as HTMLButtonElement), buttons.length, true);
-      if (index !== null) { e.preventDefault(); buttons[index].focus(); }
+  const matches = data?.branches.filter(b => b.name.toLowerCase().includes(query.toLowerCase())) || [];
+  async function choose(kind: 'switch' | 'create', name: string, remoteBranch = false) {
+    if (!data || loading || busy) return;
+    setBusy(true); setNotice('');
+    try {
+      await window.piApi.gitCheckout(cwd, { repository, kind, name, remoteBranch, head: data.head, branch: data.branch });
+      close();
+    } catch (cause) {
+      setNotice(errorText(cause));
+    } finally {
+      setBusy(false);
+      window.dispatchEvent(new Event(gitChangedEvent));
     }
-  }}>
-    <button type="button" ref={trigger} className="git-workspace-summary git-branch-trigger" aria-label={'切换分支，当前 ' + branch}
-      aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? menuId : undefined} title={branch}
-      onClick={() => { setQuery(''); setNotice(''); setOpen(!open); }}>
-      <GitBranch aria-hidden="true" /><span>{branch}</span><ChevronDown aria-hidden="true" />
-    </button>
-    {open && <PopoverSurface ref={menu} id={menuId} className="git-branch-menu" role="dialog" aria-label="切换分支">
-      <label className="git-branch-search"><Search aria-hidden="true" /><input autoFocus placeholder="搜索或创建分支" aria-label="搜索或创建分支"
-        value={query} onChange={e => setQuery(e.target.value)} /></label>
-      <div className="git-branch-options">
-        {(['本地分支', '远程分支'] as const).map((label, group) => {
-          const items = matches.filter(b => b.remote === Boolean(group));
-          if (!items.length) return null;
-          if (group === 0) items.sort((a, b) => Number(b.name === data?.branch) - Number(a.name === data?.branch));
-          const Icon = group === 0 ? GitBranch : Cloud;
-          return <section key={label}><h3>{label}</h3>{items.map(b => {
-            const current = !b.remote && b.name === data?.branch;
-            const occupied = !!b.worktree && !current;
-            return <button type="button" key={b.name} aria-current={current || undefined} disabled={mutation.busy || loading || current || occupied} title={occupied ? b.worktree : b.name}
-              onClick={() => void choose({ kind: 'switch', name: b.name, remoteBranch: b.remote })}>
-              <Icon aria-hidden="true" /><span>{b.name}</span>{current ? <Check aria-hidden="true" /> : occupied && <small>其他工作树</small>}
-            </button>;
-          })}</section>;
-        })}
-        {!matches.length && <p className="git-branch-empty" role={error ? 'alert' : 'status'}>{error || (loading ? '正在读取分支…' : '没有匹配的分支')}</p>}
-      </div>
-      {filter && !data?.branches.some(b => !b.remote && b.name === filter) && <button type="button" className="git-branch-create"
-        disabled={!data || mutation.busy || loading} onClick={() => void choose({ kind: 'create', name: filter })}><Plus aria-hidden="true" /><span>创建并切换到 <b>{filter}</b></span></button>}
-      {!!status.dirty.total && <p className="git-branch-dirty"><FilePenLine aria-hidden="true" />有未提交的修改，发生覆盖时会停止切换。</p>}
-      {onOpenGit && <button type="button" className="git-branch-open-workbench" onClick={() => { setOpen(false); onOpenGit(); }}>
-        <PanelRightOpen aria-hidden="true" />打开 Git
-      </button>}
-      {notice && mutation.error && <p role="alert">{mutation.error}</p>}
-    </PopoverSurface>}
-  </div>;
+  }
+  return <>
+    <div className="git-branch-directory"><span>{status.worktree.isWorktree ? '链接工作树' : '主工作树'}</span><GitDirectory path={status.worktree.path || cwd} /></div>
+    <div className="git-branch-options">
+      {(['本地分支', '远程分支'] as const).map((label, group) => {
+        const items = matches.filter(b => b.remote === Boolean(group));
+        if (!items.length) return null;
+        if (group === 0) items.sort((a, b) => Number(b.name === data?.branch) - Number(a.name === data?.branch));
+        const Icon = group === 0 ? BranchIcon : Cloud;
+        return <section key={label}><h3>{label}</h3>{items.map(b => {
+          const current = !b.remote && b.name === data?.branch;
+          const occupied = Boolean(b.worktree) && !current;
+          const tree = occupied && status.worktrees.find(tree => tree.path === b.worktree);
+          const owner = worktreeName(b.worktree, status.worktree.mainPath);
+          const occupancy = tree && tree.unavailable ? worktreeAvailability(tree) : '已占用';
+          return <button type="button" key={b.name} aria-current={current || undefined} disabled={busy || loading || current || occupied}
+            title={current ? '当前分支' : occupied ? '占用此分支的工作树 · ' + b.worktree : '在当前目录切换到 ' + b.name}
+            onClick={() => void choose('switch', b.name, b.remote)}>
+            <Icon aria-hidden="true" /><span>{b.name}</span>{current ? <Check aria-label="当前分支" /> : occupied && <small>{occupancy} · {owner}</small>}
+          </button>;
+        })}</section>;
+      })}
+      {!matches.length && <p className="git-branch-empty" role={error ? 'alert' : 'status'}>{error || (loading ? '正在读取分支…' : '没有匹配的分支')}</p>}
+    </div>
+    {query && !data?.branches.some(b => !b.remote && b.name === query) && <button type="button" className="git-branch-create"
+      disabled={!data || busy || loading} onClick={() => void choose('create', query)}><Plus aria-hidden="true" /><span>创建并切换到 <b>{query}</b></span></button>}
+    {status.worktree.path === cwd && <p className="git-branch-help">在此目录切换分支会保留会话列表，并打开目标分支的标签页。</p>}
+    {!!status.dirty.total && <p className="git-branch-dirty"><FilePenLine aria-hidden="true" />有未提交的修改，发生覆盖时会停止切换。</p>}
+    {onOpenGit && <button type="button" className="git-branch-open-workbench" onClick={() => { close(); onOpenGit(); }}>
+      <PanelRightOpen aria-hidden="true" />打开 Git
+    </button>}
+    {notice && <p role="alert">{notice}</p>}
+  </>;
 }

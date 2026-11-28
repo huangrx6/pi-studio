@@ -1,0 +1,107 @@
+.team-project-rooms {
+  width: 100%;
+  min-width: 0;
+  container: team-project-rooms / inline-size;
+  color: var(--text);
+}
+
+.team-rooms-heading, .team-room-members-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.team-rooms-heading { margin-bottom: var(--space-3); }
+.team-project-rooms :is(h2, h3, h4, p, ul) { margin: 0; }
+.team-project-rooms :is(h2, h3, h4) { font-weight: var(--weight-semibold); }
+.team-rooms-heading h2 { font-size: var(--text-subtitle); }
+.team-room-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  min-height: var(--control-sm);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: var(--text-label);
+}
+.team-room-action:hover { background: var(--surface-hover); }
+.team-project-rooms svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); }
+.team-project-rooms button:focus-visible { outline: 2px solid var(--focus-color); outline-offset: -2px; }
+
+.team-room-browser, .team-project-rooms > .team-room-placeholder {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+}
+.team-room-browser {
+  display: grid;
+  grid-template-columns: minmax(140px, 29%) minmax(0, 1fr);
+  overflow: hidden;
+}
+.team-room-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: min(480px, 62dvh);
+  overflow-y: auto;
+  padding: var(--space-2);
+  border-inline-end: 1px solid var(--divider);
+}
+.team-room-list button {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: var(--space-2);
+  min-height: var(--row-height);
+  min-width: 0;
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  text-align: start;
+}
+.team-room-list button:hover { color: var(--text); background: var(--surface-hover); }
+.team-room-list button[aria-current="true"] { color: var(--text); background: var(--nav-selected-bg); }
+.team-room-list button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.team-room-detail { display: flex; flex-direction: column; min-width: 0; }
+.team-room-title, .team-room-members { padding: var(--space-4); border-bottom: 1px solid var(--divider); }
+.team-room-title h3 { font-size: var(--text-subtitle); overflow-wrap: anywhere; }
+.team-room-members { display: grid; gap: var(--space-2); }
+.team-room-members h4 { font-size: var(--text-label); }
+.team-room-members ul { display: flex; flex-wrap: wrap; gap: var(--space-2); padding: 0; list-style: none; }
+.team-room-members li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 100%;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-tag);
+  background: var(--surface-soft);
+  font-size: var(--text-body);
+}
+.team-room-members li span { overflow-wrap: anywhere; min-width: 0; }
+.team-room-members li svg { color: var(--muted); }
+.team-room-members p, .team-room-placeholder p, .team-room-conversation p {
+  color: var(--muted);
+  font-size: var(--text-description);
+  line-height: var(--leading-body);
+}
+.team-room-placeholder, .team-room-conversation {
+  display: grid;
+  flex: 1;
+  place-content: center;
+  justify-items: center;
+  gap: var(--space-2);
+  min-height: 144px;
+  padding: var(--space-5);
+  text-align: center;
+}
+.team-room-placeholder h3 { font-size: var(--text-subtitle); }
+.team-room-placeholder svg, .team-room-conversation svg { width: var(--icon-lg); height: var(--icon-lg); color: var(--muted); }
+
+@container team-project-rooms (max-width: 520px) {
+  .team-room-browser { grid-template-columns: minmax(0, 1fr); }
+  .team-room-list { max-height: min(168px, 30dvh); border-inline-end: none; border-bottom: 1px solid var(--divider); }
+}

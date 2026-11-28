@@ -121,7 +121,7 @@ const contributors = {
     id,
     title: text(120, 1),
     description: text(1200),
-    slot: { enum: [...summarySlots, 'panel.side'] },
+    slot: { enum: [...summarySlots, 'tool.view', 'status.detail'] },
     slots: { ...array({ enum: summarySlots }, summarySlots.length, 1), uniqueItems: true },
     icon: { $ref: '#/$defs/icon' },
     size: { enum: ['compact', 'regular'] },
@@ -134,12 +134,11 @@ const contributors = {
       entry: text(200, 1),
       sourceId: { $ref: '#/$defs/contributionRef' },
       scope: { enum: ['session', 'global'] },
-      fullscreen: { type: 'boolean' },
     }, ['entry', 'sourceId']),
   }, ['id', 'title'], {
     oneOf: [{ required: ['slot'] }, { required: ['slots'] }],
     if: { required: ['view'] },
-    then: { required: ['slot'], properties: { slot: { const: 'panel.side' }, content: { maxItems: 0 } } },
+    then: { required: ['slot'], properties: { slot: { enum: ['tool.view', 'status.detail'] }, content: { maxItems: 0 } } },
   }), 256),
   settings: array(object({
     id,

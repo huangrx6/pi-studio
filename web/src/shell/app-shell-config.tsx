@@ -1,26 +1,53 @@
 import {
   ArchiveRestore, BarChart3, Bot, Code2, Cpu, HardDrive, Info, Keyboard, KeyRound,
-  GitBranch, Globe, Package, Monitor, Settings, ShieldCheck, Wrench, AppWindow, Plug, FileCode2, Layers3,
+  Globe, Package, Monitor, Settings, ShieldCheck, Wrench, AppWindow, Plug, FileCode2, Layers3,
+  CalendarDays, Columns3, FolderOpen, LayoutGrid, MessageCircleDashed, MessagesSquare,
+  MonitorSmartphone, QrCode, Smartphone, UsersRound,
 } from 'lucide-react';
+import { BranchIcon } from '../features/git/git-icons';
+
+export const sidebarSections = {
+  conversations: { label: '对话', icon: MessagesSquare },
+  temporary: { label: '临时对话', icon: MessageCircleDashed },
+  plugins: { label: '插件', icon: LayoutGrid },
+  plans: { label: '计划', icon: CalendarDays },
+  team: { label: '团队', icon: UsersRound },
+  mobile: { label: '手机端', icon: Smartphone },
+};
+
+export const teamMenu = [
+  { id: 'workspace', label: '工作区', icon: FolderOpen },
+  { id: 'members', label: 'Bot 成员', icon: Bot },
+  { id: 'board', label: '协作看板', icon: Columns3 },
+] as const;
+
+export const mobileMenu = [
+  { id: 'pairing', label: '手机配对', icon: QrCode },
+  { id: 'devices', label: '已配对设备', icon: MonitorSmartphone },
+] as const;
+
+export type SidebarSection = keyof typeof sidebarSections;
+export type TeamView = typeof teamMenu[number]['id'];
+export type MobileView = typeof mobileMenu[number]['id'];
 
 // Keep navigation to the noun labels users need to scan; each page's controls
 // and layout carry the detail rather than repeating it as a sidebar subtitle.
 // MCP / 技能 deep links stay valid as SettingsTab aliases and open the 插件 hub.
 export const settingsPages = [
-  // 先外观与输入，再模型与执行，再资源，最后工作区与应用数据。
+  // 先外观与输入，再模型与执行，再插件与扩展，最后工作区与数据应用。
   { id: 'general', group: '外观与输入', label: '通用', icon: Settings, keywords: ['外观', '主题', '背景', '壁纸', '终端', '托盘', '菜单栏', '字号', '圆角', '强调色'] },
   { id: 'shortcuts', group: '外观与输入', label: '快捷键', icon: Keyboard },
   { id: 'models', group: '模型与用量', label: '模型配置', icon: Cpu },
   { id: 'usage', group: '模型与用量', label: '使用量', icon: BarChart3, keywords: ['Token', '用量', '成本', '统计', 'Metrics', '采集', '已移除'] },
-  { id: 'tools', group: '执行与权限', label: '智能体工具', icon: Wrench, keywords: ['工具方案', '内置工具', 'MCP', '临时对话'] },
+  { id: 'tools', group: '执行与权限', label: '智能体工具', icon: Wrench, keywords: ['工具方案', '扩展工具', 'MCP', '临时对话'] },
   { id: 'permissions', group: '执行与权限', label: '权限策略', icon: ShieldCheck, keywords: ['批准', '规则', '安全', '权限方案', '临时对话'] },
   { id: 'harness', group: '执行与权限', label: 'Harness 配置', icon: Code2, keywords: ['提示词', '指令', '临时对话'] },
   { id: 'agents', group: '执行与权限', label: '智能体配置', icon: Bot, keywords: ['主对话', '临时对话', '子智能体', '子代理', '多智能体', 'agent', '装配'] },
-  { id: 'plugins', group: '资源与扩展', label: '插件', icon: Package, keywords: ['Plugin', 'CLI', '插件包', '市场', '安装'] },
-  { id: 'git', group: '工作区', label: 'Git 工作流', icon: GitBranch, keywords: ['Git 与 Worktree', '工作树', 'Git workflow', 'gitworkflow', '差异', '换行', '分支'] },
+  { id: 'plugins', group: '插件与扩展', label: '插件', icon: Package, keywords: ['Plugin', 'CLI', '插件包', '市场', '安装', '扩展'] },
+  { id: 'browser', group: '插件与扩展', label: '浏览器', icon: AppWindow, keywords: ['Browser', 'CDP', 'Chrome', '下载', '历史', '网站权限', 'webview', '内嵌浏览器', '扩展'] },
+  { id: 'desktop-control', group: '插件与扩展', label: '电脑操控', icon: Monitor, keywords: ['Desktop', 'Computer Use', '屏幕', '辅助功能', '窗口', '截图', '桌面', '扩展'] },
+  { id: 'git', group: '工作区', label: 'Git', icon: BranchIcon, keywords: ['Git 工作流', 'Git 与 Worktree', '工作树', 'Git workflow', 'gitworkflow', '差异', '换行', '分支'] },
   { id: 'network', group: '数据与应用', label: '网络代理', icon: Globe, keywords: ['proxy', '代理', '网络', 'VPN', '连接', 'HTTP', 'SOCKS', '超时'] },
-  { id: 'browser', group: '数据与应用', label: '浏览器', icon: AppWindow, keywords: ['Browser', 'CDP', 'Chrome', '下载', '历史', '网站权限', 'webview', '内嵌浏览器'] },
-  { id: 'desktop-control', group: '数据与应用', label: '电脑操控', icon: Monitor, keywords: ['Desktop', 'Computer Use', '屏幕', '辅助功能', '窗口', '截图', '桌面', '只读'] },
   { id: 'secrets', group: '数据与应用', label: '测试凭据', icon: KeyRound, keywords: ['密钥', '令牌', '占位符', 'secret', 'token', '凭据引用'] },
   { id: 'archives', group: '数据与应用', label: '归档会话', icon: ArchiveRestore },
   { id: 'storage', group: '数据与应用', label: '设备存储', icon: HardDrive, keywords: ['storage', '磁盘', '硬盘', '空间', '占用', '缓存', '附件', '工作树', '数据目录', '数据库', '文件夹'] },
@@ -28,9 +55,9 @@ export const settingsPages = [
 ] as const;
 
 export const pluginSettingsSearchPages = [
-  { id: 'mcp', group: '资源与扩展', label: 'MCP 服务器', icon: Plug, keywords: ['插件', '连接', 'OAuth', '服务器'] },
-  { id: 'skills', group: '资源与扩展', label: '技能', icon: FileCode2, keywords: ['插件', 'skill', '技能源', '技能市场'] },
-  { id: 'extensions', group: '资源与扩展', label: '扩展', icon: Layers3, keywords: ['插件', 'extension', '声明式', '发布者'] },
+  { id: 'mcp', group: '插件与扩展', label: 'MCP 服务器', icon: Plug, keywords: ['插件', '连接', 'OAuth', '服务器'] },
+  { id: 'skills', group: '插件与扩展', label: '技能', icon: FileCode2, keywords: ['插件', 'skill', '技能源', '技能市场'] },
+  { id: 'extensions', group: '插件与扩展', label: '扩展', icon: Layers3, keywords: ['插件', 'extension', '声明式', '发布者'] },
 ] as const;
 
 /** Sidebar page ids. */

@@ -9,6 +9,7 @@
  * - a second process exits and reveals the primary instance;
  * - hiding/reactivation keeps IPC available and the app exits cleanly.
  */
+import { openToolPanel } from './fixtures/tool-panel.mjs';
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -293,14 +294,21 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-async function exercisePackagedTerminal(page, workspace) {
+async function exercisePackagedTerminal(app, main, workspace) {
+  const page = await openToolPanel(app, main, () => main.evaluate(async cwd => {
+    await window.piApi.setToolWindowContext({key:'studio', title:'安装包验证', cwd});
+    await window.piApi.openToolWindow({kind:'terminal'});
+  }, workspace));
+  await page.locator('.terminal-panel').waitFor();
   const created = await page.evaluate(async ({ cwd }) => {
+    const state = await window.toolWindowApi.state();
+    window.__packagedTab = state.groups.find(group => group.context.key === state.key).active;
     window.__packagedPtyEvents = [];
     window.__disposePackagedPty = window.piApi.onTerminalEvent((event) => {
       window.__packagedPtyEvents.push(event);
     });
     return window.piApi.terminalCreate({
-      id: 'packaged-startup-pty',
+      id: window.__packagedTab,
       cwd,
       cols: 96,
       rows: 24,
@@ -310,7 +318,7 @@ async function exercisePackagedTerminal(page, workspace) {
   const marker = '__PI_STUDIO_PACKAGED_PTY_OK__';
   try {
     await page.evaluate(({ marker }) => window.piApi.terminalWrite(
-      'packaged-startup-pty',
+      window.__packagedTab,
       `printf '\\r${marker}:%s:%s:%s\\r\\n' "$PWD" "$TERM_PROGRAM" "$PI_STUDIO_TERMINAL"; exit\r`,
     ), { marker });
     await page.waitForFunction(
@@ -342,7 +350,7 @@ async function exercisePackagedTerminal(page, workspace) {
       window.__disposePackagedPty?.();
       delete window.__disposePackagedPty;
       delete window.__packagedPtyEvents;
-      return window.piApi.terminalClose('packaged-startup-pty').catch(() => undefined);
+      return window.toolWindowApi.command('studio', {kind:'close', id:window.__packagedTab});
     }).catch(() => {});
   }
 }
@@ -459,7 +467,7 @@ async function exerciseProfile(executable, profile, workspace, label, options = 
 
     if (options.seed) {
       evidence = await seedOfflineConfiguration(page, workspace);
-      evidence.pty = await exercisePackagedTerminal(page, workspace);
+      evidence.pty = await exercisePackagedTerminal(app, page, workspace);
       await page.screenshot({
         path: path.join(artifactDirectory, '01-offline-configured.png'),
         fullPage: true,

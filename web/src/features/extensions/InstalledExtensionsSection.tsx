@@ -35,7 +35,7 @@ function ExtensionDisplayOrder({ items, order, saving, onSave, onRetry }: Extens
       onClick={() => setOpen(true)}><ListOrdered aria-hidden="true" />对话显示顺序</button>
     {open && <DetailDialog className="extension-display-order" onClose={() => setOpen(false)}>{close => <>
       <header className="detail-header">
-        <div className="detail-heading"><div><h2>对话显示顺序</h2><p>扩展菜单和状态摘要按此顺序显示，适用于所有对话。</p></div></div>
+        <div className="detail-heading"><div><h2>对话显示顺序</h2><p>扩展摘要按此顺序显示，适用于所有对话。</p></div></div>
         <button className="icon-button" type="button" aria-label="关闭对话显示顺序" onClick={close}><X /></button>
       </header>
       <div className="detail-body">
@@ -89,9 +89,9 @@ export function InstalledExtensionsSection({ items, displayOrder, publisherSetti
     </section>
     {builtins.length > 0 && <Accordion
       className="extension-disclosure-card builtin-extension-section"
-      summary="内置能力"
+      summary="内置扩展"
       badge={builtins.length}
-      description="Pi Studio 自带，可查看和单独启停"
+      description="Pi Studio 内置提供的能力扩展，可查看提供的工具并单独启停"
       summaryClassName="builtin-extension-summary"
       compact
       defaultOpen={builtins.some(item => !item.enabled)}

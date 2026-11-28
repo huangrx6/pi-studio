@@ -230,10 +230,6 @@ function mergeModelMetadataSources(model, sources, declarations = discoveryDecla
   return next;
 }
 
-function mergeOfficialModelMetadata(model, official, declarations = discoveryDeclarations(model)) {
-  return mergeModelMetadataSources(model, [official], declarations);
-}
-
 function storedModelMetadata(row, sources) {
   if (!row) return undefined;
   const settled = row.metadataSource && row.metadataSource !== 'legacy'
@@ -529,7 +525,6 @@ module.exports = {
   markDiscoveryDeclarations,
   mergeDiscoveredModelMetadata,
   mergeModelMetadataSources,
-  mergeOfficialModelMetadata,
   modelSources,
   normalizeBaseUrl,
   resolveOfficialModel,

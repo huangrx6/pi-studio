@@ -7,7 +7,7 @@
 Pi Studio 的扩展分为两层：
 
 - **Agent 扩展**在 Electron 主进程中运行受信任的 Node.js 模块，通过 Pi Durable 提供 tools、sections、hooks 和 tasks。
-- **UI 扩展**优先使用 JSON 安全的声明式内容；需要独立交互界面的侧栏面板，可通过 `panel.view` 在受控沙箱（`pi-ext://` + `iframe sandbox` + JSON `postMessage` 桥）中加载插件自身的 `ui/` 静态资源。主渲染进程不会接收任意可执行插件代码或直接 DOM 注入。
+- **UI 扩展**优先使用 JSON 安全的声明式内容；需要独立交互界面的视图，可通过 `panel.view` 在受控沙箱（`pi-ext://` + `iframe sandbox` + JSON `postMessage` 桥）中加载插件自身的 `ui/` 静态资源。主渲染进程不会接收任意可执行插件代码或直接 DOM 注入。
 
 两层可以写在同一个扩展中，也可以只实现其中一层。扩展契约面向普通主进程和 renderer；扩展不应读取 `~/.pi`、Pi CLI 配置或另一套宿主 API。
 
@@ -70,7 +70,7 @@ Studio 先把本地目录、ZIP、HTTPS、GitHub 或 registry 来源复制到 qu
       {
         "id": "checklist-detail",
         "title": "发布检查",
-        "slot": "panel.side",
+        "slot": "tool.view",
         "size": "regular",
         "content": [
           { "kind": "heading", "text": "发布前" },
@@ -147,7 +147,7 @@ Agent 扩展示例：
 | `agent.hooks` | 监听或拦截 Durable task 阶段 |
 | `agent.tasks` | 注册可持久化 Durable task |
 | `ui.commands` | 注册命令和 composer 命令 |
-| `ui.panels` | 注册声明式 slot 内容或 `panel.view` 沙箱侧栏面板 |
+| `ui.panels` | 注册声明式 slot 内容或 `panel.view` 沙箱视图 |
 | `ui.settings` | 在设置页注册声明式内容 |
 | `ui.data` | 通过 Durable provider 向已挂载的 `dataView` 或 `panel.view` 提供实时数据与受控 RPC |
 | `network` | 声明扩展会访问网络；这是审计标记，不是网络沙箱 |
@@ -360,15 +360,16 @@ button tone：`default`、`primary`、`danger`。
 
 | 声明 | 用途 |
 | --- | --- |
-| `status.chip` | 扩展卡片或顶栏的简要状态。`details` 必须指向本扩展的 `panel.side`。 |
+| `status.chip` | 底部状态栏摘要。`details` 指向本扩展的工具视图或状态详情。 |
 | `composer.above` | 输入框上方的单行摘要。 |
 | `composer.below` | 输入框下方的单行摘要。 |
-| `panel.side` | 右侧工作台中的完整面板，可展示指标、表格、时间线和操作。 |
+| `tool.view` | 悬浮工具面板内的标签页，可提供沙箱界面或声明式内容。 |
+| `status.detail` | 状态栏详情弹出层。 |
 | `contributes.settings` | 当前扩展自己的设置区，需要 `ui.settings` 权限。 |
 
-使用 `slot` 声明一个位置，或用 `slots` 声明最多三个可选的摘要位置。用户可为每项摘要选择一个位置或隐藏它。摘要最多两个区块，可用 `text`、`badge`、`keyValue`、`notice` 和 `dataView`。完整布局和操作由工作台面板承载。
+使用 `slot` 声明一个位置，或用 `slots` 声明最多三个可选摘要位置。用户可选择其中一个位置或隐藏摘要。摘要最多两个区块，可用 `text`、`badge`、`keyValue`、`notice` 和 `dataView`。含 `status.chip` 的摘要默认展示在底部状态栏。
 
-工作台按扩展 ID 归组。同一扩展的多个面板在一个标签内切换。`priority` 和声明顺序决定初始顺序。用户在「设置 → 插件 → 扩展 → 对话显示顺序」调整扩展菜单和状态摘要里的排列，顺序适用于所有会话。
+`priority` 和声明顺序决定初始顺序。用户在「设置 → 插件 → 扩展 → 对话显示顺序」调整摘要排列，顺序适用于所有会话。
 
 未知位置和非法内容会在清单扫描时产生诊断。完整规范和示例见 [声明式 UI](ui.md)。
 
@@ -391,7 +392,7 @@ type ExtensionUiAction =
 - `openUrl` 只接受 `http://` 或 `https://`。
 - `sendPrompt` 只填充或提交输入框，不能伪造 assistant 消息。
 - `runCommand` 必须指向同一扩展中带 runtime handler 的命令，并要求 `ui.commands` 权限。
-- `openPanel` 必须指向同一扩展声明的 `panel.side` 面板，并要求 `ui.panels` 权限。
+- `openPanel` 必须指向同一扩展声明的 `tool.view` 或 `status.detail`，并要求 `ui.panels` 权限。
 - UI 不能直接读写文件、数据库、凭据或任意 IPC。需要这些能力时由 Agent extension/tool 完成。
 
 ## 10. Scope、信任与来源

@@ -22,14 +22,6 @@ function safeSnapshot(value: unknown): ExtensionUiSnapshot {
   };
 }
 
-/**
- * Loads the declarative extension surface for one workspace.
- *
- * Multiple slots intentionally remain independent: settings and the right
- * workbench can stay mounted while the conversation surface changes. Callers
- * that need to inspect items before rendering them can pass an external
- * snapshot to ExtensionSlot.
- */
 export function useExtensionUiSnapshot(cwd?: string, enabled = true) {
   const [loaded, setLoaded] = useState<{ cwd?: string; snapshot: ExtensionUiSnapshot }>();
 
@@ -58,5 +50,6 @@ export function useExtensionUiSnapshot(cwd?: string, enabled = true) {
     };
   }, [cwd, enabled]);
 
-  return enabled && loaded && loaded.cwd === cwd ? loaded.snapshot : EMPTY_SNAPSHOT;
+  const current = enabled && loaded?.cwd === cwd ? loaded : undefined;
+  return { snapshot: current?.snapshot ?? EMPTY_SNAPSHOT, ready: !enabled || Boolean(current) };
 }

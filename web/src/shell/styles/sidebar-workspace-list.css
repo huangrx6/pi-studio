@@ -2,22 +2,44 @@
    Virtual groups also reserve their complete height while React replaces gaps,
    so intermediate DOM removal cannot clamp the scroll root back to zero. */
 .sidebar-session-gap { pointer-events: none; flex: none; }
-.sessions.is-virtualized > .session-row-shell { height: var(--control); }
+.sessions.is-virtualized > .session-row-shell { height: var(--sidebar-session-height); }
 .workspace-list:has(.sessions.is-virtualized) { overflow-anchor: none; }
 .sidebar-row-shell[data-transferring-focus="true"] > .sidebar-row-actions { opacity: 1; visibility: visible; pointer-events: auto; }
-.workspace-row > .workspace-count {
+.workspace-label, .workspace-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.workspace-label { flex: 1; min-width: 0; gap: 6px; }
+.workspace-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workspace-label .project-name { color: var(--text); font-weight: var(--weight-semibold); }
+.workspace-label > .workspace-tree-icon {
   flex: none;
-  color: var(--text-3);
-  font-size: var(--text-xs);
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  color: var(--faint);
+}
+.workspace-row.hint-trigger { interest-delay-start: 450ms; }
+.workspace-row.hint-trigger:focus-visible { interest-delay-start: 0s; }
+.workspace-meta { display: var(--workspace-meta-display, inline-flex); flex: none; }
+.workspace-count {
+  flex: none;
+  color: var(--faint);
+  font-size: var(--text-caption);
   font-variant-numeric: tabular-nums;
   line-height: 1;
 }
-.workspace-row > .workspace-running-dot {
+.workspace-running-dot {
   flex: none;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--loading);
   animation: pulse 1.6s ease-in-out infinite;
 }
 .sessions:not(.is-virtualized) {
@@ -30,4 +52,38 @@
 @media (prefers-reduced-motion: reduce) {
   .sessions:not(.is-virtualized) { animation: none; }
   .workspace-running-dot { animation: none; }
+}
+
+.sidebar-project + .sidebar-project { margin-block-start: 2px; }
+.sidebar-project:has(.workspace-row[aria-expanded="true"]) + .sidebar-project { margin-block-start: var(--space-2); }
+.sidebar-worktree { margin-inline-start: var(--space-2); }
+.sidebar-worktree + .sidebar-worktree { margin-block-start: var(--space-1); }
+.sidebar-worktree.is-current {
+  border-radius: var(--radius-control);
+  background: var(--nav-hover-bg);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+.sidebar-worktree.is-current .session-row[aria-current="page"] {
+  background: transparent;
+  font-weight: var(--weight-semibold);
+}
+.sidebar-worktree.is-current .session-row[aria-current="page"]::after {
+  position: absolute;
+  inset-inline-start: 2px;
+  width: 2px;
+  height: var(--icon-xs);
+  border-radius: var(--radius-round);
+  background: currentColor;
+  content: '';
+}
+.workspace-missing-label {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 42%;
+  overflow: hidden;
+  color: var(--faint);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-label);
+  font-weight: var(--weight-regular);
 }

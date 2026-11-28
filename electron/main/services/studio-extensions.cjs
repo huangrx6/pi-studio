@@ -12,9 +12,11 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { EventEmitter } = require('node:events');
 const { pathToFileURL } = require('node:url');
 const { app } = require('electron');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
+const { installedPluginManifest } = require('../core/installed-plugin-panels.cjs');
 const {
   normalizeManifest: normalizeCoreManifest,
 } = require('../core/extension-manifest.cjs');
@@ -81,6 +83,7 @@ const QUOTA_EXTENSION_ID = 'user:pi-quota-status';
 let host;
 let distribution;
 let officialCatalog;
+const enabledEvents = new EventEmitter();
 let extensionRuntimeQueue = Promise.resolve();
 
 function officialExtensionsRoot() {
@@ -248,6 +251,10 @@ function normalizeUiAction(raw, owner) {
 
 function normalizeManifest(raw, source, scope) {
   return normalizeCoreManifest(raw, source, scope);
+}
+
+function normalizeInstalledPluginManifest(raw, source, scope, options) {
+  return normalizeCoreManifest(installedPluginManifest(raw), source, scope, options);
 }
 
 function readManifestFile(file, scope) {
@@ -474,14 +481,14 @@ function assertSymlinkTreeContained(root) {
   return realRoot;
 }
 
-function extensionContentFingerprint(manifest) {
+function extensionContentFingerprint(manifest, normalize = normalizeManifest) {
   const directory = path.dirname(manifest.path);
   const managed = Boolean(manifest.installation);
   const validated = validateExtensionDirectory(directory, {
     scope: manifest.scope,
     integrity: managed ? 'required' : 'ignore',
     requirePublisher: managed,
-    normalizeManifest,
+    normalizeManifest: normalize,
   });
   if (managed && validated.treeSha256 !== manifest.installation.sha256) {
     throw new Error('扩展文件摘要与安装状态不一致，请重新安装或回滚');
@@ -499,13 +506,14 @@ function installedExtension(row, cwd) {
 }
 
 function fingerprintForRow(row, cwd) {
+  const installedPlugin = row.origin === 'plugin' && row.contentHash;
   const fingerprint = extensionContentFingerprint({
     ...row.manifest,
     path: row.source,
     scope: row.scope,
     installation: installedExtension(row, cwd),
-  });
-  if (row.origin === 'plugin' && row.contentHash && fingerprint !== row.contentHash) {
+  }, installedPlugin ? normalizeInstalledPluginManifest : normalizeManifest);
+  if (installedPlugin && fingerprint !== row.contentHash) {
     throw new Error('插件扩展代码已改变，请重新安装插件');
   }
   return fingerprint;
@@ -728,7 +736,7 @@ function revealExtensionPanel(row, panelId, durableConversationId) {
   const db = getStudioDatabase();
   const current = db.getExtension(row.id);
   if (!current?.enabled || !current.trusted
-    || !current.manifest.contributes.panels.some(panel => panel.slot === 'panel.side'
+    || !current.manifest.contributes.panels.some(panel => (panel.slot === 'tool.view' || panel.slot === 'status.detail')
       && contributionId(current, current.scope, panel.id) === id)) return;
   const conversation = db.getConversation(String(durableConversationId));
   if (!conversation || conversation.archived) return;
@@ -1160,7 +1168,7 @@ function runtimeRows(rows) {
 
 async function reloadStudioExtensionsUnlocked(runtime, cwd, prepared = {}) {
   const effectiveCwd = cwd ? path.resolve(cwd) : '';
-  await closeAllExtensionDataViewServices();
+  await closeAllExtensionDataViewServices({ reloading: true });
   const previousHost = host?.runtime === runtime ? host : undefined;
   const installed = previousHost?.installed || new Map();
   if (previousHost) host = undefined;
@@ -1320,8 +1328,9 @@ function extensionDataSource(sourceId) {
 }
 
 function extensionViewDirectory(extensionId) {
-  const entry = extensionHostSnapshot().extensions.find((row) => row.id === extensionId && row.available);
+  const entry = availableExtensionRow(extensionId);
   if (!entry || !entry.source) return undefined;
+  if (entry.scope === 'builtin') return host?.runtime.builtinViewDirectories?.[extensionId];
   const uiDir = path.join(path.dirname(entry.source), 'ui');
   try {
     return fs.statSync(uiDir).isDirectory() ? uiDir : undefined;
@@ -1416,6 +1425,11 @@ function assertNoActiveDependents(row, cwd, action) {
   }
 }
 
+function onStudioExtensionEnabled(id, listener) {
+  enabledEvents.on(id, listener);
+  return () => enabledEvents.off(id, listener);
+}
+
 function setStudioExtensionEnabled(id, enabled, cwd) {
   const row = extensionRowsForWorkspace(cwd).find((item) => item.id === id);
   if (!row) throw new Error('扩展不存在');
@@ -1425,7 +1439,9 @@ function setStudioExtensionEnabled(id, enabled, cwd) {
     if (extensionTier(row) === 'core') throw new Error(`核心扩展不能停用：${id}`);
     assertNoActiveDependents(row, cwd, '停用');
   }
-  return getStudioDatabase().setExtensionEnabled(id, nextEnabled);
+  const saved = getStudioDatabase().setExtensionEnabled(id, nextEnabled);
+  enabledEvents.emit(id, nextEnabled);
+  return saved;
 }
 
 function setStudioExtensionTrusted(id, trusted, cwd) {
@@ -1434,18 +1450,9 @@ function setStudioExtensionTrusted(id, trusted, cwd) {
   if (row.scope === 'builtin') return row;
   const nextTrusted = Boolean(trusted);
   if (!nextTrusted && row.trusted) assertNoActiveDependents(row, cwd, '撤销信任');
-  const contentHash = nextTrusted
-    ? extensionContentFingerprint({
-      ...row.manifest,
-      path: row.source,
-      scope: row.scope,
-      installation: extensionDistributionService().getInstalled(
-        row.manifest.id,
-        row.scope,
-        cwd,
-      ),
-    })
-    : '';
+  // Plugin ownership pins the installed bytes even while runtime trust is off.
+  const revokedHash = row.origin === 'plugin' ? row.contentHash : '';
+  const contentHash = nextTrusted ? fingerprintForRow(row, cwd) : revokedHash;
   return getStudioDatabase().setExtensionTrusted(id, nextTrusted, contentHash);
 }
 
@@ -1542,16 +1549,33 @@ function installationSnapshot(row, cwd) {
   };
 }
 
+function visibleExtensionRows() {
+  return getStudioDatabase().listExtensions().filter((row) => rowVisibleForWorkspace(row, host?.cwd));
+}
+
+function rowIsAvailable(row, health) {
+  const needsRuntime = row.scope === 'builtin'
+    || (row.id !== QUOTA_EXTENSION_ID && Boolean(row.manifest?.runtime?.durableEntry));
+  return health.available && (!needsRuntime || Boolean(host?.installed?.has(row.id)));
+}
+
+// View assets and live data need current availability, without assembling the
+// settings inventory and reading installation histories for every extension.
+function availableExtensionRow(id) {
+  const graph = dependencyGraph(visibleExtensionRows());
+  const row = graph.byId.get(id);
+  if (!row) return undefined;
+  const health = extensionHealthForRows([row], graph, host?.errors);
+  return rowIsAvailable(row, health.get(id)) ? row : undefined;
+}
+
 function extensionHostSnapshot() {
-  const db = getStudioDatabase();
-  const rows = db.listExtensions()
-    .filter((row) => rowVisibleForWorkspace(row, host?.cwd))
-    .sort((left, right) => (
-      TIER_RANK.get(extensionTier(left)) - TIER_RANK.get(extensionTier(right))
-      || SCOPE_RANK.get(left.scope) - SCOPE_RANK.get(right.scope)
-      || left.name.localeCompare(right.name, 'zh-CN')
-      || left.id.localeCompare(right.id)
-    ));
+  const rows = visibleExtensionRows().sort((left, right) => (
+    TIER_RANK.get(extensionTier(left)) - TIER_RANK.get(extensionTier(right))
+    || SCOPE_RANK.get(left.scope) - SCOPE_RANK.get(right.scope)
+    || left.name.localeCompare(right.name, 'zh-CN')
+    || left.id.localeCompare(right.id)
+  ));
   const graph = dependencyGraph(rows);
   const errors = host?.errors || [];
   const health = extensionHealthForRows(rows, graph, errors);
@@ -1559,8 +1583,6 @@ function extensionHostSnapshot() {
     extensions: rows.map((row) => {
       const rowHealth = health.get(row.id);
       const management = managementState(row, graph);
-      const needsRuntime = row.scope === 'builtin'
-        || (row.id !== QUOTA_EXTENSION_ID && Boolean(row.manifest?.runtime?.durableEntry));
       return {
         ...row,
         tier: extensionTier(row),
@@ -1573,7 +1595,7 @@ function extensionHostSnapshot() {
         requirements: requirementsForRow(row),
         dependents: graph.dependents.get(row.id) || [],
         activeDependents: management.activeDependents,
-        available: rowHealth.available && (!needsRuntime || Boolean(host?.installed?.has(row.id))),
+        available: rowIsAvailable(row, rowHealth),
         health: rowHealth.health,
         blockedReason: rowHealth.blockedReason,
         missingDependencies: rowHealth.missingDependencies,
@@ -1602,16 +1624,7 @@ function extensionHostSnapshot() {
 }
 
 function providerQuotaExtensionAvailable() {
-  return extensionHostSnapshot().extensions.some(row => row.id === QUOTA_EXTENSION_ID && row.available);
-}
-
-function extensionRowsForRuntime(cwd) {
-  const effectiveCwd = cwd || host?.cwd || '';
-  const rows = syncStudioExtensions(effectiveCwd).rows
-    .filter((row) => rowVisibleForWorkspace(row, effectiveCwd));
-  const graph = dependencyGraph(rows);
-  const health = extensionHealthForRows(rows, graph, host?.errors || []);
-  return runtimeRows(rows.filter((row) => health.get(row.id)?.available));
+  return Boolean(availableExtensionRow(QUOTA_EXTENSION_ID));
 }
 
 function extensionUiSnapshot() {
@@ -1638,7 +1651,7 @@ function extensionUiSnapshot() {
         ...(panel.icon ? { icon: panel.icon } : {}),
         ...(panel.color ? { color: panel.color } : {}),
         ...(plugin ? { ownerPluginId: plugin.id } : {}),
-        ...(iconDataUrl && panel.slot === 'panel.side' ? { iconDataUrl } : {}),
+        ...(iconDataUrl && (panel.slot === 'tool.view' || panel.slot === 'status.detail') ? { iconDataUrl } : {}),
         ...(panel.view ? {
           view: {
             url: extensionViewUrl(row.id, panel.view.entry),
@@ -1705,7 +1718,7 @@ function normalizeCommandResult(value, row) {
   const settingsPage = text(value.settingsPage, 32);
   const hasPanel = (id) => hasPermission(row.manifest.permissions || [], 'ui.panels')
     && (row.manifest.contributes?.panels || []).some(panel =>
-      panel.slot === 'panel.side' && contributionId(row, row.scope, panel.id) === id);
+      (panel.slot === 'tool.view' || panel.slot === 'status.detail') && contributionId(row, row.scope, panel.id) === id);
   if (message) result.message = message;
   if (promptText) result.promptText = promptText;
   if (value.submit === true) result.submit = true;
@@ -1716,7 +1729,7 @@ function normalizeCommandResult(value, row) {
     });
     if (!action) throw new Error('扩展命令返回了不受支持的 UI action');
     if (action.kind === 'openPanel' && !hasPanel(action.panelId)) {
-      throw new Error('扩展命令返回的 openPanel 必须指向本扩展声明的 panel.side 面板');
+      throw new Error('扩展命令返回的 openPanel 必须指向本扩展声明的详情视图');
     }
     if (action.kind === 'runCommand') {
       const target = (row.manifest.contributes?.commands || [])
@@ -1730,7 +1743,7 @@ function normalizeCommandResult(value, row) {
     result.action = action;
   }
   if (panelId) {
-    if (!hasPanel(panelId)) throw new Error('扩展命令返回的 panelId 必须指向本扩展声明的 panel.side 面板');
+    if (!hasPanel(panelId)) throw new Error('扩展命令返回的 panelId 必须指向本扩展声明的详情视图');
     result.panelId = panelId;
   }
   if (settingsPage) {
@@ -1804,6 +1817,7 @@ module.exports = {
   API_VERSION,
   MANIFEST_NAME,
   assertSymlinkTreeContained,
+  availableExtensionRow,
   composerCommandsFromSnapshot,
   contributionId,
   dependencyGraph,
@@ -1817,7 +1831,6 @@ module.exports = {
   extensionDistributionService,
   extensionHealthForRows,
   extensionHostSnapshot,
-  extensionRowsForRuntime,
   extensionTier,
   extensionUiSnapshot,
   providerQuotaExtensionAvailable,
@@ -1840,6 +1853,7 @@ module.exports = {
   runtimeExtensionName,
   scanStudioExtensions,
   setStudioExtensionEnabled,
+  onStudioExtensionEnabled,
   setStudioExtensionTrusted,
   setOfficialExtensionAutoUpdate,
   stableExtensionId,

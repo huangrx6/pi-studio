@@ -1,5 +1,15 @@
-/* Shell navigation shares one neutral selection across both sidebars and the workbench. */
-.app :is(.session-row, .nav-row, .settings-nav-row, .panel-tab).is-active {
+/* Portaled sidebar menus share the sidebar's keyboard focus colour. */
+.shell-sidebar, .sidebar-action-menu {
+  --focus-color: var(--muted);
+}
+
+.shell-sidebar :is(.nav-row, .workspace-row, .session-row, .bottom-row, .settings-nav-row, .icon-button):enabled:hover {
+  background: var(--nav-hover-bg);
+  color: var(--text);
+}
+
+.app :is(.session-row, .nav-row, .settings-nav-row).is-active,
+.shell-sidebar .icon-button.is-active {
   background: var(--nav-selected-bg);
   border-color: var(--transparent);
   color: var(--text-1);
@@ -7,8 +17,12 @@
   box-shadow: none;
 }
 
-.app :is(.session-row, .nav-row, .settings-nav-row, .panel-tab).is-active:hover {
+.app :is(.session-row, .nav-row, .settings-nav-row).is-active:hover,
+.shell-sidebar .icon-button.is-active:hover {
   background: var(--nav-selected-hover-bg);
 }
 
-:is(.session-row, .nav-row, .settings-nav-row).is-active > :is(svg, .nav-icon) { color: var(--accent); }
+@media (forced-colors: none) {
+  /* Chromium's native outline can still appear when a dismissed surface returns focus. */
+  [data-pointer-dismiss]:focus { outline: none; }
+}

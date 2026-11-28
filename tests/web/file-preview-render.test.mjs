@@ -20,11 +20,18 @@ const compiled = ts.transpileModule(source, {
 function fixture() {
   const calls = { json: 0, fence: 0, table: 0 };
   const markdownChrome = [];
+  const sourceViews = [];
   const context = {
     exports: {},
     require(id) {
       if (id.endsWith('.css')) return {};
+      if (id === './editor-state') return require('../../web/src/shared/editor-state.ts');
+      if (id === 'react') return { ...React, lazy: () => props => {
+        sourceViews.push(props);
+        return React.createElement('code', null, props.text);
+      } };
       if (id === './Accordion') return { Accordion };
+      if (id === './FilePreviewMenu') return { FilePreviewMenu: () => null };
       if (id === './ArchivePreview') return { ArchivePreview: ({ data }) => React.createElement('div', null, data.format) };
       if (id === './LoadingState') return { LoadingIndicator: () => null, LoadingState: ({ children }) => React.createElement('span', null, children) };
       if (id === './file-preview.ts') return {
@@ -49,43 +56,58 @@ function fixture() {
   return {
     calls,
     markdownChrome,
-    render(path, text, overrides = {}) {
+    sourceViews,
+    render(path, text, overrides = {}, props = {}) {
       return renderToStaticMarkup(React.createElement(context.exports.FilePreview, {
         file: { path, name: path, text, size: text.length, kind: 'text', ...overrides },
+        ...props,
       }));
     },
   };
 }
 
 test('plain text bypasses JSON parsing and Markdown fence construction while preserving original text', () => {
-  const { calls, render } = fixture();
+  const { calls, render, sourceViews } = fixture();
   // Large backtick-heavy text previously incurred both irrelevant transforms.
   const text = 'literal ` content\r\n'.repeat(10_000);
-  const html = render('notes.txt', text);
+  render('notes.txt', text);
   assert.deepEqual(calls, { json: 0, fence: 0, table: 0 });
-  assert.ok(html.includes(`<pre><code>${text}</code></pre>`));
+  assert.equal(sourceViews[0].text, text);
+});
+
+test('a pending file read replaces the empty prompt, and a refresh keeps the current contents visible', () => {
+  const { render } = fixture();
+  const pending = render('notes.md', '', {}, { file: null, loading: true });
+  assert.match(pending, /正在读取文件/);
+  assert.doesNotMatch(pending, /选择一个文件/);
+  assert.match(render('notes.md', '', {}, { file: null }), /选择一个文件/);
+  assert.match(render('notes.md', '# Current text', {}, { loading: true }), /# Current text/);
 });
 
 test('each format runs only its required text preparation', () => {
-  const { calls, markdownChrome, render } = fixture();
+  const { calls, markdownChrome, render, sourceViews } = fixture();
   assert.match(render('notes.md', '# Heading'), /# Heading/);
   assert.match(render('page.html', '<h1>Heading</h1>'), /sandbox=""/);
   assert.match(render('picture.png', '', { kind: 'image', dataUrl: 'data:image/png;base64,AA==' }), /<img/);
   assert.deepEqual(calls, { json: 0, fence: 0, table: 0 });
   assert.match(render('data.csv', 'name,value\nAlpha,2'), /<td>Alpha<\/td>/);
   assert.deepEqual(calls, { json: 0, fence: 0, table: 1 });
-  assert.match(render('script.ts', 'const value = 2;'), /typescript/);
-  assert.deepEqual(markdownChrome, [true, false], 'README keeps the Markdown chrome while source mode removes it');
-  assert.deepEqual(calls, { json: 0, fence: 1, table: 1 });
+  render('script.ts', 'const value = 2;');
+  assert.equal(sourceViews.at(-1).path, 'script.ts');
+  assert.equal(sourceViews.at(-1).text, 'const value = 2;');
+  assert.deepEqual(markdownChrome, [true]);
+  assert.deepEqual(calls, { json: 0, fence: 0, table: 1 });
 });
 
 test('JSON still formats valid content and preserves invalid content with a visible warning', () => {
-  const { calls, render } = fixture();
+  const { calls, render, sourceViews } = fixture();
   const valid = render('data.json', '{"count":2}');
   assert.match(valid, /\n  &quot;count&quot;: 2\n/);
   assert.ok(!valid.includes('JSON 格式有误'));
   const invalid = render('invalid.json', '{broken');
   assert.match(invalid, /JSON 格式有误/);
   assert.match(invalid, /\{broken/);
-  assert.deepEqual(calls, { json: 2, fence: 2, table: 0 });
+  render('data.json', '{"count":2}', {}, {sourceOnOpen:true});
+  assert.equal(sourceViews.at(-1).text, '{"count":2}');
+  assert.deepEqual(calls, { json: 2, fence: 0, table: 0 });
 });

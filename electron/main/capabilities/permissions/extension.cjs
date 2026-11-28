@@ -78,7 +78,7 @@ function createPermissionsExtension(durable) {
               : call.arguments?.path
                 ? `${call.name} → ${String(call.arguments.path)}${secrets.expanded ? `\n\n使用凭据：${secrets.referenced.join('、')}` : ''}`
                 : `${call.name}\n\n${JSON.stringify(call.arguments, null, 2).slice(0, 4_000)}${secrets.expanded ? `\n\n使用凭据：${secrets.referenced.join('、')}` : ''}`,
-          }));
+          }), context?.abortSignal);
           if (!response.accepted) return { block: '用户拒绝了这次工具调用。' };
           if (response.remember) {
             try {

@@ -192,15 +192,16 @@ async function assertVisibility(label, inside, outside, scrim = 0) {
   const { points, chrome, canvas } = await page.evaluate(async () => {
     const view = document.querySelector('.settings-overlay') || document.querySelector('.app');
     await Promise.all([...document.querySelectorAll('.window-wallpaper img')].map(image => image.decode()));
-    await Promise.all([...view.querySelectorAll('.shell-sidebar, .file-panel')].flatMap(node =>
+    await Promise.all([...document.querySelectorAll('.shell-sidebar, .file-panel')].flatMap(node =>
       node.getAnimations().map(animation => animation.finished.catch(() => {}))));
     const rect = selector => view.querySelector(selector).getBoundingClientRect();
     const region = rect('.content-region');
-    const sidebar = rect('.shell-sidebar');
+    const sidebar = document.querySelector('.shell-sidebar').getBoundingClientRect();
     const frame = document.querySelector('.app').getBoundingClientRect();
     const points = [
       ['outside', 2, 2],
-      ['outside bottom', frame.left + frame.width / 2, frame.bottom + 3],
+      // The save toast casts a shadow across the centre of the bottom gutter.
+      ['outside bottom', frame.left + frame.width / 4, frame.bottom + 3],
       ['header', region.left + region.width / 2, region.top - 4],
       ['inner gutter', region.right + 3, region.top + region.height / 2],
       ['canvas', region.left + 8, region.top + region.height / 2],
@@ -231,7 +232,8 @@ async function assertVisibility(label, inside, outside, scrim = 0) {
 
 try {
   await loadWallpaper('red.png', 32, 48);
-  await page.locator('.bottom-row[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
+  await page.locator('.general-background-summary').click();
   for (const theme of ['dark', 'light']) {
     await page.getByRole('button', { name: theme === 'dark' ? '深色' : '浅色', exact: true }).click();
     for (const percent of [32, 0, 75, 100]) {
@@ -248,17 +250,14 @@ try {
   await assertVisibility('separate outer scrim', 32, 100, 75);
   await page.locator('#background-opacity').fill('0');
   await assertVisibility('outer media hidden', 32, 0, 75);
-  await page.getByRole('button', { name: '返回对话' }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await assertVisibility('conversation', 32, 0, 75);
   await page.getByRole('button', { name: '打开右侧面板' }).click();
-  await page.locator('.file-panel.is-open .panel-start').waitFor();
-  await assertVisibility('docked workbench', 32, 0, 75);
-  await page.locator('.panel-start').getByRole('button', { name: '临时聊天', exact: true }).click();
-  await page.getByRole('button', { name: '全屏', exact: true }).click();
-  await assertVisibility('fullscreen workbench', 32, 0, 75);
+  await page.getByRole('navigation', { name: '工作区视图' }).waitFor();
+  await assertVisibility('workspace files', 32, 0, 75);
   await page.keyboard.press(process.platform === 'darwin' ? 'Meta+,' : 'Control+,');
   await page.locator('.settings-content h1').waitFor();
-  await assertVisibility('settings over fullscreen workbench', 32, 0, 75);
+  await assertVisibility('settings over workspace files', 32, 0, 75);
 } finally {
   await app.close();
 }

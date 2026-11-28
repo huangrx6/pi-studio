@@ -155,9 +155,15 @@ function clearTabTelemetry(webContentsId, scope = 'all') {
 function attachWebContentsTelemetry(contents) {
   if (!contents || contents.isDestroyed?.()) return;
   const id = contents.id;
+  const sameOrigin = origin => Boolean(origin && origin !== 'null' && origin === contents.mainFrame.origin);
+  // A new main document starts a fresh console. Hash changes and iframe loads keep it.
+  contents.on('did-navigate', () => clearTabTelemetry(id, 'console'));
   contents.on('console-message', (event, level, message, line, sourceId) => {
     // Electron 35+ passes a single event object; earlier versions pass positional args.
     if (event && typeof event === 'object' && typeof event.message === 'string') {
+      const frame = event.frame;
+      if (frame?.detached) return;
+      if (frame && frame !== contents.mainFrame && !sameOrigin(frame.origin)) return;
       recordConsoleEntry(id, {
         level: event.level,
         message: event.message,
@@ -177,6 +183,7 @@ function attachWebContentsTelemetry(contents) {
   });
   contents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     if (errorCode === -3) return; // ERR_ABORTED
+    if (!isMainFrame && !sameOrigin(URL.parse(validatedURL)?.origin)) return;
     recordConsoleEntry(id, {
       level: 'error',
       message: `${isMainFrame ? '页面加载失败' : '子资源加载失败'} (${errorCode}): ${errorDescription || 'unknown'}`,
@@ -253,10 +260,15 @@ function readNetworkEntries(webContentsId, options = {}) {
 }
 
 function listBrowserConsole(tabId, options = {}) {
-  const { resolveBrowserTab } = require('./tabs.cjs');
+  const { getTabWebContents, resolveBrowserTab } = require('./tabs.cjs');
+  const { assertSiteActionAllowed } = require('./site-policy.cjs');
   const entry = resolveBrowserTab(tabId);
+  const contents = getTabWebContents(entry);
+  if (!contents) throw new Error('浏览器标签尚未就绪');
+  const url = contents.getURL();
+  assertSiteActionAllowed(url, 'read', { requireAllow: true });
   const data = readConsoleEntries(entry.webContentsId, options);
-  return { tabId: entry.id, url: entry.url, ...data };
+  return { tabId: entry.id, url, ...data };
 }
 
 function listBrowserNetwork(tabId, options = {}) {

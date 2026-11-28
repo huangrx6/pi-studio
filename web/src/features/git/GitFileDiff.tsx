@@ -1,5 +1,6 @@
 import { createContext, useContext, useState } from 'react';
 import { Eye } from 'lucide-react';
+import './styles/git-file-diff.css';
 import { DiffView } from '../conversation/DiffView';
 import { DeferredFilePreview } from '../../shared/DeferredFilePreview';
 import { FileKindIcon } from '../../shared/FileKindIcon';
@@ -8,7 +9,7 @@ import { errorText } from '../../shared/error-text';
 import { prefersFilePreview } from '../../shared/file-preview';
 import { DEFAULT_PREFERENCES, type GitDiffPreferences } from '../../shared/preferences';
 import type { GitDiffSource, GitFileSide } from '../../types/git-types';
-import { useGitRead } from './useGitTools';
+import { useGitRead, useGitRevision } from './useGitTools';
 import { useGitRepositories } from './useWorkspaceRepositories';
 
 export const GitDiffDefaults = createContext<GitDiffPreferences>(DEFAULT_PREFERENCES);
@@ -38,7 +39,7 @@ function FileReview({ sessionId, source, revision }: Props) {
   const { gitDiffLayout, gitDiffWrap } = useContext(GitDiffDefaults);
   const [mode, setMode] = useState<'diff' | 'preview'>();
   const [side, setSide] = useState<GitFileSide>();
-  if (!data) return error ? <p role="alert">{error}</p> : <LoadingState variant="section">正在读取差异…</LoadingState>;
+  if (!data) return error ? <p role="alert">{error}</p> : <LoadingState variant="panel">正在读取差异…</LoadingState>;
   const target = selected?.root.replace(/\\/g, '/').replace(/\/$/, '') + '/' + source.path.replace(/\/$/, '');
   const nested = repositories.find(repo => repo.root.replace(/\\/g, '/') === target);
   const canDiff = !data.binary && data.patch !== '嵌套 Git 仓库';
@@ -62,8 +63,9 @@ function FileReview({ sessionId, source, revision }: Props) {
   return <DiffView key={gitDiffLayout} file={data} responsive actions={showPreview} options={{ layout: gitDiffLayout, wrap: gitDiffWrap, wordDiff: true, hideImports: false }} />;
 }
 
-export function GitFileDiff(props: Props) {
+export function GitFileDiff(props: Omit<Props, 'revision'>) {
+  const revision = useGitRevision();
   return <section className="git-file-diff" aria-label={'文件差异 ' + props.source.path}>
-    <FileReview key={JSON.stringify(props.source)} {...props} />
+    <FileReview key={JSON.stringify(props.source)} {...props} revision={revision} />
   </section>;
 }

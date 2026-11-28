@@ -1,8 +1,7 @@
 import { lazy, useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from 'react';
-import { BookOpen, ChevronLeft, Plus, RotateCw } from 'lucide-react';
+import { BookOpen, Plus, RotateCw } from 'lucide-react';
 import { LoadingState } from '../shared/LoadingState';
 import type { DiscoveredModel } from '../features/models/model-settings-types';
-import type { BrowserLibraryView } from '../features/browser/browser-history';
 import type { ModelOption, ModelSelection } from '../types/model-types';
 import type { SettingsDraftGuard } from '../shared/settings-draft-guard';
 import type { PermissionMode } from './app-shell-config';
@@ -20,101 +19,152 @@ import { errorText } from '../shared/error-text';
 import { quotaExtensionAvailable } from '../types/provider-quota';
 import { SettingsEditorDialog } from './SettingsEditorDialog';
 import type { ModalDismiss } from '../shared/useModalDialog';
-import { SettingsNavigation } from './SettingsNavigation';
-import { ShellHeader, ShellLayout } from './ShellLayout';
+import { ShellHeader } from './ShellLayout';
 import { isComposingKey } from '../shared/keyboard-navigation';
-import { apiTypeOptions, pluginSettingsSearchPages, settingsPages } from './app-shell-config';
+import { apiTypeOptions } from './app-shell-config';
 import { PluginWorkspaceAction, PluginWorkspaceHeader } from '../features/plugins/PluginWorkspaceHeader';
 
+const loadAgentToolsSettings = () => import('../features/tools/AgentToolsSettings');
+const loadHarnessSettings = () => import('../features/harness/HarnessSettings');
+const loadPermissionPolicySettings = () => import('../features/permissions/PermissionPolicySettings');
+const loadSecretVaultSettings = () => import('../features/permissions/SecretVaultSettings');
+const loadSkillHub = () => import('../features/skills/SkillHub');
+const loadAgentsSettings = () => import('../features/agents/AgentsSettings');
+const loadUsageSettings = () => import('../features/usage/UsageSettings');
+const loadArchivedConversationsSettings = () => import('../features/archives/ArchivedConversationsSettings');
+const loadDeviceStorageSettings = () => import('../features/storage/DeviceStorageSettings');
+const loadShortcutSettings = () => import('./ShortcutSettings');
+const loadModelSettings = () => import('../features/models/ModelSettings');
+const loadMcpSettings = () => import('../features/mcp/McpSettings');
+const loadPluginSettings = () => import('../features/plugins/PluginSettings');
+const loadInstalledSkills = () => import('../features/skills/InstalledSkills');
+const loadPublisherTrustSettings = () => import('../features/extensions/PublisherTrustSettings');
+const loadInstalledExtensionsSection = () => import('../features/extensions/InstalledExtensionsSection');
+const loadGeneralSettings = () => import('../features/appearance/GeneralSettings');
+const loadNetworkSettings = () => import('../features/network/NetworkSettings');
+const loadGitSettings = () => import('../features/git/GitSettings');
+const loadAboutSettings = () => import('../features/about/AboutSettings');
+const loadBrowserSettings = () => import('../features/browser/BrowserSettings');
+const loadDesktopControlSettings = () => import('../features/desktop-control/DesktopControlSettings');
+
+const TAB_PRELOADERS: Record<string, Array<() => Promise<unknown>>> = {
+  general: [loadGeneralSettings],
+  shortcuts: [loadShortcutSettings],
+  models: [loadModelSettings],
+  usage: [loadUsageSettings],
+  tools: [loadAgentToolsSettings],
+  permissions: [loadPermissionPolicySettings],
+  harness: [loadHarnessSettings],
+  agents: [loadAgentsSettings],
+  plugins: [loadPluginSettings, loadMcpSettings, loadInstalledSkills, loadSkillHub, loadInstalledExtensionsSection, loadPublisherTrustSettings],
+  mcp: [loadMcpSettings, loadPluginSettings],
+  skills: [loadInstalledSkills, loadSkillHub],
+  extensions: [loadInstalledExtensionsSection, loadPublisherTrustSettings],
+  browser: [loadBrowserSettings],
+  'desktop-control': [loadDesktopControlSettings],
+  git: [loadGitSettings],
+  network: [loadNetworkSettings],
+  secrets: [loadSecretVaultSettings],
+  archives: [loadArchivedConversationsSettings],
+  storage: [loadDeviceStorageSettings],
+  about: [loadAboutSettings],
+};
+
+export function preloadSettingsTab(id: string) {
+  const loaders = TAB_PRELOADERS[id];
+  if (!loaders) return;
+  for (const load of loaders) void load().catch(() => {});
+}
+
 const AgentToolsSettings = lazy(async () => {
-  const module = await import('../features/tools/AgentToolsSettings');
+  const module = await loadAgentToolsSettings();
   return { default: module.AgentToolsSettings };
 });
 const HarnessSettings = lazy(async () => {
-  const module = await import('../features/harness/HarnessSettings');
+  const module = await loadHarnessSettings();
   return { default: module.HarnessSettings };
 });
 const PermissionPolicySettings = lazy(async () => {
-  const module = await import('../features/permissions/PermissionPolicySettings');
+  const module = await loadPermissionPolicySettings();
   return { default: module.PermissionPolicySettings };
 });
 const SecretVaultSettings = lazy(async () => {
-  const module = await import('../features/permissions/SecretVaultSettings');
+  const module = await loadSecretVaultSettings();
   return { default: module.SecretVaultSettings };
 });
 const SkillHub = lazy(async () => {
-  const module = await import('../features/skills/SkillHub');
+  const module = await loadSkillHub();
   return { default: module.SkillHub };
 });
 const AgentsSettings = lazy(async () => {
-  const module = await import('../features/agents/AgentsSettings');
+  const module = await loadAgentsSettings();
   return { default: module.AgentsSettings };
 });
 const UsageSettings = lazy(async () => {
-  const module = await import('../features/usage/UsageSettings');
+  const module = await loadUsageSettings();
   return { default: module.UsageSettings };
 });
 const ArchivedConversationsSettings = lazy(async () => {
-  const module = await import('../features/archives/ArchivedConversationsSettings');
+  const module = await loadArchivedConversationsSettings();
   return { default: module.ArchivedConversationsSettings };
 });
 const DeviceStorageSettings = lazy(async () => {
-  const module = await import('../features/storage/DeviceStorageSettings');
+  const module = await loadDeviceStorageSettings();
   return { default: module.DeviceStorageSettings };
 });
 const ShortcutSettings = lazy(async () => {
-  const module = await import('./ShortcutSettings');
+  const module = await loadShortcutSettings();
   return { default: module.ShortcutSettings };
 });
 const ModelSettings = lazy(async () => {
-  const module = await import('../features/models/ModelSettings');
+  const module = await loadModelSettings();
   return { default: module.ModelSettings };
 });
 const McpSettings = lazy(async () => {
-  const module = await import('../features/mcp/McpSettings');
+  const module = await loadMcpSettings();
   return { default: module.McpSettings };
 }) as typeof import('../features/mcp/McpSettings').McpSettings;
 const PluginSettings = lazy(async () => {
-  const module = await import('../features/plugins/PluginSettings');
+  const module = await loadPluginSettings();
   return { default: module.PluginSettings };
 }) as typeof import('../features/plugins/PluginSettings').PluginSettings;
 const InstalledSkills = lazy(async () => {
-  const module = await import('../features/skills/InstalledSkills');
+  const module = await loadInstalledSkills();
   return { default: module.InstalledSkills };
 }) as typeof import('../features/skills/InstalledSkills').InstalledSkills;
 
 const PublisherTrustSettings = lazy(async () => {
-  const module = await import('../features/extensions/PublisherTrustSettings');
+  const module = await loadPublisherTrustSettings();
   return { default: module.PublisherTrustSettings };
 });
 const InstalledExtensionsSection = lazy(async () => {
-  const module = await import('../features/extensions/InstalledExtensionsSection');
+  const module = await loadInstalledExtensionsSection();
   return { default: module.InstalledExtensionsSection };
 });
 const GeneralSettings = lazy(async () => {
-  const module = await import('../features/appearance/GeneralSettings');
+  const module = await loadGeneralSettings();
   return { default: module.GeneralSettings };
 });
 const NetworkSettings = lazy(async () => {
-  const module = await import('../features/network/NetworkSettings');
+  const module = await loadNetworkSettings();
   return { default: module.NetworkSettings };
 });
 const GitSettings = lazy(async () => {
-  const module = await import('../features/git/GitSettings');
+  const module = await loadGitSettings();
   return { default: module.GitSettings };
 });
 const AboutSettings = lazy(async () => {
-  const module = await import('../features/about/AboutSettings');
+  const module = await loadAboutSettings();
   return { default: module.AboutSettings };
 });
 
 const BrowserSettings = lazy(async () => {
-  const module = await import('../features/browser/BrowserSettings');
+  const module = await loadBrowserSettings();
   return { default: module.BrowserSettings };
 });
 
 const DesktopControlSettings = lazy(async () => {
-  const module = await import('../features/desktop-control/DesktopControlSettings');
+  const module = await loadDesktopControlSettings();
   return { default: module.DesktopControlSettings };
 });
 
@@ -125,13 +175,13 @@ type WorkspaceNotices = {
 };
 
 export type SettingsOverlayProps = {
-  sidebar: { collapsed: boolean; setCollapsed: (collapsed: boolean) => void; resizeHandle: ReactNode };
+  sidebar: { collapsed: boolean; setCollapsed: (collapsed: boolean) => void };
   workspace: string;
   workspaces: PiWorkspace[];
   onOpenWorktree: (path: string) => Promise<void>;
   onOpenGitChanges: () => void;
   onChooseWorkspace: () => void;
-  onOpenBrowser: (view?: BrowserLibraryView) => void;
+  onOpenBrowser: (url?: string) => void;
   workspaceRef: RefObject<string>;
   sessionId?: string;
   activeWorkspaceName?: string;
@@ -153,8 +203,7 @@ export type SettingsOverlayProps = {
 };
 
 /**
- * Full-screen settings surface. App retains ownership of state and IPC; this
- * component owns the page shell, lazy-page routing and editor placement.
+ * Settings content beside the shared navigation, including lazy pages and their editors.
  */
 export function SettingsOverlay({
   sidebar,
@@ -190,7 +239,6 @@ export function SettingsOverlay({
     agentSection,
     settingsData: data,
     settingsContentRef: contentRef,
-    settingsBusy,
     resourceWriteBusy,
     modelRefreshError,
     modelRefreshSummary,
@@ -262,7 +310,6 @@ export function SettingsOverlay({
     skillRefreshError,
     skillRefreshSummary,
     skillRefreshBusy,
-    settingsBusy,
     resourceWriteBusy,
   };
   const models = {
@@ -370,12 +417,12 @@ export function SettingsOverlay({
     },
     onSubmit: submitEditor,
   };
-  // Esc 退出设置：内层编辑器/native dialog 自己处理 Esc，搜索框在前方已 stopPropagation。
+  // Search, dialogs and popovers handle Escape before it closes Settings.
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (event: KeyboardEvent) => {
       if (event.key !== 'Escape' || event.defaultPrevented || isComposingKey(event)) return;
-      if (document.querySelector('dialog[open]')) return;
+      if (document.querySelector('dialog[open], [popover="auto"]:popover-open, [data-status-popover="open"]')) return;
       event.preventDefault();
       void controller.closeSettings();
     };
@@ -392,18 +439,32 @@ export function SettingsOverlay({
   useEffect(() => {
     if (open && sidebar.collapsed) expandRef.current?.focus({ preventScroll: true });
   }, [open, sidebar.collapsed]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const warm = () => {
+      for (const id of Object.keys(TAB_PRELOADERS)) preloadSettingsTab(id);
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+      const handle = window.requestIdleCallback(warm, { timeout: 900 });
+      return () => window.cancelIdleCallback(handle);
+    }
+    const timer = window.setTimeout(warm, 250);
+    return () => window.clearTimeout(timer);
+  }, [open]);
   useLayoutEffect(() => {
     if (open && contentRef.current) contentRef.current.scrollTop = 0;
   }, [open, tab, hubSection, contentRef]);
 
   if (!open) return null;
-  const resourceBusy = notices.settingsBusy || notices.resourceWriteBusy;
-  const close = () => { void controller.closeSettings(); };
+  const resourceBusy = notices.resourceWriteBusy;
   const select = (id: string) => { void controller.selectSettingsTab(id as SettingsTab); };
   const selectPluginSection = (section: PluginWorkspaceSection) => {
     void controller.selectPluginSection(section);
   };
   const boundaryKey = onPluginHub ? 'plugins' : tab;
+  const needsSnapshot = tab === 'models' || tab === 'tools' || tab === 'harness' || tab === 'about' || onPluginHub;
+  const waitingForSnapshot = needsSnapshot && !data && !error;
+  const frameKey = `${boundaryKey}:${waitingForSnapshot ? 'loading' : 'ready'}`;
   let pluginActions: ReactNode;
   if (hubSection === 'mcp' && data?.mcp.length) {
     const refreshBusy = notices.mcpRefreshBusy;
@@ -433,37 +494,22 @@ export function SettingsOverlay({
 
   return (
     <SettingsDraftContext.Provider value={draftGuard}>
-      <div className="settings-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-window-title">
-        <ShellLayout
-          sidebar={<SettingsNavigation
-            pages={settingsPages}
-            searchPages={pluginSettingsSearchPages}
-            activeId={tab}
-            searchActiveId={onPluginHub ? hubSection : tab}
-            searchShortcut={appearance.preferences.shortcuts.palette}
-            onSelect={select}
-            onBack={close}
-            collapsed={sidebar.collapsed}
-            onCollapsedChange={sidebar.setCollapsed}
-          />}
-          resizeHandle={sidebar.resizeHandle}
-        >
+      <section className="settings-overlay" aria-labelledby="settings-window-title">
+        <div className="content-region">
           <ShellHeader
             className="settings-header"
             onExpandSidebar={sidebar.collapsed ? () => sidebar.setCollapsed(false) : undefined}
             expandRef={expandRef}
           >
             <span id="settings-window-title">设置</span>
-            {sidebar.collapsed && <button type="button" className="settings-header-back" onClick={close}><ChevronLeft />返回对话</button>}
           </ShellHeader>
         <main className="shell-canvas settings-content" ref={contentRef as RefObject<HTMLElement>}>
           <DeferredSettingsBoundary
             key={boundaryKey}
             isGeneral={tab === 'general'}
-            onBack={close}
             onOpenGeneral={() => select('general')}
           >
-            <div className="settings-page-frame">
+            <div className="settings-page-frame" key={frameKey}>
             {notices.conversationListRefreshError && (
               <SettingsToast message="操作已完成，但会话列表刷新失败。" tone="error">
                 <button type="button" className="settings-outline" disabled={notices.stateLoading} onClick={notices.onRefreshConversations}>
@@ -500,8 +546,10 @@ export function SettingsOverlay({
                 </button>
               </SettingsToast>
             )}
-            {!data && !error && tab !== 'general' && tab !== 'network' && tab !== 'browser' && tab !== 'desktop-control' && tab !== 'git' && tab !== 'usage' && tab !== 'archives' && tab !== 'storage' && tab !== 'permissions' && tab !== 'secrets' && tab !== 'agents' && (
-              <LoadingState variant="section">正在加载设置…</LoadingState>
+            {waitingForSnapshot && (
+              <div className="settings-loading-panel">
+                <LoadingState variant="panel">正在加载设置…</LoadingState>
+              </div>
             )}
             {tab === 'shortcuts' && <ShortcutSettings preferences={appearance.preferences} onChange={appearance.onChange} />}
             {tab === 'general' && <GeneralSettings {...appearance} onOpenBrowserSettings={() => select('browser')} />}
@@ -533,6 +581,7 @@ export function SettingsOverlay({
                 initialProfiles={data.toolProfiles}
                 mcpServers={data.mcp}
                 onOpenMcp={() => selectPluginSection('mcp')}
+                onOpenExtensions={() => selectPluginSection('extensions')}
                 onSaved={(snapshot) => updateData((current) => ({
                   ...current,
                   ...(snapshot.agentTools ? { agentTools: snapshot.agentTools } : {}),
@@ -692,11 +741,6 @@ export function SettingsOverlay({
                       }}
                       onNotify={(message, tone = 'info') => skills.notify(message, tone)}
                     />
-                    <p className="plugin-workspace-crosslink">
-                      也可从
-                      <button type="button" onClick={() => selectPluginSection('plugins')}>插件目录</button>
-                      安装包含技能的插件包。
-                    </p>
                   </div>
                 )}
                 {hubSection === 'extensions' && (
@@ -707,14 +751,15 @@ export function SettingsOverlay({
                       publisherSettings={<PublisherTrustSettings />}
                       onOpenDetail={extensions.setExtensionDetail}
                     />
-                    {data.extensionErrors.length > 0 && <div className="settings-error-list">
-                      {data.extensionErrors.map((item) => <div key={`${item.path}:${item.message}`}><code>{item.path}</code><span>{item.message}</span></div>)}
+                    {data.extensionErrors.length > 0 && <div className="settings-error-list" role="group" aria-label="扩展诊断">
+                      {data.extensionErrors.map(item => {
+                        const extension = data.extensions.find(entry => entry.id === item.id || entry.source === item.path);
+                        return <details key={`${item.path}:${item.message}`}>
+                          <summary><strong>{extension?.name || item.id || '扩展'}</strong> <span>{item.message}</span></summary>
+                          <code>{item.path}</code>
+                        </details>;
+                      })}
                     </div>}
-                    <p className="plugin-workspace-crosslink">
-                      插件附带的扩展请在
-                      <button type="button" onClick={() => selectPluginSection('plugins')}>插件</button>
-                      页统一安装或卸载。
-                    </p>
                   </div>
                 )}
                 </div>
@@ -725,9 +770,9 @@ export function SettingsOverlay({
           </DeferredSettingsBoundary>
         </main>
           <div className="settings-toast-stack" />
-        </ShellLayout>
+        </div>
         {editor.editor && <SettingsEditorDialog {...editor} editor={editor.editor} />}
-      </div>
+      </section>
     </SettingsDraftContext.Provider>
   );
 }

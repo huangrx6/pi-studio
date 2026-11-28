@@ -39,7 +39,7 @@ export function Breadcrumb({ path }: { path: string }) {
   }, []);
 
   const ordinary = text.map((part, index) => <span key={index} className="breadcrumb-part">
-    {index > 0 && <ChevronRight size={13} aria-hidden="true" />}
+    {index > 0 && <ChevronRight size="calc(var(--icon-xs) + 1px)" aria-hidden="true" />}
     <span>{part}</span>
   </span>);
 
@@ -50,7 +50,7 @@ export function Breadcrumb({ path }: { path: string }) {
       {compact ? <>
         {pieces.length > 2 && ordinary[0]}
         <span className="breadcrumb-part breadcrumb-fold">
-          {pieces.length > 2 && <ChevronRight size={13} aria-hidden="true" />}
+          {pieces.length > 2 && <ChevronRight size="calc(var(--icon-xs) + 1px)" aria-hidden="true" />}
           <details ref={foldRef} key={path} onKeyDown={event => {
             if (event.key === 'Escape' && event.currentTarget.open) {
               event.stopPropagation();
@@ -61,7 +61,7 @@ export function Breadcrumb({ path }: { path: string }) {
             <summary aria-label="查看完整路径" title="查看完整路径">…</summary>
             <ol aria-label="完整路径">
               {pieces.map((part, index) => <li key={index}>
-                {index > 0 && <ChevronRight size={12} aria-hidden="true" />}<span>{part}</span>
+                {index > 0 && <ChevronRight size="var(--icon-xs)" aria-hidden="true" />}<span>{part}</span>
               </li>)}
             </ol>
           </details>
@@ -114,13 +114,13 @@ export function ThemeMenu({ selected, onChange }: { selected: string; onChange: 
         ? { background: theme.bg, color: theme.accent, borderColor: 'color-mix(in srgb, ' + theme.text + ' 20%, transparent)', ['--swatch-surface' as string]: theme.surface }
         : undefined} />
       <span className="theme-title">{theme.title}</span>
-      {selected === theme.id && <Check size={13} aria-hidden="true" />}
+      {selected === theme.id && <Check size="calc(var(--icon-xs) + 1px)" aria-hidden="true" />}
     </button>;
   }
 
   return <div className="toolbar-menu" ref={ref}>
     <IconButton label="知识库主题" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => setOpen(!open)}>
-      <Palette size={16} />
+      <Palette size="var(--icon-md)" />
     </IconButton>
     {open && <div id={id} className="theme-menu" role="group" aria-label="选择知识库主题">
       {follow.map(option)}

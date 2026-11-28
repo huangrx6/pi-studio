@@ -2,13 +2,13 @@
   "$schema": "../../sdk/plugins/schemas/pi-studio.plugin.registry.schema.json",
   "schemaVersion": 1,
   "name": "Pi Studio 官方插件",
-  "updatedAt": "2026-11-26T00:00:00.000Z",
+  "updatedAt": "2026-11-28T00:00:00.000Z",
   "plugins": [
     {
       "id": "studio.excalidraw",
       "name": "Excalidraw",
       "publisher": "Pi Studio",
-      "summary": "在侧栏看着图逐步画出来，完成后可以继续编辑。",
+      "summary": "在悬浮工具面板中观看实时绘图，完成后可以继续编辑。",
       "description": "完全独立的实时画布插件：聊天绘图、手动画布和本地导出。支持架构图、依赖图、流程图、状态图、拓扑图及思维导图。",
       "category": "productivity",
       "icon": "assets/icon.png",
@@ -29,10 +29,10 @@
       },
       "versions": [
         {
-          "version": "2.0.1",
+          "version": "2.1.1",
           "packagePath": "packages/excalidraw",
-          "sha256": "4cd3363cb7b30c70d073ba11889c7b8736d5f55ada8927d75105fd8e2f279411",
-          "publishedAt": "2026-11-26T00:00:00.000Z"
+          "sha256": "95f9e207f75eac0af453c5a7976c52d8d4f927fd9a5370ca34d148db5a3e1431",
+          "publishedAt": "2026-11-28T00:00:00.000Z"
         }
       ]
     },
@@ -62,10 +62,10 @@
       },
       "versions": [
         {
-          "version": "2.0.0",
+          "version": "2.1.4",
           "packagePath": "packages/task-board",
-          "sha256": "e3b56e8bd64b1e16436ee2f7c6bfbdda9c75700b3b23e879227481b8780153c1",
-          "publishedAt": "2026-11-25T00:00:00.000Z"
+          "sha256": "76022bbadf372aaf195e2960ce35290ccf805725de1235fcd7f5c82085cf7183",
+          "publishedAt": "2026-11-28T00:00:00.000Z"
         }
       ]
     },
@@ -78,14 +78,29 @@
       "category": "productivity",
       "icon": "assets/icon.png",
       "repository": "https://github.com/huangrx6/pi-studio",
-      "keywords": ["知识库", "笔记库", "PARA", "Markdown", "HTML", "学习", "notes"],
-      "provides": { "skills": ["para-notes"], "extension": true },
-      "versions": [{
-        "version": "1.3.0",
-        "packagePath": "packages/notes-library",
-        "sha256": "904b5b48edf8964ebc86eb7543fbc795b1eee830f25874e3b9a320a3a88ab45e",
-        "publishedAt": "2026-11-26T00:00:00.000Z"
-      }]
+      "keywords": [
+        "知识库",
+        "笔记库",
+        "PARA",
+        "Markdown",
+        "HTML",
+        "学习",
+        "notes"
+      ],
+      "provides": {
+        "skills": [
+          "para-notes"
+        ],
+        "extension": true
+      },
+      "versions": [
+        {
+          "version": "1.4.1",
+          "packagePath": "packages/notes-library",
+          "sha256": "cf7f48ca6c9439991cb8ee4425ce73279266d1cdeec5d8f0feaeaf108c65a14c",
+          "publishedAt": "2026-11-28T00:00:00.000Z"
+        }
+      ]
     }
   ]
 }

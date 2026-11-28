@@ -23,6 +23,11 @@ export function installComposerInputFixture() {
     ];
   });
   const extensionItems = [
+    ...[['scope-launcher', '扩展归属测试'], ['live-detail', '实时数据详情']].map(([id, title]) => ({
+      id: 'project:qa-extension/' + id + '-summary', contributionId: id + '-summary',
+      extensionId: 'project:qa-extension', extensionName: 'QA Extension', scope: 'project',
+      title, details: id, slot: 'status.chip', size: 'compact', priority: 0, sourceOrder: 0, content: [],
+    })),
     {
       id: 'project:qa-extension/scope-launcher',
       extensionId: 'project:qa-extension',
@@ -31,7 +36,7 @@ export function installComposerInputFixture() {
       contributionId: 'scope-launcher',
       title: '扩展归属测试',
       description: '验证切换会话后旧结果不会进入新范围',
-      slot: 'panel.side',
+      slot: 'status.detail',
       size: 'compact',
       priority: 10,
       sourceOrder: 0,
@@ -51,7 +56,7 @@ export function installComposerInputFixture() {
       contributionId: 'scope-panel',
       title: 'QA 范围面板',
       description: '只属于打开它的会话',
-      slot: 'panel.side',
+      slot: 'status.detail',
       size: 'compact',
       priority: 5,
       sourceOrder: 1,
@@ -73,7 +78,7 @@ export function installComposerInputFixture() {
     },
     {
       id: 'project:qa-extension/live-detail', extensionId: 'project:qa-extension', extensionName: 'QA Extension',
-      scope: 'project', contributionId: 'live-detail', title: '实时数据详情', slot: 'panel.side',
+      scope: 'project', contributionId: 'live-detail', title: '实时数据详情', slot: 'status.detail',
       size: 'regular', priority: 1, sourceOrder: 3,
       content: [{ kind: 'dataView', sourceId: 'project:qa-extension/live-data' }],
     },

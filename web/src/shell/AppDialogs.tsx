@@ -129,6 +129,10 @@ export function AppDialogs({
           extensions.setDetail(null);
           void controller.selectPluginSection('plugins');
         }}
+        onOpenSettingsPage={(tab) => {
+          extensions.setDetail(null);
+          void controller.openSettings(tab);
+        }}
         onToggle={(item, enabled) => void controller.toggleExtension(item, enabled)}
         onDelete={(id, name) => void controller.deleteExtension(id, name)}
         onRollback={item => void controller.rollbackExtension(item)}
@@ -203,11 +207,13 @@ export function AppDialogs({
         onTrust={skills.onTrust}
       />}
       {shortcuts.open && <DetailDialog className="shortcuts-dialog" onClose={shortcuts.close}>
-        <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Keyboard /></span><div><h2>快捷键</h2></div></div><button className="icon-button" aria-label="关闭快捷键" onClick={shortcuts.close}><X /></button></header>
+        {close => <>
+        <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Keyboard /></span><div><h2>快捷键</h2></div></div><button className="icon-button" aria-label="关闭快捷键" onClick={close}><X /></button></header>
         <div className="shortcut-list">
           {[['发送消息 / 补充当前任务', 'Enter'], ['排队下一条消息', formatShortcut('Mod+Enter')], ['换行', 'Shift + Enter'], ['打开命令与技能', '/'], ['引用工作区文件', '@'], ['关闭浮层', 'Esc'], ['打开设置', formatShortcut(getActivePreferences().shortcuts.settings)]].map(([label, key]) => <div className="shortcut-row" key={label}><span>{label}</span><kbd>{key}</kbd></div>)}
         </div>
-        <footer className="detail-footer"><span /><button className="settings-outline" onClick={shortcuts.close}>关闭</button></footer>
+        <footer className="detail-footer"><span /><button className="settings-outline" onClick={close}>关闭</button></footer>
+        </>}
       </DetailDialog>}
     </>
   );

@@ -40,6 +40,7 @@ export function useWorkspaceState({
 
   const sidebar = useSidebarWorkspace({ workspaces, setWorkspaces, workspace });
   const {
+    restoreExpanded,
     workspaceOrderRef,
     sessionOrderRef,
     setWorkspaceOrder,
@@ -75,6 +76,7 @@ export function useWorkspaceState({
     try {
       const next = await window.piApi.state(cwd);
       if (request !== stateRequestRef.current || cwd !== workspaceRef.current) return;
+      restoreExpanded(next.expandedProjects || []);
       const savedWorkspaceOrder = workspaceOrderRef.current;
       const savedWorkspaceCwds = new Set(savedWorkspaceOrder);
       const savedSessionOrder = sessionOrderRef.current;
@@ -150,6 +152,7 @@ export function useWorkspaceState({
     setSessionOrder,
     setWorkspaceOrder,
     workspaceOrderRef,
+    restoreExpanded,
   ]);
 
   return {

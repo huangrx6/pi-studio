@@ -4,6 +4,7 @@ import { useActionConfirmation } from '../../shared/ConfirmDialog';
 import { PreferenceGroup, PreferenceRow } from '../../shared/PreferenceGroup';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { LoadingState } from '../../shared/LoadingState';
+import { useDeferredEnter } from '../../shared/useDeferredEnter';
 import { useSettingsToast } from '../../shared/SettingsToast';
 import { errorText } from '../../shared/error-text';
 import { formatFileSize } from '../../shared/filesize';
@@ -71,20 +72,25 @@ function LocationRow({ location }: { location: StorageLocation }) {
     </>} />;
 }
 
+let cachedStorageSnapshot: DeviceStorageSnapshot | undefined;
+
 export function DeviceStorageSettings({ onOpenArchives, onOpenWorktrees }: { onOpenArchives: () => void; onOpenWorktrees: () => void }) {
   const toast = useSettingsToast();
   const confirmation = useActionConfirmation();
   const [revision, setRevision] = useState(0);
-  const [snapshot, setSnapshot] = useState<DeviceStorageSnapshot>();
-  const [busy, setBusy] = useState(true);
+  const [snapshot, setSnapshot] = useState<DeviceStorageSnapshot | undefined>(cachedStorageSnapshot);
+  const [busy, setBusy] = useState(!cachedStorageSnapshot);
   const [cleaning, setCleaning] = useState(false);
   const [error, setError] = useState('');
+  useEffect(() => {
+    if (snapshot) cachedStorageSnapshot = snapshot;
+  }, [snapshot]);
   useEffect(() => {
     let active = true;
     setBusy(true);
     setError('');
     window.piApi.deviceStorage().then(
-      next => { if (active) setSnapshot(next); },
+      next => { if (active) { cachedStorageSnapshot = next; setSnapshot(next); } },
       cause => { if (active) setError(errorText(cause)); },
     ).finally(() => { if (active) setBusy(false); });
     return () => { active = false; };
@@ -98,8 +104,8 @@ export function DeviceStorageSettings({ onOpenArchives, onOpenWorktrees }: { onO
     maintenance?.cacheBytes ? `临时缓存 ${formatFileSize(maintenance.cacheBytes)}` : '',
   ].filter(Boolean);
   const cleanupDescription = cleanable > 0
-    ? `应用会自动轮转备份并回收空闲页；当前还可立即释放 ${formatFileSize(cleanable)}（${maintenanceParts.join('、')}）。`
-    : '应用会自动轮转迁移备份并回收数据库空闲页；当前空间紧凑，可随时手动整理兜底。';
+    ? `当前可释放 ${formatFileSize(cleanable)}（${maintenanceParts.join('、')}）`
+    : '空间紧凑，可手动清理缓存并压缩数据库';
 
   async function runCleanup() {
     if (cleaning || busy) return;
@@ -131,6 +137,8 @@ export function DeviceStorageSettings({ onOpenArchives, onOpenWorktrees }: { onO
     }
   }
 
+  const revealData = useDeferredEnter(Boolean(snapshot));
+
   return <div className="settings-preference-page device-storage-settings">
     <SettingsPageHeader title="设备存储" icon={<HardDrive />} iconPosition="end" meta="查看 Pi Studio 在这台设备上的数据占用和存储位置。" />
     <div className="settings-preference-groups">
@@ -138,15 +146,15 @@ export function DeviceStorageSettings({ onOpenArchives, onOpenWorktrees }: { onO
         onClick={() => setRevision(value => value + 1)}><RotateCw className={busy ? 'spin' : ''} aria-hidden="true" />{busy ? '统计中' : '刷新'}</button>}>
         {!snapshot && busy && <LoadingState variant="section">正在统计文件大小…</LoadingState>}
         {error && <p className="storage-error" role="alert">{error}{snapshot ? ' 当前显示上次统计结果。' : ''}</p>}
-        {snapshot && <UsageBreakdown snapshot={snapshot} />}
+        {snapshot && <div className={revealData ? 'settings-async-ready' : undefined}><UsageBreakdown snapshot={snapshot} /></div>}
       </PreferenceGroup>
-      {snapshot && <PreferenceGroup title="存储位置" description="按文件大小统计，同一文件只计一次。工作区内仅统计 .pi-studio 目录。">
-        <div className="storage-locations">{snapshot.locations.map(location => <LocationRow key={location.id} location={location} />)}</div>
+      {snapshot && <PreferenceGroup title="存储位置" description="工作区内仅统计 .pi-studio 目录">
+        <div className={`storage-locations${revealData ? ' settings-async-ready' : ''}`}>{snapshot.locations.map(location => <LocationRow key={location.id} location={location} />)}</div>
       </PreferenceGroup>}
       <PreferenceGroup title="数据管理">
-        <PreferenceRow title="归档会话" description="查看、恢复或删除已归档的对话。"
+        <PreferenceRow title="归档会话" description="查看或恢复已归档对话"
           control={<button type="button" className="settings-outline storage-management-action" onClick={onOpenArchives}>查看归档会话</button>} />
-        <PreferenceRow title="隔离工作树" description="查看子智能体的工作副本和待处理的改动。"
+        <PreferenceRow title="隔离工作树" description="管理子智能体工作副本"
           control={<button type="button" className="settings-outline storage-management-action" onClick={onOpenWorktrees}>管理工作树</button>} />
         <PreferenceRow title="空间整理" description={cleanupDescription}
           control={<button type="button" className="settings-outline storage-management-action" disabled={busy || cleaning}

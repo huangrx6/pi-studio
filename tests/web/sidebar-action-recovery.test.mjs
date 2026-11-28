@@ -17,7 +17,7 @@ visit(tree);
 assert.equal(functions.length, 2);
 const code = ts.transpileModule(functions.join('\n') + '\nglobalThis.action = sidebarAction; globalThis.retry = refreshConversationList;', { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
 function harness() {
-  const calls = { writes: [], reads: 0, navigation: [], toasts: [], drafts: [], queues: [] };
+  const calls = { writes: [], reads: 0, navigation: [], toasts: [], drafts: [], queues: [], closedTabs: [] };
   const h = {
     sidebarMutationRef: { current: false }, conversationListNeedsRefreshRef: { current: false },
     conversationListRetryRef: { current: false }, stateRequestRef: { current: 0 },
@@ -26,6 +26,7 @@ function harness() {
     workspaces: [{ cwd: '/A', sessions: [{ id: 'A', archived: true }] }],
     setSidebarMutating(value) { h.busy = value; },
     setConversationListRefreshError(value) { h.refreshError = value; },
+    forgetConversations(ids) { calls.closedTabs.push(...ids); },
     removeWorkspaceFromList(cwd) { h.workspaces = h.workspaces.filter(item => item.cwd !== cwd); },
     clearSessionQueuedPrompts(id) { calls.queues.push(id); },
     persistDeletedComposerSessions: async () => {},
@@ -101,6 +102,7 @@ test('late workspace deletion leaves a newly selected workspace in place and cle
   assert.deepEqual(calls.navigation, []);
   assert.deepEqual(calls.drafts, ['session:A', 'new:/A']);
   assert.deepEqual(calls.queues, ['A']);
+  assert.deepEqual(calls.closedTabs, ['A']);
 });
 
 test('a committed empty workspace deletion removes its row even when the list refresh fails', async () => {

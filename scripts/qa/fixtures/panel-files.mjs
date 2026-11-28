@@ -33,11 +33,13 @@ export function installPanelFilesFixture() {
     release(id, reject = false) { const entry = pending.get(id); if (!entry) throw new Error(`No held request ${id}`); pending.delete(id); if (reject) entry.reject(new Error('QA delayed read failure')); else entry.resolve(); },
     open(owner) { for (const listener of listeners) listener({ id: owner === 'a' ? 'perf-0' : 'perf-1', cwd: roots[owner] }); },
   };
-  localStorage.setItem('pi-studio:expanded-workspaces', JSON.stringify(Object.values(roots)));
   window.piApi = new Proxy({
+    readLayout: async (owner, surface) => JSON.parse(sessionStorage.getItem(JSON.stringify([owner, surface])) || 'null'),
+    writeLayout: async (owner, surface, layout) => sessionStorage.setItem(JSON.stringify([owner, surface]), JSON.stringify(layout)),
+    temporaryHistory: async () => [],
     state: async () => {
       const value = await base.state(); const sessions = value.workspaces[0].sessions;
-      return { ...value, workspaces: Object.entries(roots).map(([owner, cwd], index) => ({ cwd, name: `文件工作区 ${owner.toUpperCase()}`, sessions: [{ ...sessions[index], cwd, title: `文件会话 ${owner.toUpperCase()}` }] })) };
+      return { ...value, expandedProjects: Object.values(roots), workspaces: Object.entries(roots).map(([owner, cwd], index) => ({ cwd, name: `文件工作区 ${owner.toUpperCase()}`, sessions: [{ ...sessions[index], cwd, title: `文件会话 ${owner.toUpperCase()}` }] })) };
     },
     conversationPage: async input => ({ ...(await base.conversationPage(input)), ...(await snapshot(input.id)) }),
     conversationSnapshot: snapshot, subscribeConversation: snapshot,
@@ -60,7 +62,7 @@ export function installPanelFilesFixture() {
         ...(chars ? { dataUrl: `data:application/octet-stream;base64,${'A'.repeat(chars)}` } : {}),
       });
     },
-    fileActions: async input => { calls.push({ id: ++serial, method: 'fileActions', ...clone(input) }); return { apps: [{ name: 'Synthetic Editor', path: '/qa/apps/editor' }] }; },
+    fileActions: input => respond('fileActions', input.cwd, input.path, { apps: [{ name: 'Synthetic Editor', path: '/qa/apps/editor' }] }),
     openWith: async input => { calls.push({ id: ++serial, method: 'openWith', ...clone(input) }); return { ok: true }; },
     revealFile: async input => { calls.push({ id: ++serial, method: 'revealFile', ...clone(input) }); return { ok: true }; },
     runtimeServices: async () => ({ services: [], summary: { related: 0 } }),

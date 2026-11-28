@@ -1,29 +1,21 @@
 import { Accordion } from './Accordion';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertTriangle,
-  Check,
+  ArrowLeft,
   ChevronDown,
   ChevronUp,
-  Code2,
-  Copy,
   ExternalLink,
-  Eye,
   FileText,
-  ListOrdered,
-  Pencil,
-  Save,
   Search,
   X,
 } from 'lucide-react';
 import { LoadingIndicator, LoadingState } from './LoadingState';
 import {
-  markdownCodeFence,
   parseDelimitedPreview,
   prettyJson,
   previewExtension,
   previewFormatForFile,
-  previewLanguageForFile,
   formatByteSample,
   previewTypeLabel,
   splitPreviewPath,
@@ -33,7 +25,12 @@ import { Markdown } from './Markdown';
 import { ArchivePreview } from './ArchivePreview';
 import { formatFileSize } from './filesize';
 import { FileFormatIcon, FileKindIcon, type FilePreviewFormat } from './FileKindIcon';
+import type { MenuAction } from './ActionMenu';
+import { FilePreviewMenu, type FileOpenWith } from './FilePreviewMenu';
 import './styles/file-preview.css';
+
+import { editorView, type SourceView } from './editor-state';
+const SourceEditor = lazy(() => import('./SourceEditor').then(module => ({ default: module.SourceEditor })));
 
 type PreviewMode = 'preview' | 'source';
 
@@ -44,34 +41,21 @@ export type FilePreviewProps = {
   emptyDescription?: string;
   onOpenExternal?: (file: FilePreviewResult) => void;
   editable?: boolean;
+  initialLine?: number;
+  fileJump?: number;
+  sourceView?: SourceView;
+  currentEdit?: () => FilePreviewProps['savedEdit'];
+  sourceOnOpen?: boolean;
+  onEdit?: () => void;
+  savedEdit?: {base:FilePreviewResult;text:string};
+  onDraftEdit?: (draft?:{base:FilePreviewResult;text:string})=>void;
   onSave?: (text: string, expectedText: string) => Promise<void>;
   refreshError?: { message: string; onRetry: () => void };
-  /** 调用方自带的工具栏动作（例如工作台的“文件操作”菜单）。 */
-  actions?: ReactNode;
+  onBack?: () => void;
+  onSplit?: () => void;
+  fileActions?: MenuAction[];
+  openWith?: FileOpenWith;
 };
-
-function SourceCode({
-  text,
-  language,
-  plain = false,
-  showLineNumbers = false,
-}: {
-  text: string;
-  language: string;
-  plain?: boolean;
-  showLineNumbers?: boolean;
-}) {
-  const fenced = useMemo(
-    () => plain ? '' : markdownCodeFence(text, language),
-    [language, plain, text],
-  );
-  const lines = Math.max(1, text.split('\n').length);
-  const numbers = showLineNumbers && <div className="file-preview-line-numbers" aria-hidden="true">{Array.from({ length: lines }, (_, index) => <span key={index}>{index + 1}</span>)}</div>;
-  if (plain) {
-    return <div className={`file-preview-code file-preview-plain-code ${showLineNumbers ? 'has-line-numbers' : ''}`}>{numbers}<pre><code>{text}</code></pre></div>;
-  }
-  return <div className={`file-preview-code ${showLineNumbers ? 'has-line-numbers' : ''}`}>{numbers}<div className="file-preview-code-content"><Markdown codeChrome={false}>{fenced}</Markdown></div></div>;
-}
 
 function TablePreview({
   text,
@@ -150,23 +134,17 @@ function PreviewBody({
   format,
   mode,
   onOpenExternal,
-  editing,
-  draft,
-  showLineNumbers,
-  onDraftChange,
+  text,
+  source,
 }: {
   file: FilePreviewResult;
   format: FilePreviewFormat;
   mode: PreviewMode;
   onOpenExternal?: (file: FilePreviewResult) => void;
-  editing: boolean;
-  draft: string;
-  showLineNumbers: boolean;
-  onDraftChange: (text: string) => void;
+  text: string;
+  source: (text: string) => ReactNode;
 }) {
-  const text = file.text || '';
-  const json = useMemo(() => format === 'json' ? prettyJson(text) : null, [format, text]);
-  const language = previewLanguageForFile(file.path);
+  const json = useMemo(() => format === 'json' && mode === 'preview' ? prettyJson(text) : null, [format, text, mode]);
 
   if (file.kind === 'archive' && file.archive) return <ArchivePreview data={file.archive} />;
   if (file.kind === 'binary' || format === 'unsupported') {
@@ -176,7 +154,7 @@ function PreviewBody({
       {file.unavailableReason && <p>{file.unavailableReason}</p>}
       {file.byteSample && <Accordion className="file-preview-bytes" summary={<>查看前 {file.byteSample.length / 2} 字节</>} compact>
         <pre>{formatByteSample(file.byteSample)}</pre></Accordion>}
-      {onOpenExternal && <button type="button" className="settings-outline" onClick={() => onOpenExternal(file)}>
+      {onOpenExternal && <button type="button" className="settings-outline" aria-label="用系统应用打开文件" onClick={() => onOpenExternal(file)}>
         <ExternalLink />用系统应用打开
       </button>}
     </div>;
@@ -186,11 +164,7 @@ function PreviewBody({
     return <MediaPreview file={file} format={format} />;
   }
 
-  if (mode === 'source') {
-    const source = json?.ok ? json.text : text;
-    if (editing) return <textarea className="file-preview-editor" value={draft} onChange={(event) => onDraftChange(event.target.value)} spellCheck={false} aria-label={`${file.name} 源码编辑器`} />;
-    return <SourceCode text={source} language={language} plain={format === 'text'} showLineNumbers={showLineNumbers} />;
-  }
+  if (mode === 'source' && file.kind === 'text') return source(text);
 
   if (format === 'markdown') {
     return <div className="file-preview-document">
@@ -223,11 +197,11 @@ function PreviewBody({
   if (format === 'json' && json) {
     return <div className="file-preview-code-stack">
       {!json.ok && <div className="file-preview-inline-note is-warning"><AlertTriangle />JSON 格式有误，已按原文显示：{json.error}</div>}
-      <SourceCode text={json.text} language="json" />
+      {source(json.text)}
     </div>;
   }
 
-  return <SourceCode text={text} language={format === 'code' ? language : 'text'} plain={format === 'text'} />;
+  return source(text);
 }
 
 /**
@@ -237,59 +211,60 @@ function PreviewBody({
  * only a classified JSON-safe payload and uses a single toolbar/state model for
  * every supported format.
  */
-export function FilePreview({
+export function FilePreview(props: FilePreviewProps) {
+  return <FilePreviewContent key={props.sourceView?.viewId ?? props.file?.path} {...props} />;
+}
+
+function FilePreviewContent({
   file: latestFile,
   loading = false,
   emptyTitle = '选择一个文件',
   emptyDescription = '',
   onOpenExternal,
-  editable = false,
+  editable = false, initialLine, fileJump, sourceOnOpen, sourceView, currentEdit, onEdit, savedEdit, onDraftEdit,
   onSave,
   refreshError,
-  actions,
+  onBack, onSplit, fileActions = [], openWith,
 }: FilePreviewProps) {
-  const [mode, setMode] = useState<PreviewMode>('preview');
-  const [copied, setCopied] = useState(false);
-  const [editBase, setEditBase] = useState<FilePreviewResult | null>(null);
-  const [draft, setDraft] = useState(latestFile?.text || '');
+  const remembered = sourceView && editorView(sourceView.viewId);
+  const [mode, setModeState] = useState<PreviewMode>(remembered?.mode ?? (sourceOnOpen ? 'source' : 'preview'));
+  const [copyNotice, setCopyNotice] = useState<{ message: string }>();
+  const [localDraft, setLocalDraft] = useState<FilePreviewProps['savedEdit']>();
+  const [editHere, setEditHere] = useState(remembered?.editing ?? false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [showLineNumbers, setShowLineNumbers] = useState(false);
+  const [showLineNumbers, setShowLineNumbers] = useState(remembered?.lineNumbers ?? true);
   const [findOpen, setFindOpen] = useState(false);
   const [findQuery, setFindQuery] = useState('');
   const [findIndex, setFindIndex] = useState(0);
   const paneRef = useRef<HTMLDivElement>(null);
+  const record = onDraftEdit ? savedEdit : localDraft;
+  const editBase = record?.base;
   const file = editBase ?? latestFile;
-  const editing = Boolean(editBase);
-  const changedOnDisk = editBase && latestFile && (
-    latestFile.kind !== editBase.kind
-    || latestFile.truncated !== editBase.truncated
-    || latestFile.changeKey !== editBase.changeKey
-    || latestFile.text !== editBase.text
-  );
-
+  const editing = editHere && Boolean(record);
+  const draft = record?.text ?? file?.text ?? '';
+  const changedOnDisk = editBase && latestFile && (latestFile.kind !== editBase.kind ||
+    latestFile.truncated !== editBase.truncated || latestFile.changeKey !== editBase.changeKey || latestFile.text !== editBase.text);
+  const format = file ? previewFormatForFile(file.path, file.mimeType, file.kind) as FilePreviewFormat : 'text';
+  const toggleable = ['markdown', 'csv', 'html', 'json'].includes(format);
+  const activeMode = toggleable ? mode : file?.kind === 'text' ? 'source' : 'preview';
+  function setMode(next: PreviewMode) { if (remembered) remembered.mode = next; setModeState(next); }
+  function changeDraft(next?: FilePreviewProps['savedEdit']) { if (onDraftEdit) onDraftEdit(next); else setLocalDraft(next); }
+  function changeEditing(value: boolean) { if (remembered) remembered.editing = value; setEditHere(value); }
   useEffect(() => {
-    setMode('preview');
-    setCopied(false);
-    setEditBase(null);
-    setDraft(file?.text || '');
-    setSaveError(null);
-    setFindOpen(false);
-    setFindQuery('');
-    setFindIndex(0);
-  }, [file?.path]);
-
+    if (!record && editHere) changeEditing(false);
+  }, [record, editHere]);
   useEffect(() => {
-    if (!file || editing) return;
-    setDraft(file.text || '');
-  }, [editing, file?.text, file?.path]);
-
-  const format = file
-    ? previewFormatForFile(file.path, file.mimeType, file.kind) as FilePreviewFormat
-    : 'text';
-  const toggleable = format === 'markdown' || format === 'csv' || format === 'html';
+    if (initialLine && (!remembered || remembered.jump !== (fileJump ?? 0))) setMode('source');
+  }, [initialLine, fileJump]);
+  useEffect(() => { setSaveError(null); setFindOpen(false); setFindQuery(''); }, [file?.path]);
+  useEffect(() => {
+    if (!copyNotice) return;
+    const timer = window.setTimeout(() => setCopyNotice(undefined), 1800);
+    return () => window.clearTimeout(timer);
+  }, [copyNotice]);
   const copyable = Boolean(
-    file?.text && file.kind !== 'binary' && file.kind !== 'pdf' && format !== 'unsupported',
+    draft && file && file.kind !== 'binary' && file.kind !== 'pdf' && format !== 'unsupported',
   );
   const pathParts = splitPreviewPath(file?.path || '');
   const sourceText = file?.text || '';
@@ -307,7 +282,7 @@ export function FilePreview({
       const target = event.target as HTMLElement | null;
       if (event.isComposing || event.altKey || event.shiftKey) return;
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'f') return;
-      if (!paneRef.current?.contains(target)) return;
+      if (!paneRef.current?.contains(target) || target?.closest('.studio-source-editor')) return;
       event.preventDefault();
       setFindOpen(true);
       window.setTimeout(() => paneRef.current?.querySelector<HTMLInputElement>('.file-preview-find input')?.focus(), 0);
@@ -317,13 +292,11 @@ export function FilePreview({
   }, []);
 
   async function copySource() {
-    if (!file?.text) return;
     try {
-      await navigator.clipboard.writeText(file.text);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1400);
+      await navigator.clipboard.writeText(draft);
+      setCopyNotice({ message: '已复制文件内容' });
     } catch {
-      setCopied(false);
+      setCopyNotice({ message: '复制失败，请重试' });
     }
   }
 
@@ -333,13 +306,17 @@ export function FilePreview({
     setSaveError(null);
     try {
       await onSave(draft, editBase.text || '');
-      setEditBase(null);
+      const newer = currentEdit?.();
+      if (newer && newer.text !== draft) changeDraft({ base: { ...editBase, text: draft }, text: newer.text });
+      else { changeDraft(); changeEditing(false); }
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
     } finally {
       setSaving(false);
     }
   }
+
+  if (loading && !file) return <LoadingState variant="panel">正在读取文件…</LoadingState>;
 
   let body: ReactNode;
   if (!file) {
@@ -349,55 +326,55 @@ export function FilePreview({
       {emptyDescription && <p>{emptyDescription}</p>}
     </div>;
   } else {
-    body = <PreviewBody file={file} format={format} mode={mode} onOpenExternal={onOpenExternal} editing={editing} draft={draft} showLineNumbers={showLineNumbers} onDraftChange={setDraft} />;
+    body = <PreviewBody file={file} format={format} mode={activeMode} text={draft} onOpenExternal={onOpenExternal}
+      source={value => <Suspense fallback={<LoadingState variant="panel">正在加载源码编辑器…</LoadingState>}>
+        <SourceEditor path={file.path} label={`${file.name} 源码编辑器`} text={value} editing={editing && activeMode === 'source' && !saving}
+          lineNumbers={showLineNumbers} view={activeMode === 'source' ? sourceView : undefined}
+          onChange={text => { if (editBase) changeDraft({ base: editBase, text }); }} onSave={() => { if (editing) void saveDraft(); }} />
+      </Suspense>} />;
   }
 
+  const menuItems: MenuAction[] = [];
+  if (copyable) menuItems.push({ label: '复制文件内容', run: copySource });
+  if (file?.kind === 'text' && activeMode === 'source' && format !== 'unsupported') {
+    menuItems.push({ label: '显示行号', checked: showLineNumbers, run: () => {
+      if (remembered) remembered.lineNumbers = !showLineNumbers;
+      setShowLineNumbers(!showLineNumbers);
+    } });
+  }
+  menuItems.push(...fileActions);
   return <div className="file-preview-pane" ref={paneRef}>
     <header className="file-preview-toolbar">
+      {onBack && <button type="button" className="icon-button file-preview-back" aria-label="返回上一位置" title="返回上一位置" onClick={onBack}><ArrowLeft aria-hidden="true" /></button>}
       <div className="file-preview-identity">
         {file ? <FileKindIcon path={file.path} mime={file.mimeType} /> : <FileFormatIcon format={format} />}
         <strong title={pathParts.name}>{file?.name || emptyTitle}</strong>
-        {file && <span className="file-preview-directory" title={file.path}>{pathParts.directory || '根目录'}</span>}
+        {file && <div className="file-preview-meta">
+          <span className="file-preview-directory" title={file.path}>{pathParts.directory || '根目录'}</span>
+          <span className="file-preview-format">{previewTypeLabel(file.path)}</span>
+          <span className="file-preview-size">{formatFileSize(file.size)}</span>
+        </div>}
       </div>
       <div className="file-preview-actions">
-        {file && <span className="file-preview-format">{previewTypeLabel(file.path)}</span>}
-        {file && <span className="file-preview-size">{formatFileSize(file.size)}</span>}
         {file && toggleable && <div className="file-preview-mode" role="group" aria-label="预览方式">
-          <button
-            type="button"
-            className={`icon-button ${mode === 'preview' ? 'is-active' : ''}`}
-            aria-label="预览渲染结果"
-            aria-pressed={mode === 'preview'}
-            title="渲染预览"
-            onClick={() => setMode('preview')}
-          ><Eye /></button>
-          <button
-            type="button"
-            className={`icon-button ${mode === 'source' ? 'is-active' : ''}`}
-            aria-label="查看文件源码"
-            aria-pressed={mode === 'source'}
-            title="查看源码"
-            onClick={() => setMode('source')}
-          ><Code2 /></button>
+          <button type="button" aria-label="预览渲染结果" aria-pressed={mode === 'preview'} onClick={() => setMode('preview')}>预览</button>
+          <button type="button" aria-label="查看文件源码" aria-pressed={mode === 'source'} onClick={() => setMode('source')}>源码</button>
         </div>}
-        {file && mode === 'source' && file.kind !== 'binary' && format !== 'pdf' && format !== 'unsupported' && <button type="button" className={`icon-button ${showLineNumbers ? 'is-active' : ''}`} aria-label={showLineNumbers ? '隐藏行号' : '显示行号'} aria-pressed={showLineNumbers} title={showLineNumbers ? '隐藏行号' : '显示行号'} onClick={() => setShowLineNumbers((value) => !value)}><ListOrdered /></button>}
-        {file && editable && !editing && <button type="button" className="icon-button" aria-label="编辑文件" title="编辑文件" disabled={loading || Boolean(refreshError)} onClick={() => {
+        {file && editable && !editing && <button type="button" className="file-preview-command" aria-label="编辑文件" disabled={loading || Boolean(refreshError)} onClick={() => {
+          onEdit?.();
+          if (!record) changeDraft({base:file,text:file.text ?? ''});
+          changeEditing(true);
           setMode('source');
-          setEditBase(file);
-          setDraft(file.text || '');
           setSaveError(null);
-        }}><Pencil /></button>}
+        }}>编辑</button>}
         {editing && <>
-          <button type="button" className="icon-button" aria-label="保存文件" title="保存文件" disabled={saving || loading || Boolean(changedOnDisk || refreshError)} onClick={() => void saveDraft()}>{saving ? <LoadingIndicator /> : <Save />}</button>
-          <button type="button" className="icon-button" aria-label="取消编辑" title="取消编辑" disabled={saving} onClick={() => { setEditBase(null); setSaveError(null); }}><X /></button>
+          <button type="button" className="file-preview-command file-preview-save" aria-label="保存文件" disabled={saving || loading || Boolean(changedOnDisk || refreshError)} onClick={() => void saveDraft()}>{saving && <LoadingIndicator />}保存</button>
+          <button type="button" className="file-preview-command" aria-label="取消编辑" disabled={saving} onClick={() => { changeDraft(); changeEditing(false); setSaveError(null); }}>取消</button>
         </>}
-        {actions}
-        {copyable && <button type="button" className="icon-button" aria-label={copied ? '已复制文件内容' : '复制文件内容'} title="复制内容" onClick={() => void copySource()}>
-          {copied ? <Check /> : <Copy />}
-        </button>}
-        {file && file.kind !== 'text' && onOpenExternal && <button type="button" className="icon-button" aria-label="用系统应用打开文件" title="用系统应用打开" onClick={() => onOpenExternal(file)}>
-          <ExternalLink />
-        </button>}
+        {onSplit && <button type="button" className="file-preview-command" aria-label="在右侧打开" title="在右侧打开" onClick={onSplit}>分栏</button>}
+        {file && file.kind !== 'text' && file.kind !== 'binary' && format !== 'unsupported' && !openWith && onOpenExternal &&
+          <button type="button" className="file-preview-command" aria-label="用系统应用打开文件" onClick={() => onOpenExternal(file)}>用系统应用打开</button>}
+        <FilePreviewMenu items={menuItems} openWith={openWith} />
       </div>
     </header>
     {file?.truncated && <div className="file-preview-banner"><AlertTriangle />文件较大，仅显示开头 1.5 MB。复制内容也只包含预览部分。</div>}
@@ -418,6 +395,7 @@ export function FilePreview({
         <button type="button" className="icon-button" aria-label="关闭搜索" title="关闭搜索" onClick={() => setFindOpen(false)}><X /></button>
       </div>}
       {body}
+      {copyNotice && <div className="file-preview-copy-notice" role="status">{copyNotice.message}</div>}
       {saveError && <div className="file-preview-save-error" role="alert">保存失败：{saveError}</div>}
       {loading && <LoadingState className="file-preview-loading">正在读取…</LoadingState>}
     </section>

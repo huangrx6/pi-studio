@@ -4,13 +4,13 @@
   padding: var(--segment-inset);
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--settings-control-bg);
+  background: var(--surface-raised);
 }
 
 :where(.settings-segments) {
   display: inline-flex;
   flex-wrap: wrap;
-  gap: var(--space-1);
+  gap: 2px;
 }
 
 :is(.settings-segments, .settings-tabs) > :where(button, label) {
@@ -19,11 +19,13 @@
   justify-content: center;
   gap: var(--space-2);
   min-width: 0;
-  min-height: calc(var(--settings-control-height) - 2 * var(--segment-inset) - 2px);
-  padding: 2px var(--space-3);
+  min-height: 26px;
+  padding: 0 var(--space-3);
   border-radius: var(--radius-tag);
   color: var(--muted);
-  font: var(--settings-preference-body-font);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-normal);
   text-align: center;
   overflow-wrap: anywhere;
   transition: background-color var(--transition-fast), color var(--transition-fast), box-shadow var(--transition-fast);
@@ -37,8 +39,8 @@
 
 .settings-segments > :is(button[aria-pressed='true'], label:has(> input:checked)),
 .settings-tabs::before {
-  background: var(--settings-accent-soft);
-  box-shadow: inset 0 0 0 1px var(--settings-accent-border);
+  background: var(--tint-neutral);
+  box-shadow: inset 0 0 0 1px var(--border);
 }
 
 .settings-segments > :is(button[aria-pressed='true'], label:has(> input:checked)),

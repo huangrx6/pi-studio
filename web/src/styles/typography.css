@@ -1,0 +1,44 @@
+/* 桌面界面的字号按文字用途选用。主窗口、菜单栏和工具窗口共用此表。 */
+:root {
+  --text-display: clamp(var(--text-title), calc(2.4vw - 1px), 25px); /* 欢迎语 */
+  --text-title: 21px;       /* 页面标题、文档一级标题 */
+  --text-heading: 17px;     /* 弹窗标题、文档二级标题 */
+  --text-subtitle: 14px;    /* 分组标题、文档三级标题 */
+  --text-body: 12px;        /* 正文与默认对话字号 */
+  --text-label: var(--text-body); /* 按钮、导航、表单和列表主标签 */
+  --text-description: 11px; /* 说明、摘要和反馈 */
+  --text-caption: 10px;     /* 时间、徽标、快捷键和计数 */
+  --text-code: var(--text-description);
+  --text-metric: var(--text-title); /* 独立展示的数值 */
+
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, monospace;
+  --font-mono: var(--mono); /* 扩展视图公开的等宽字体名 */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 650;
+  --leading-tight: 1.3;
+  --leading-normal: 1.5;
+  --leading-body: 1.6;
+  --leading-relaxed: 1.75;
+
+  --font-title: var(--weight-semibold) var(--text-title)/var(--leading-tight) var(--font);
+  --font-heading: var(--weight-semibold) var(--text-heading)/var(--leading-tight) var(--font);
+  --font-subtitle: var(--weight-semibold) var(--text-subtitle)/var(--leading-tight) var(--font);
+  --font-body: var(--weight-regular) var(--text-body)/var(--leading-body) var(--font);
+  --font-label: var(--weight-medium) var(--text-label)/var(--leading-normal) var(--font);
+  --font-description: var(--weight-regular) var(--text-description)/var(--leading-normal) var(--font);
+  --font-code: var(--weight-regular) var(--text-code)/var(--leading-normal) var(--mono);
+
+  /* 设置里的对话字号只覆盖第一项。工具步骤与状态随对话一起缩放。 */
+  --chat-font-size: var(--text-body);
+  --chat-text-detail: max(var(--text-description), round(nearest, calc(var(--chat-font-size) * .9), 1px));
+  --chat-text-caption: max(var(--text-caption), round(nearest, calc(var(--chat-font-size) * .8), 1px));
+  --chat-line-height: var(--leading-relaxed);
+}
+
+:root[data-platform='win32'] {
+  --font: "Segoe UI", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  --mono: "Cascadia Mono", Consolas, monospace;
+}

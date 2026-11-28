@@ -1,5 +1,5 @@
 {
-  "defaultTheme": "night",
+  "defaultTheme": "studio",
   "outline": { "minimum": 180, "maximum": 400, "initial": 216 },
   "legacyThemes": {
     "nord": "night",

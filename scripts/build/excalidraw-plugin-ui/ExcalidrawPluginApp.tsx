@@ -9,6 +9,7 @@ import type { ExcalidrawElement } from '@excalidraw/excalidraw/element/types';
 import type { AppState, BinaryFileData, BinaryFiles, ExcalidrawImperativeAPI } from '@excalidraw/excalidraw/types';
 import '@excalidraw/excalidraw/index.css';
 import { CanvasPlayback, type PlaybackTiming } from './CanvasPlayback';
+import { applyStudioTheme } from '../../../sdk/extensions/view-theme.mjs';
 
 const PROTOCOL = 'pi-studio:ext-view:v1';
 const THEME_KEY = 'pi-studio.excalidraw.theme';
@@ -146,6 +147,9 @@ export function ExcalidrawPluginApp() {
   const failedDraft = useRef<CanvasScene>();
 
   const theme = themePref === 'app' ? appTheme : themePref;
+  useLayoutEffect(() => {
+    document.documentElement.dataset.canvasTheme = themePref;
+  }, [themePref]);
   const selectedTheme = THEME_MODES.find(item => item.mode === themePref) ?? THEME_MODES[0];
   const readOnly = !api || !writable || Boolean(board?.drawing) || importing;
   const savedToChat = Boolean(board && board.revision > 0 && !board.drawing && !saving && !importing && !failedDraft.current);
@@ -153,15 +157,10 @@ export function ExcalidrawPluginApp() {
   useEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const msg = event.data;
-      if (!msg || typeof msg !== 'object' || msg.protocol !== PROTOCOL) return;
+      if (event.source !== window.parent || msg?.protocol !== PROTOCOL) return;
       if (msg.type === 'host:context') {
-        setAppTheme(msg.theme === 'dark' ? 'dark' : 'light');
+        setAppTheme(applyStudioTheme(msg));
         setWritable(msg.invocable === true && Boolean(msg.sessionId));
-        if (msg.tokens && typeof msg.tokens === 'object') {
-          for (const [k, v] of Object.entries(msg.tokens)) {
-            document.documentElement.style.setProperty(k, String(v));
-          }
-        }
         return;
       }
       if (msg.type === 'host:snapshot') {
@@ -428,7 +427,7 @@ export function ExcalidrawPluginApp() {
     return <div className="ex-loading">
       <span>{hostError || '画布暂时无法读取'}</span>
       <button type="button" className="ex-icon-btn" onClick={() => postHost({ type: 'view:retry' })} aria-label="重试">
-        <RefreshCw size={15} />
+        <RefreshCw size="calc(var(--icon-sm) + 1px)" />
       </button>
     </div>;
   }
@@ -452,12 +451,12 @@ export function ExcalidrawPluginApp() {
             onClick={() => { setMenuOpen(open => !open); setEditingBoardId(null); }}>
             <span className="ex-board-label">{activeBoardLabel}</span>
             {boardList.length > 1 && <span className="ex-board-count">{boardList.length}</span>}
-            <ChevronDown size={13} aria-hidden />
+            <ChevronDown size="calc(var(--icon-xs) + 1px)" aria-hidden />
           </button>
           <button type="button" className="ex-icon-btn" title="新建空白画布" aria-label="新建空白画布"
             disabled={!writable || Boolean(board.drawing) || boardBusy || importing}
             onClick={() => void handleCreateBoard()}>
-            <Plus size={15} aria-hidden />
+            <Plus size="calc(var(--icon-sm) + 1px)" aria-hidden />
           </button>
           {menuOpen && <div className="ex-board-menu" role="menu">
             <div className="ex-board-list">
@@ -483,7 +482,7 @@ export function ExcalidrawPluginApp() {
                     <>
                       <button type="button" className="ex-board-item-main" disabled={boardBusy}
                         onClick={() => void switchBoard(item.id)}>
-                        {isActive && <Check size={13} aria-hidden />}
+                        {isActive && <Check size="calc(var(--icon-xs) + 1px)" aria-hidden />}
                         <span className="ex-board-item-title" title={label}>{label}</span>
                         <span className="ex-board-item-meta">
                           {item.drawing ? '绘制中' : item.elementCount > 0 ? `${item.elementCount} 项` : '空白'}
@@ -496,7 +495,7 @@ export function ExcalidrawPluginApp() {
                             event.stopPropagation();
                             setEditingBoardId(item.id);
                             setEditingTitle(item.title);
-                          }}><Pencil size={12} aria-hidden /></button>
+                          }}><Pencil size="var(--icon-xs)" aria-hidden /></button>
                         <button type="button" className="ex-mini-btn"
                           title={boardList.length <= 1 ? '清空当前画布' : '删除画布'}
                           aria-label={boardList.length <= 1 ? '清空当前画布' : `删除 ${label}`}
@@ -504,7 +503,7 @@ export function ExcalidrawPluginApp() {
                           onClick={event => {
                             event.stopPropagation();
                             void handleDeleteBoard(item.id, boardList.length <= 1);
-                          }}><Trash2 size={12} aria-hidden /></button>
+                          }}><Trash2 size="var(--icon-xs)" aria-hidden /></button>
                       </div>}
                     </>
                   )}
@@ -514,7 +513,7 @@ export function ExcalidrawPluginApp() {
             <button type="button" className="ex-board-create"
               disabled={!writable || Boolean(board.drawing) || boardBusy || importing}
               onClick={() => void handleCreateBoard()}>
-              <Plus size={14} aria-hidden />
+              <Plus size="var(--icon-sm)" aria-hidden />
               <span>新建画布</span>
             </button>
           </div>}
@@ -526,7 +525,7 @@ export function ExcalidrawPluginApp() {
       </div>
       <div className="ex-actions">
         <button type="button" className="ex-icon-btn" aria-label="切换画板外观" title={`画板外观 · ${selectedTheme.label}（点击切换）`}
-          onClick={cycleTheme}><selectedTheme.icon size={15} aria-hidden /></button>
+          onClick={cycleTheme}><selectedTheme.icon size="calc(var(--icon-sm) + 1px)" aria-hidden /></button>
         <input ref={fileInput} type="file" hidden accept=".excalidraw,application/json"
           onChange={event => {
             const file = event.currentTarget.files?.[0];
@@ -534,13 +533,13 @@ export function ExcalidrawPluginApp() {
             if (file) void importScene(file);
           }} />
         <button type="button" className="ex-icon-btn" title="导入 Excalidraw 文件" aria-label="导入 Excalidraw 文件"
-          disabled={!api || readOnly || saving} onClick={() => fileInput.current?.click()}><FileUp size={15} aria-hidden /></button>
+          disabled={!api || readOnly || saving} onClick={() => fileInput.current?.click()}><FileUp size="calc(var(--icon-sm) + 1px)" aria-hidden /></button>
         <button type="button" className="ex-icon-btn" title="从 Mermaid 导入" aria-label="从 Mermaid 导入"
-          disabled={!api || readOnly} onClick={() => api?.updateScene({ appState: { openDialog: { name: 'ttd', tab: 'mermaid' } } })}><Network size={15} aria-hidden /></button>
+          disabled={!api || readOnly} onClick={() => api?.updateScene({ appState: { openDialog: { name: 'ttd', tab: 'mermaid' } } })}><Network size="calc(var(--icon-sm) + 1px)" aria-hidden /></button>
         <button type="button" className="ex-icon-btn" title="适应画布" aria-label="适应画布"
-          disabled={!api || !hasElements || board.drawing} onClick={() => api?.scrollToContent(undefined, { fitToViewport: true, viewportZoomFactor: .8 })}><Maximize size={15} aria-hidden /></button>
+          disabled={!api || !hasElements || board.drawing} onClick={() => api?.scrollToContent(undefined, { fitToViewport: true, viewportZoomFactor: .8 })}><Maximize size="calc(var(--icon-sm) + 1px)" aria-hidden /></button>
         <button type="button" className="ex-icon-btn" title="导出 Excalidraw 文件" aria-label="导出 Excalidraw 文件"
-          disabled={!api || (!hasElements && !failedDraft.current) || board.drawing} onClick={download}><Download size={15} aria-hidden /></button>
+          disabled={!api || (!hasElements && !failedDraft.current) || board.drawing} onClick={download}><Download size="calc(var(--icon-sm) + 1px)" aria-hidden /></button>
       </div>
     </div>
     {(error || hostError) && <div className="ex-feedback" role="alert">

@@ -31,7 +31,7 @@ function fixture() {
   const owner = { current: 'A' }, generation = { current: 1 }, session = { current: { id: 'A', title: 'Session A' } };
   const module = { exports: {} };
   const globals = {
-    module, exports: module.exports, Error,
+    module, exports: module.exports, Error, createFromDraft: () => pending.create.promise,
     composerDraftKeyRef: owner, sessionLoadRef: generation, composerDraftsRef: { current: store }, sessionRef: session,
     workspace: '/workspace-a', composerDraftMatches, snapshotComposerDraft, clearComposerDraft, readComposerDraft,
     parseStudioCommand: () => ({ route: 'goal.control', argument: 'goal' }), parseGoalCommandArgument: () => ({ action: 'set', text: 'goal' }),
@@ -50,7 +50,6 @@ function fixture() {
     } } },
     window: { piApi: {
       runExtensionCommand: ({ commandId }) => commandId === 'nested.command' && pending.nested ? pending.nested.promise : pending.command.promise,
-      createConversation: () => pending.create.promise,
       conversationAction: payload => { calls.actions.push(payload); return pending.goal.promise; },
     } },
   };

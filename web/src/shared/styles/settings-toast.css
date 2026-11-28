@@ -42,11 +42,10 @@
   padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2);
   border: 1px solid var(--settings-border);
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--settings-control-bg) 94%, transparent);
-  backdrop-filter: blur(var(--space-3));
+  background: var(--surface-floating);
   box-shadow: var(--shadow-float);
   color: var(--settings-text);
-  font: var(--weight-medium) var(--settings-description-size)/var(--leading-normal) var(--font);
+  font: var(--weight-medium) var(--text-description)/var(--leading-normal) var(--font);
   animation: settings-toast-in var(--settings-page-enter) var(--settings-motion-out) both;
 }
 
@@ -94,7 +93,7 @@
   background: var(--settings-accent-soft);
   color: var(--settings-text);
   font: inherit;
-  font-size: var(--settings-label-size);
+  font-size: var(--text-label);
   white-space: normal;
   pointer-events: auto;
 }

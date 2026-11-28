@@ -8,6 +8,21 @@
  * 本文件只有类型声明，没有运行时代码，不直接参与 IPC 调用。
  */
 
+import type { ThinkingLevel } from './model-types';
+
+export interface TemporaryChatSummary {
+  id: string;
+  title: string;
+  createdAt: number;
+  updatedAt: number;
+  modelRef: string;
+  thinkingLevel: ThinkingLevel;
+}
+
+export interface TemporaryChatDetail extends TemporaryChatSummary {
+  messages: ChatMessage[];
+}
+
 /** 文本块：用户输入、助手回复、工具结果里的纯文本都用它承载。 */
 export type TextBlock = { type: 'text'; text: string };
 

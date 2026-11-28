@@ -3,59 +3,6 @@
   contain: layout;
 }
 
-/* The workbench tab row belongs to the same outer band. Its body remains in
- * the rounded canvas below it. */
-.content-region > .file-panel .panel-tabbar {
-  position: absolute;
-  z-index: 3;
-  top: calc(-1 * var(--header-height));
-  right: 0;
-  left: 0;
-}
-
-.app.is-panel-fullscreen .content-region > .chat-header {
-  display: none;
-}
-
-.content-region > .file-panel {
-  grid-area: 1 / 2;
-  position: relative;
-  border: 0;
-  border-radius: var(--radius-panel);
-  background: var(--surface-canvas);
-}
-
-.app.is-panel-fullscreen .content-region > .file-panel {
-  grid-column: 1 / -1;
-}
-
-.content-region > .file-panel-backdrop {
-  display: block;
-  position: fixed;
-  inset: 0;
-  z-index: 19;
-  background: var(--scrim);
-  cursor: default;
-}
-
-.content-region > .file-panel.is-overlay {
-  position: absolute;
-  inset: 0 0 0 auto;
-  z-index: 20;
-  grid-area: 1 / 1 / -1 / -1;
-  box-shadow: var(--shadow-drawer);
-}
-
-/* When the workbench is docked, the two canvas surfaces form one frame. */
-.content-region:has(> .file-panel:not(.is-overlay)) > .main {
-  border-top-right-radius: 0;
-  border-bottom-right-radius: 0;
-}
-.content-region > .file-panel:not(.is-fullscreen, .is-overlay) {
-  border-top-left-radius: 0;
-  border-bottom-left-radius: 0;
-}
-
 .chat-header {
   position: relative;
   z-index: 2;
@@ -70,23 +17,7 @@
   color: var(--icon);
 }
 
-.chat-header-status { display: flex; min-width: 0; max-width: min(28cqi, 280px); align-items: center; -webkit-app-region: no-drag; }
-@container conversation-header (max-width: 540px) {
-  .chat-header-status { display: none; }
-}
 .chat-header .chat-actions .icon-button.is-active { background: var(--surface-soft); color: var(--text); }
-
-/* Release the opener's width and its flex gap as the panel expands. */
-.chat-actions .panel-open-entry {
-  overflow: hidden;
-  transition: width var(--shell-transition), margin-inline-start var(--shell-transition), opacity var(--shell-transition);
-}
-.chat-actions .panel-open-entry:disabled {
-  width: 0;
-  margin-inline-start: calc(-1 * var(--space-1));
-  opacity: 0;
-  pointer-events: none;
-}
 
 .app.is-wallpaper-inside .chat-header .chat-actions {
   color: var(--text-1);
@@ -97,19 +28,7 @@
 }
 
 .app.is-wallpaper-inside .chat-header .chat-actions .icon-button:hover {
-  background: var(--conversation-hover-surface);
-}
-
-/* The header ends where the conversation canvas begins. The header menu uses
- * that shared corner even when the workbench changes the column width. */
-.chat-header .workspace-menu {
-  --popover-inset: var(--space-1);
-  position: absolute;
-  top: calc(100% + var(--popover-inset));
-  right: var(--popover-inset);
-  max-width: calc(100% - 2 * var(--popover-inset));
-  max-height: min(var(--popover-max-height), calc(100dvh - var(--shell-top) - var(--header-height) - var(--shell-gutter) - var(--content-gutter) - var(--space-3)));
-  -webkit-app-region: no-drag;
+  background: var(--surface-hover);
 }
 
 /* The title rows stay square because they sit in the shared shell header; the
@@ -121,9 +40,6 @@
 }
 .chat-header { border-radius: 0; border-bottom: 0; }
 
-/* The expanded sidebar has its collapse control in the left half of the same
- * title band. Keep the optical seam there as well; the collapsed state uses
- * the matching rule on .sidebar-expand below. */
 .sidebar-top-toggle {
   position: relative;
   top: 0;
@@ -133,21 +49,6 @@
   align-self: center;
 }
 
-.sidebar-top-toggle::after {
-  position: absolute;
-  top: 50%;
-  right: -8px;
-  width: 1px;
-  height: 18px;
-  border-radius: var(--radius-round);
-  background: var(--divider);
-  content: '';
-  transform: translateY(-50%);
-}
-
-/* When the sidebar is collapsed, keep a small optical divider between the
- * expand control and the session title. It is deliberately shorter than the
- * full column border so the header still feels like one rounded surface. */
 .shell-header .sidebar-expand {
   position: relative;
   top: 0;
@@ -155,138 +56,22 @@
   margin-right: 10px;
 }
 
-.shell-header .sidebar-expand::after {
-  position: absolute;
-  top: 50%;
-  right: -6px;
-  width: 1px;
-  height: 18px;
-  border-radius: var(--radius-round);
-  background: var(--divider);
-  content: '';
-  transform: translateY(-50%);
-}
-
-.workspace-menu-anchor {
-  position: static;
-  display: flex;
-  flex: none;
-  -webkit-app-region: no-drag;
-}
-
-/* The right workbench is part of the same shell. Its header gets the chrome
- * tone and a short seam at the join; the body uses the same canvas surface as
- * the conversation so the divider is the only visual boundary. */
-.file-panel {
-  border-radius: var(--radius-panel);
-  overflow: hidden;
-}
-
-.file-panel.is-open { overflow: visible; }
-.file-panel-inner {
-  position: relative;
-  container: file-panel / inline-size;
-  overflow: visible;
-  border-radius: inherit;
-  padding-top: 0;
-}
-
-.file-panel .panel-tabbar {
-  position: relative;
-  border-radius: 0;
-  background: var(--surface-chrome);
-}
-
-.file-panel:not(.is-fullscreen) .panel-tabbar::before {
-  position: absolute;
-  top: 50%;
-  left: 0;
-  width: 1px;
-  height: 18px;
-  border-radius: var(--radius-round);
-  background: var(--divider);
-  content: '';
-  transform: translateY(-50%);
-}
-
 .content-region > .main > .composer-dock {
   background: var(--transparent);
 }
 
-/* Keep the panel body on the conversation canvas. The tab row is intentionally
- * the only chrome-colored strip, matching the main conversation header. */
-.app .file-panel,
+
 .app .file-panel :is(
-  .file-panel-inner,
   .panel-body,
-  .panel-start,
-  .workbench-tool-pane,
   .panel-file-browser,
-  .panel-file-preview,
   .file-code,
-  .file-toolbar,
-  .terminal-tab-stack,
-  .terminal-panel:not(.has-custom-theme)
+  .file-toolbar
 ) {
   background: var(--canvas-surface, var(--surface-canvas));
 }
 
-.app.is-wallpaper-inside .file-panel :is(.panel-tabbar, .changes-view, .diff-view) {
-  background: var(--transparent);
-}
 
-.app.is-wallpaper-inside .file-panel .panel-launcher-tile {
-  background: color-mix(in srgb, var(--launcher-card-bg) 74%, transparent);
-  border-color: color-mix(in srgb, var(--border) 78%, transparent);
-}
-
-.app.is-wallpaper-inside .file-panel .panel-launcher-tile:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--surface-hover) 82%, transparent);
-}
-
-.app.is-wallpaper-inside .file-panel .panel-launcher-icon {
-  background: color-mix(in srgb, var(--conversation-inset-surface, var(--surface-soft)) 72%, transparent);
-}
-
-.app.is-wallpaper-inside .file-panel .panel-tool-count,
-.app.is-wallpaper-inside .file-panel .panel-launcher-badge {
-  background: var(--accent);
-  color: var(--accent-foreground);
-}
-
-.app.is-wallpaper-inside .file-panel :is(.panel-workspace-card, .panel-workspace-prompt) {
-  background: color-mix(in srgb, var(--launcher-card-bg) 72%, transparent);
-}
-
-.app.is-wallpaper-inside .file-panel :is(.browser-panel, .browser-toolbar, .browser-stage) {
-  background: var(--transparent);
-}
-
-/* 分栏时外层宽度会按 --panel-w 自动扩到可用的舒适宽度；内部跟随外层，
- * 避免沿用旧的 760px 最小宽度把顶部工具栏裁掉。 */
-.file-panel.is-split:not(.is-fullscreen) .file-panel-inner {
-  width: var(--panel-w, 700px);
-  min-width: var(--panel-w, 700px);
-}
-
-.workspace-menu {
-  --popover-max-height: 620px;
-  z-index: 50;
-  display: flex;
-  flex-direction: column;
-  width: 340px;
-  overflow: hidden;
-  padding: 8px;
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-panel);
-  background: var(--surface-floating);
-  box-shadow: var(--shadow-popover);
-}
-
-/* The tab row is lifted above the panel. Keep the actual workbench body clipped
- * to the same rounded canvas so its background cannot leak into the shell. */
 .file-panel .panel-body {
   min-height: 0;
-  border-radius: inherit;
   overflow: hidden;
 }

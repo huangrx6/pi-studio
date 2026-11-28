@@ -14,11 +14,8 @@ const {
   createExtensionPackage,
   integrityFromFiles,
   INTEGRITY_NAME,
-  MANIFEST_NAME,
-  normalizeIntegrity,
   readIntegrity,
   validateExtensionDirectory,
-  verifyIntegrity,
   walkPackageFiles,
 } = require('../core/extension-package.cjs');
 const {
@@ -45,7 +42,6 @@ const REGISTRY_SCHEMA_VERSION = 1;
 const UNINSTALL_JOURNAL_VERSION = 1;
 const PREPARED_TTL_MS = 30 * 60 * 1_000;
 const MAX_REDIRECTS = 5;
-const MAX_REGISTRY_BYTES = 3 * 1024 * 1024;
 const MAX_CHECKSUM_BYTES = 1024 * 1024;
 const MAX_GITHUB_JSON_BYTES = 4 * 1024 * 1024;
 const SAFE_ID = /^[a-z0-9][a-z0-9._-]{1,63}$/;
@@ -524,21 +520,6 @@ function readJsonFile(file, label) {
     throw distributionError('INVALID_JSON', `${label} 必须是对象`);
   }
   return value;
-}
-
-function fileSha256(file) {
-  const hash = crypto.createHash('sha256');
-  const descriptor = fs.openSync(file, 'r');
-  const buffer = Buffer.allocUnsafe(1024 * 1024);
-  try {
-    let count;
-    while ((count = fs.readSync(descriptor, buffer, 0, buffer.length, null)) > 0) {
-      hash.update(buffer.subarray(0, count));
-    }
-  } finally {
-    fs.closeSync(descriptor);
-  }
-  return hash.digest('hex');
 }
 
 function fileSizeWithin(file, maximum) {

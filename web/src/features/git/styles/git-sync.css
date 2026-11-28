@@ -14,9 +14,9 @@
 .git-remote-heading > div:first-child,
 .git-remote-op-copy { min-width: 0; }
 .git-remote-controls { display: flex; flex: none; align-items: center; gap: var(--space-1); max-width: 100%; }
-.git-remote-addresses { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; color: var(--text-2); font-size: var(--text-sm); }
+.git-remote-addresses { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; color: var(--text-2); font-size: var(--text-description); }
 .git-remote-addresses dd { margin: 0; font-family: var(--mono); white-space: pre-line; overflow-wrap: anywhere; user-select: text; }
-.git-remote-form, .git-sync-review { display: grid; gap: var(--space-3); min-width: 0; color: var(--text); font-size: var(--text-sm); }
+.git-remote-form, .git-sync-review { display: grid; gap: var(--space-3); min-width: 0; color: var(--text); font-size: var(--text-description); }
 .git-remote-form label, .git-remote-form > div { display: grid; gap: 6px; }
 .git-remote-form code, .git-sync-route code, .git-sync-address { overflow-wrap: anywhere; font-family: var(--mono); }
 .git-remote-form input { width: 100%; padding: 7px 9px; color: var(--text); background: var(--surface); border: var(--field-border-width) solid var(--border); border-radius: var(--radius-control); }
@@ -28,8 +28,8 @@
 .git-sync-route svg { width: var(--icon-sm); color: var(--text-2); }
 .git-sync-route small, .git-remote-form small { color: var(--text-2); }
 .git-sync-range { padding-top: var(--space-3); border-top: 1px solid var(--divider); }
-.git-sync-range h3 { display: flex; gap: 8px; margin: 0 0 6px; font-size: var(--text-13); font-weight: var(--weight-medium); }
-.git-sync-range small, .git-sync-range code, .git-sync-range nav { color: var(--text-2); font-size: var(--text-xs); }
+.git-sync-range h3 { display: flex; gap: 8px; margin: 0 0 6px; font-size: var(--text-subtitle); font-weight: var(--weight-medium); }
+.git-sync-range small, .git-sync-range code, .git-sync-range nav { color: var(--text-2); font-size: var(--text-caption); }
 .git-sync-range ul { max-height: 180px; overflow: auto; margin: 0; padding: 0; list-style: none; }
 .git-sync-range li { display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: baseline; padding-block: 4px; overflow-wrap: anywhere; }
 .git-sync-range nav { display: flex; align-items: center; gap: 12px; margin-top: 6px; }
@@ -40,7 +40,7 @@
 .git-remote-empty h3 {
   margin: 0;
   color: var(--text);
-  font-size: var(--text-base);
+  font-size: var(--text-subtitle);
   font-weight: var(--weight-semibold);
   line-height: var(--leading-normal);
 }
@@ -50,7 +50,7 @@
 .git-remote-empty p {
   margin: var(--space-1) 0 0;
   color: var(--text-2);
-  font-size: var(--text-sm);
+  font-size: var(--text-description);
   line-height: var(--leading-body);
   overflow-wrap: anywhere;
 }
@@ -66,7 +66,7 @@
   height: var(--control-sm);
   border-color: var(--border);
   padding-inline: var(--space-2);
-  font: var(--text-sm)/var(--leading-normal) var(--mono);
+  font: var(--text-label)/var(--leading-normal) var(--mono);
 }
 
 .git-remote-refs {
@@ -75,8 +75,8 @@
   align-items: center;
   gap: var(--space-4);
   padding: var(--space-5) clamp(16px, 3cqi, 32px);
-  background: color-mix(in srgb, var(--surface-hover) 42%, transparent);
-  border: 1px solid var(--divider);
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
   border-radius: var(--radius-card);
 }
 
@@ -87,7 +87,7 @@
   align-items: center;
   gap: 6px;
   color: var(--text-2);
-  font-size: var(--text-sm);
+  font-size: var(--text-description);
 }
 
 .git-remote-ref svg,
@@ -100,7 +100,7 @@
 
 .git-remote-ref code {
   color: var(--text);
-  font: var(--text-sm)/var(--leading-normal) var(--mono);
+  font: var(--text-code)/var(--leading-normal) var(--mono);
   overflow-wrap: anywhere;
 }
 
@@ -126,7 +126,7 @@
   align-items: center;
   gap: var(--space-1);
   color: var(--warning);
-  font-size: var(--text-13);
+  font-size: var(--text-body);
   border-radius: var(--radius-tag);
 }
 
@@ -154,7 +154,7 @@
 
 .git-remote-op-copy strong {
   color: var(--text);
-  font-size: var(--text-13);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
 }
 
@@ -166,7 +166,7 @@
   border-radius: var(--radius-control);
   color: var(--text);
   background: var(--surface);
-  font: var(--weight-medium) var(--text-sm)/var(--leading-normal) var(--mono);
+  font: var(--weight-medium) var(--text-label)/var(--leading-normal) var(--mono);
 }
 
 .git-remote-operations button:hover:enabled { border-color: var(--border-hover); background: var(--surface-hover); }

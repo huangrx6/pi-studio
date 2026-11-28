@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from 'react';
-import { ArrowDown, ArrowDownToLine, ArrowLeftRight, ArrowUp, ChevronRight, Cloud, CloudOff, GitBranch, Settings2 } from 'lucide-react';
+import { ArrowDown, ArrowDownToLine, ArrowLeftRight, ArrowUp, ChevronRight, Cloud, CloudOff, Settings2 } from 'lucide-react';
+import { BranchIcon } from './git-icons';
 import { Select } from '../../shared/Select';
 import type { GitAction, GitRemoteInfo, GitState, GitSyncKind } from '../../types/git-types';
 import { GitRemoteEditor } from './GitRemoteEditor';
@@ -78,7 +79,7 @@ export function GitSync({ sessionId, revision, state, disabled, busy, error, exe
       {(info.data.explicitPush || info.data.pushUrls.join() !== info.data.fetchUrls.join()) && <><dt>推送地址</dt><dd>{info.data.pushUrls.join('\n')}</dd></>}
     </dl>}
     <div className="git-remote-refs">
-      <div className="git-remote-ref"><span><GitBranch aria-hidden="true" />本地分支</span>
+      <div className="git-remote-ref"><span><BranchIcon aria-hidden="true" />本地分支</span>
         <code dir="auto">{state.branch || state.head.slice(0, 8) || 'HEAD'}</code></div>
       <span className="git-remote-connection" aria-hidden="true"><ArrowLeftRight /></span>
       <div className="git-remote-ref"><span><Cloud aria-hidden="true" />{tracks ? '上游分支' : '目标分支'}</span>

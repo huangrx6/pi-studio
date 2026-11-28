@@ -4,7 +4,6 @@ import {
   maximumPanelWidth,
   panelUsesOverlay,
   normalizePanelWidth,
-  splitPanelWidth,
 } from '../../web/src/shell/right-panel/panel-width.ts';
 
 test('panel preference accepts saved sizes and recovers invalid storage', () => {
@@ -25,11 +24,4 @@ test('docked panel leaves a usable conversation and overlay respects window edge
   assert.equal(panelUsesOverlay(980, 252), false);
   assert.equal(panelUsesOverlay(980, 340), true);
   assert.equal(panelUsesOverlay(890, 0), false);
-});
-
-test('split panel expands enough for the tree and persistent toolbar', () => {
-  assert.equal(splitPanelWidth(320, 680), 560);
-  assert.equal(splitPanelWidth(700, 680), 680);
-  assert.equal(splitPanelWidth(900, 1200), 760);
-  assert.equal(splitPanelWidth(320, 388), 388);
 });

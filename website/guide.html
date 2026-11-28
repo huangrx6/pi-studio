@@ -159,7 +159,7 @@
                   <tr><td>会话</td><td>保存消息、工具轨迹、模型选择和运行状态</td><td>左侧栏、对话正文</td></tr>
                   <tr><td>工作区</td><td>确定项目目录、项目资源、文件与差异范围</td><td>左侧工作区列表、输入框工作区选择器</td></tr>
                   <tr><td>配置</td><td>模型、Harness、权限、工具、Skill、MCP 与扩展</td><td>设置页</td></tr>
-                  <tr><td>扩展</td><td>增加工具、命令、Prompt section、hooks、tasks 与声明式 UI</td><td>顶栏 → 扩展、设置 → 插件 → 扩展</td></tr>
+                  <tr><td>扩展</td><td>增加工具、命令、Prompt section、hooks、tasks 与声明式 UI</td><td>工具面板、设置 → 插件 → 扩展</td></tr>
                 </tbody>
               </table>
             </div>
@@ -209,26 +209,29 @@
           <header class="section-heading">
             <span class="section-kicker">03 / Interface</span>
             <h2 id="interface-title">界面地图</h2>
-            <p>消息和本轮改动在中间阅读，文件、终端、服务与浏览器可以在右侧并排打开。</p>
+            <p>左侧选择项目、工作树和会话，中间标签显示对话、文件和差异。右侧可查看文件和 Git。会话进展显示在对话区右上角，终端、浏览器和插件从悬浮工具面板打开。</p>
           </header>
           <div class="doc-copy">
             <figure class="figure">
-              <img src="assets/screens/workbench-dark.png" alt="会话旁的右侧工作台正在预览工作区文件" width="2880" height="1840" loading="lazy">
-              <figcaption><span>工作台</span><span>在对话旁核对文件预览</span></figcaption>
+              <img src="assets/screens/workbench-dark.png" alt="左侧选中 feat/tag-search 工作树下的会话，中间显示 README 标签，右侧文件树展开了 notes、src 和 tests 目录。" width="2880" height="1840" loading="lazy">
+              <figcaption><span>工作台</span><span>从右侧文件树打开 README，在当前会话中阅读索引规则</span></figcaption>
             </figure>
             <div class="table-wrap">
               <table class="doc-table">
                 <thead><tr><th>区域</th><th>可以做什么</th></tr></thead>
                 <tbody>
-                  <tr><td>左侧栏</td><td>新建对话、打开临时聊天、按工作区查找历史会话，或进入设置。</td></tr>
-                  <tr><td>会话顶栏</td><td>查看会话标题与 Git 状态。从「进展」「轨迹」和「扩展」打开右侧工作台的对应标签。模型额度按当前模型来源在顶栏显示。</td></tr>
+                  <tr><td>左侧栏</td><td>第一列切换对话、临时对话、插件和计划。第二列显示项目会话、临时对话记录或当前分区菜单。</td></tr>
+                  <tr><td>工作树标签</td><td>同一分支的多个会话、文件和差异共用一排标签。切换工作树或重启后恢复上次打开的内容。</td></tr>
                   <tr><td>对话正文</td><td>阅读消息，展开工具执行步骤，检查本轮文件变更。使用 ⌘ F 搜索会话。</td></tr>
                   <tr><td>输入区</td><td>选择模型与工具权限，添加文件引用或附件。排队消息显示在输入框上方。</td></tr>
-                  <tr><td>右侧工作台</td><td>打开工作区文件、终端、服务、浏览器或临时聊天。不同工具各用一个标签。</td></tr>
+                  <tr><td>右侧面板</td><td>浏览工作区文件和 Git 变更。</td></tr>
+                  <tr><td>悬浮工具面板</td><td>点击主窗口右下角的按钮打开面板，切换终端、浏览器和插件标签。可将面板拖到右侧文件树上方，也可放大到整个内容区。收起后可继续对话，再次打开可恢复当前会话的工具标签。</td></tr>
+                  <tr><td>管理标签页</td><td>内容区、分栏编辑器和工具面板的标签都支持滚轮和触控板横向浏览，放不下时还会显示左右箭头。中键点击可关闭一个标签。点击「标签页操作」或右键点击标签，可关闭同一栏中的其他标签、右侧标签或全部标签。关闭未保存文件的最后一个标签时会先询问。</td></tr>
+                  <tr><td>底部状态栏</td><td>点击「运行服务」查看监听端口。对话中的实时指标与已启用的模型额度默认显示在这里，点击可查看详情。</td></tr>
                 </tbody>
               </table>
             </div>
-            <p>新对话页也能打开右侧工作台。发送第一条消息后，顶栏会出现当前会话的工作区面板。需要查看单独的轨迹页面，可在「设置 → 通用」开启「显示代码工作视图」。</p>
+            <p>打开文件或 Git 差异后，点击对应的会话标签即可继续那段对话。</p>
           </div>
         </section>
 
@@ -236,7 +239,7 @@
           <header class="section-heading">
             <span class="section-kicker">04 / Workspaces</span>
             <h2 id="workspaces-title">工作区与临时对话</h2>
-            <p>工作区是项目资源的精确边界；临时对话是明确不落盘的隔离工作区。</p>
+            <p>项目会话按工作区归档。临时对话独立保存在本机，可从「临时对话 → 对话记录」继续。</p>
           </header>
           <div class="doc-copy">
             <h3>普通工作区</h3>
@@ -249,10 +252,10 @@
             </ul>
 
             <h3>临时对话</h3>
-            <p>临时对话使用独立的 Durable <code>MemoryStorage</code>，不写工作区文件也不记入会话历史。你可以在「设置 → 智能体配置 → 临时对话」中单独为其绑定工具方案、权限方案与 Harness 方案，按需开放内置工具、用户扩展或指定的 MCP 服务器。</p>
-            <div class="callout warning">
-              <strong>不落盘边界</strong>
-              <p>关闭临时聊天标签或退出应用后，其中的消息、图片和运行状态会清除。需要保存的文件或结果应在会话结束前主动导出或复制。</p>
+            <p>在侧栏选择「临时对话 → 新建临时对话」。发送后，聊天会进入该分区的独立历史。你可以在「设置 → 智能体配置 → 临时对话」中单独为其绑定工具方案、权限方案与 Harness 方案，按需开放内置工具、用户扩展或指定的 MCP 服务器。</p>
+            <div class="callout">
+              <strong>本地保存位置</strong>
+              <p>默认保存在 <code>~/.pi-studio/pi-studio.sqlite</code>。关闭标签或重启应用后，可以从临时对话记录重新打开已保存的消息和图片。</p>
             </div>
           </div>
         </section>
@@ -266,7 +269,7 @@
           <div class="doc-copy">
             <figure class="figure">
               <img src="assets/screens/conversation-light.png" alt="浅色会话界面中的智能体回复和进展面板里的三项任务" width="2880" height="1840" loading="lazy">
-              <figcaption><span>任务计划</span><span>点开会话顶栏的「进展」，可以逐项核对任务。</span></figcaption>
+              <figcaption><span>任务计划</span><span>点击对话右上角的进展摘要，可以逐项核对任务。从侧栏会话的「更多」菜单也能打开会话详情。</span></figcaption>
             </figure>
             <p>
               新会话不需要预先选择会话类型。普通输入创建一条 Durable conversation；第一次设置目标时，
@@ -298,10 +301,10 @@
               <table class="doc-table">
                 <thead><tr><th>能力</th><th>普通输入</th><th>设置 /goal 后</th><th>临时对话</th></tr></thead>
                 <tbody>
-                  <tr><td>Durable 持久化</td><td>是</td><td>是</td><td>否，MemoryStorage</td></tr>
+                  <tr><td>Durable 持久化</td><td>是</td><td>是</td><td>是，独立的 Durable 表</td></tr>
                   <tr><td>Harness / 工具 / 工作区</td><td>是</td><td>是</td><td>否</td></tr>
                   <tr><td>Goal 与任务生命周期</td><td>否</td><td>是</td><td>否</td></tr>
-                  <tr><td>侧边栏历史</td><td>是</td><td>是</td><td>仅在临时聊天标签中可见</td></tr>
+                  <tr><td>侧边栏历史</td><td>是</td><td>是</td><td>临时对话分区的「对话记录」</td></tr>
                   <tr><td>可停止 / 继续</td><td>是</td><td>是</td><td>是</td></tr>
                 </tbody>
               </table>
@@ -338,7 +341,7 @@
           <header class="section-heading">
             <span class="section-kicker">07 / Files</span>
             <h2 id="files-changes-title">文件、附件与差异</h2>
-            <p>项目上下文在右侧面板查看；真正的文件改动按回合汇总到差异工作台。</p>
+            <p>在右侧浏览项目文件与 Git 变更，选择文件即可在当前会话中查看内容或差异。</p>
           </header>
           <div class="doc-copy">
             <ul>
@@ -422,7 +425,7 @@
             <h3>AGENTS.md 加载顺序</h3>
             <figure class="code-block">
               <figcaption><span>Project context</span><button class="code-copy" type="button">复制</button></figcaption>
-              <pre><code>&lt;Studio userData&gt;/AGENTS.md
+              <pre><code>~/.pi-studio/AGENTS.md
 &lt;最近项目边界&gt;/AGENTS.md
 &lt;最近项目边界&gt;/.pi-studio/AGENTS.md
 ... 从边界逐级向下 ...
@@ -513,7 +516,7 @@
                 <tbody>
                   <tr><td>1</td><td>项目私有</td><td><code>&lt;workspace&gt;/.pi-studio/skills</code></td></tr>
                   <tr><td>2</td><td>项目通用</td><td><code>&lt;workspace&gt;/.agents/skills</code></td></tr>
-                  <tr><td>3</td><td>用户私有</td><td><code>&lt;Studio userData&gt;/skills</code></td></tr>
+                  <tr><td>3</td><td>用户私有</td><td><code>~/.pi-studio/skills</code></td></tr>
                   <tr><td>4</td><td>用户通用</td><td><code>&lt;home&gt;/.agents/skills</code></td></tr>
                 </tbody>
               </table>
@@ -580,7 +583,7 @@
               </table>
             </div>
             <p>扩展 scope 分为 builtin、user 和 project。内置默认信任；用户扩展默认信任；项目扩展默认不信任，必须由用户检查来源、权限和内容后手动信任。</p>
-            <p>在「设置 → 插件 → 扩展」中安装、启用或升级扩展。顶栏「扩展」和工作台的「+」可打开扩展面板。</p>
+            <p>在「设置 → 插件 → 扩展」中安装、启用或升级扩展。从插件目录或悬浮工具面板打开插件视图。</p>
             <div class="callout warning">
               <strong>权限与代码执行是两层</strong>
               <p>manifest 权限用于契约校验和安装审计，不会把 Node 代码变成沙箱。<code>network</code> 也是审计标记，不会阻止扩展访问网络。安装 Agent 扩展等同于信任本机 Node 代码。</p>
@@ -622,15 +625,15 @@
             <p>菜单栏和系统完成通知只做入口，不复制完整对话。点击通知会直接回到对应会话。</p>
 
             <h3>交互式终端</h3>
-            <p>从右侧工作台打开终端时，Studio 在 Electron 主进程创建 PTY，renderer 只接收 JSON-safe 会话元数据和输出字符串。POSIX 终端以交互式登录 shell 启动，按所用 shell 的规则读取用户环境。终端跟随当前主题与对话字号，切换 Tab 时由主进程保留输出并回放；最多同时打开 8 个窗口级 PTY。</p>
+            <p>从悬浮工具面板打开终端时，Studio 在 Electron 主进程创建 PTY，renderer 只接收 JSON-safe 会话元数据和输出字符串。POSIX 终端以交互式登录 shell 启动，按所用 shell 的规则读取用户环境。终端跟随当前主题与对话字号，切换 Tab 时由主进程保留输出并回放；最多同时打开 8 个窗口级 PTY。</p>
             <ul>
               <li>工作区可用时以工作区为起始目录；工作区已移动或不可用时回退到用户主目录。</li>
-              <li>关闭终端 Tab、关闭所属窗口或退出 Studio 会结束对应 PTY；仅收起右侧面板不会终止进程。</li>
+              <li>关闭终端 Tab、关闭所属窗口或退出 Studio 会结束对应 PTY；仅隐藏工具面板不会终止进程。</li>
               <li>终端拥有当前用户 shell 的权限，不是文件工具边界或操作系统沙箱。</li>
             </ul>
 
             <h3>运行服务</h3>
-            <p>运行服务页每 2.5 秒扫描一次 TCP 监听端口，并默认只显示与当前任务或已登记工作区相关的服务。每行提供端口、进程、PID、运行时长、工作目录和归属依据，可复制 URL 或直接打开。</p>
+            <p>点击窗口底部的端口图标打开「运行服务」。弹层按归属列出 TCP 监听端口，切换「本机全部」可查看其他服务。每行提供端口、进程、PID、运行时长、工作目录和归属依据，可复制 URL 或直接打开。</p>
             <ul>
               <li><strong>任务进程</strong>来自 Studio 主进程的后代关系；<strong>工作区</strong>表示进程工作目录位于已登记工作区。</li>
               <li>“全部”会显示本机其他监听端口，但不会把它们伪装成 Agent 启动的服务。</li>
@@ -751,17 +754,18 @@ builtin:studio-subagents/subagent</code></pre>
               <table class="doc-table">
                 <thead><tr><th>Slot</th><th>用途</th><th>关键限制</th></tr></thead>
                 <tbody>
-                  <tr><td><code>status.chip</code></td><td>顶栏或扩展菜单中的状态</td><td>一行摘要，details 指向本扩展的工作台面板</td></tr>
+                  <tr><td><code>status.chip</code></td><td>底部状态栏摘要</td><td>details 指向同一扩展的详情视图</td></tr>
                   <tr><td><code>composer.above</code></td><td>输入框上方</td><td>最多两个紧凑区块</td></tr>
                   <tr><td><code>composer.below</code></td><td>输入框下方</td><td>最多两个紧凑区块</td></tr>
-                  <tr><td><code>panel.side</code></td><td>右侧工作台</td><td>显示完整数据与操作，同一扩展共用一个标签</td></tr>
+                  <tr><td><code>tool.view</code></td><td>工具视图</td><td>在悬浮工具面板中打开标签</td></tr>
+                  <tr><td><code>status.detail</code></td><td>状态详情</td><td>从摘要打开状态栏弹出层</td></tr>
                   <tr><td><code>contributes.settings</code></td><td>扩展自己的设置</td><td>需要 ui.settings 权限</td></tr>
                 </tbody>
               </table>
             </div>
             <div class="callout">
               <strong>实时数据与沙箱自定义视图（panel.view）</strong>
-              <p><code>dataView</code> 只在已经挂载且可见时订阅；需要独立交互界面的侧栏面板可在 manifest 中声明 <code>view</code>（<code>entry</code> 位于插件 <code>ui/</code> 目录），由主进程通过 <code>pi-ext://</code> 协议与 <code>iframe sandbox</code> 隔离加载，经 JSON <code>postMessage</code> 桥读写数据，不与宿主渲染进程耦合。</p>
+              <p><code>dataView</code> 只在已经挂载且可见时订阅；需要独立交互界面的工具视图可在 manifest 中声明 <code>view</code>（<code>entry</code> 位于插件 <code>ui/</code> 目录），由主进程通过 <code>pi-ext://</code> 协议与 <code>iframe sandbox</code> 隔离加载，经 JSON <code>postMessage</code> 桥读写数据，不与宿主渲染进程耦合。</p>
             </div>
             <div class="reference-grid">
               <a class="ref-link" href="https://github.com/huangrx6/pi-studio/blob/main/docs/extensions/ui.md"><span>UI Block 与示例</span><span>↗</span></a>
@@ -868,11 +872,13 @@ Model provider</code></pre>
           <div class="doc-copy">
             <figure class="code-block">
               <figcaption><span>Filesystem</span><button class="code-copy" type="button">复制</button></figcaption>
-              <pre><code>&lt;Studio userData&gt;/
+              <pre><code>~/.pi-studio/
 ├── AGENTS.md
 ├── pi-studio.sqlite
 │   ├── durable_*                    # Durable 执行事实
-│   ├── conversations                # Studio 侧栏与任务投影
+│   ├── conversations                # Studio 项目会话与任务投影
+│   ├── temporary_chats               # 临时对话历史索引
+│   ├── pi_temporary_*                # 临时对话的 Durable 记录
 │   ├── settings / model_* / credentials
 │   ├── mcp_servers / studio_extensions
 │   └── project_resource_trust
@@ -909,7 +915,7 @@ Model provider</code></pre>
                 </tbody>
               </table>
             </div>
-            <p>Durable 与 Studio 使用同一个 SQLite 文件中的不同表，通过 WAL、busy_timeout 和连接职责协调。临时对话不进入这棵树。</p>
+            <p>Durable 与 Studio 使用同一个 SQLite 文件中的不同表，通过 WAL、busy_timeout 和连接职责协调。项目会话与临时对话各自维护独立的历史索引。</p>
           </div>
         </section>
 
@@ -952,7 +958,7 @@ Model provider</code></pre>
               <li>远程扩展来源使用 HTTPS、外部 SHA-256 或固定 GitHub commit；可选 Ed25519 发布者签名。</li>
               <li>项目 Skill 与项目扩展使用内容指纹，变化后撤销旧信任。</li>
               <li>工具权限在每次 ToolTask 前读取，覆盖模型直接调用、MCP 与 nested tool。</li>
-              <li>运行服务的终止范围由主进程校验：只接受 Studio 子进程或 Studio SQLite 已登记工作区内的进程，不信任 renderer 自报的任意路径。</li>
+              <li>终止运行服务需要确认。主进程复核监听地址、PID、启动时间和进程归属，保护系统进程；「本机全部」中符合条件的同用户进程也可终止。</li>
             </ul>
             <h3>明确没有解决</h3>
             <ul>

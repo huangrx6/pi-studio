@@ -1,3 +1,4 @@
+import { copyPreviewText } from './fixtures/source-editor.mjs';
 // Exercise the built renderer with real images and Studio-managed files in an isolated profile.
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
@@ -72,11 +73,11 @@ async function assertImageNavigation(rail) {
 }
 
 async function assertFileOpens(rail) {
-  const file = rail.getByRole('button', { name: '在右侧面板查看 ' + fileName, exact: true });
+  const file = rail.getByRole('button', { name: '打开附件 ' + fileName, exact: true });
   await file.focus();
   await page.keyboard.press('Enter');
-  await page.frameLocator('.panel-file-preview iframe').getByRole('heading', { name: '工作区原型' }).waitFor();
-  await page.getByRole('button', { name: '收起右侧面板', exact: true }).click();
+  await page.frameLocator('.session-document iframe').getByRole('heading', { name: '工作区原型' }).waitFor();
+  await page.getByRole('button', { name: '关闭 ' + fileName, exact: true }).click();
 }
 
 async function capture(locator, name) {
@@ -190,11 +191,10 @@ try {
     data.setData('text/plain', value);
     node.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData: data }));
   }, pasted);
-  const savedPaste = draftRail.getByRole('button', { name: /在右侧面板查看 long-message-.*\.txt/ });
+  const savedPaste = draftRail.getByRole('button', { name: /打开附件 long-message-.*\.txt/ });
   await savedPaste.press('Enter');
-  const pastePreview = page.locator('.panel-file-preview .file-preview-code pre code');
-  await pastePreview.waitFor();
-  assert.equal(await pastePreview.textContent(), pasted);
+  assert.equal(await copyPreviewText(page.locator('.session-document')), pasted);
+  await page.getByRole('tablist', {name:'工作树标签'}).getByRole('tab').first().click();
   assert.equal(await composerValue(textbox), typed);
   assert.deepEqual(errors, []);
   console.log('Attachment checks passed: external rails, alignment, horizontal scrolling, disclosure, editing, previews, keyboard file open and removal.');

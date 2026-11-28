@@ -16,6 +16,12 @@
   white-space: normal;
 }
 
+/* Keep Chromium from copying the block separators before the message controls. */
+.message.user > .message-actions,
+.user-text-toggle {
+  user-select: none;
+}
+
 .user-attachments {
   width: max-content;
   max-width: min(100%, 680px);
@@ -81,7 +87,7 @@
   display: flex; align-items: center; gap: 5px; margin-top: 8px;
   padding: 3px 0; border: 0; background: transparent; color: var(--muted);
   font-family: var(--font);
-  font-size: max(var(--text-13), calc(var(--chat-font-size, 15px) * 0.85));
+  font-size: var(--chat-text-detail);
   line-height: var(--leading-normal);
   cursor: pointer;
 }

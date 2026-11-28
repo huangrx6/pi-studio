@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, Layers3, Search, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { DetailDialog } from '../../shared/DetailDialog';
 import type { ModelOption } from '../../types/model-types';
 import type { ModelSettingsActions } from './model-settings-types';
@@ -27,8 +27,8 @@ export function EnabledModelsDialog({ enabledModels, modelById, defaultId, view,
   const visible = matches.slice(start, start + ENABLED_MODELS_PAGE_SIZE);
   useLayoutEffect(() => { if (scroller.current) scroller.current.scrollTop = 0; }, [page, needle, view]);
   return <DetailDialog label="已启用模型" className={`enabled-models-dialog${enabledModels.length <= 6 ? ' is-compact' : ''}`} onClose={onClose}>{close => <>
-    <header className="detail-header"><div className="detail-heading"><span className="detail-icon"><Layers3 /></span>
-      <div><h2>已启用模型</h2><p>{enabledModels.length} 个模型</p></div>
+    <header className="detail-header"><div className="detail-heading">
+      <div><h2 className="enabled-models-title">已启用模型 <span className="model-count">{enabledModels.length}</span></h2></div>
     </div><button type="button" className="icon-button" aria-label="关闭已启用模型" onClick={close}><X /></button></header>
     <div className="enabled-models-toolbar">
       <label className="model-list-search"><Search aria-hidden="true" /><input autoFocus type="search" aria-label="搜索已启用模型" placeholder="搜索模型名称、ID 或来源…" value={query} onChange={e => { setQuery(e.target.value); setPage(0); }} /></label>

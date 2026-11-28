@@ -18,7 +18,7 @@ const views = [
   ['usage', 'Token 使用量'], ['tools', '智能体工具'], ['permissions', '权限策略'],
   ['harness', 'Harness 配置'], ['subagents', '子智能体'], ['plugins', '插件'],
   ['mcp', 'MCP 服务器'], ['skills', '技能'], ['extensions', '扩展'],
-  ['git', 'Git 工作流'], ['network', '网络代理'], ['browser', '浏览器'],
+  ['git', 'Git'], ['network', '网络代理'], ['browser', '浏览器'],
   ['desktop-control', '电脑操控'], ['secrets', '测试凭据'], ['archives', '归档会话', 'archives'], ['about', 'Pi Studio'],
   ['storage', '设备存储'],
 ];
@@ -47,7 +47,7 @@ try {
   const nav = page.locator('.settings-navigation');
   const cdp = await page.context().newCDPSession(page);
   const preferenceFold = name => content.getByRole('region', { name, exact: true }).locator('.preference-disclosure');
-  const openSettings = () => page.locator('.sidebar-bottom button[title="设置"]').click();
+  const openSettings = () => page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   const hubTab = name => content.getByRole('tablist', { name: '插件与资源' }).getByRole('tab', { name, exact: true });
   const hubTabLabels = { plugins: '插件', mcp: 'MCP', skills: '技能', extensions: '扩展' };
   async function go(id, title) {
@@ -170,7 +170,7 @@ try {
       assert.ok(rhythm.rowHeights.every(height => height >= 44), `${sample} row hit area: ${rhythm.rowHeights}`);
       assert.ok(rhythm.labels.every(font => font === '13px/500/19.5px'), `${sample} labels: ${rhythm.labels}`);
       assert.ok(rhythm.descriptions.every(font => font === '12px/400/18px'), `${sample} descriptions: ${rhythm.descriptions}`);
-      assert.ok(await nav.getByRole('button', { name: '返回对话' }).isVisible());
+      assert.ok(await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '对话', exact: true }).isVisible());
       const name = `${mode}-${size}-${id}`;
       await screenshot(name);
       if (id === 'browser') {
@@ -233,7 +233,7 @@ try {
     const paletteSelection = await selectionAppearance(content.getByRole('radiogroup', { name: '强调色' }).locator('label:has(> input:checked)'));
     await go('harness', 'Harness 配置');
     await harness.getByRole('button', { name: '新建配置' }).waitFor();
-    const cards = harness.locator('.settings-profile-grid');
+    const cards = harness.locator('.harness-workspace');
     const cardEdges = await cards.evaluate(node => {
       const header = node.closest('.harness-settings').querySelector('.settings-page-header').getBoundingClientRect();
       return [node.getBoundingClientRect().left - header.left, node.getBoundingClientRect().right - header.right];
@@ -322,9 +322,9 @@ try {
     await page.keyboard.press('Escape');
     await defaults.waitFor({ state: 'detached' });
 
-    await go('git', 'Git 工作流');
+    await go('git', 'Git');
     await assertSettingsRowLinkHover(page, content.locator('.git-tree-open'), '.git-worktree-row');
-    assert.notEqual(await preferenceFold('差异审阅').getAttribute('open'), null);
+    await content.getByRole('region', { name: '差异显示' }).waitFor();
     const diffLayout = content.getByRole('group', { name: '默认差异布局' }).getByRole('button', { pressed: true });
     assert.deepEqual(await selectionAppearance(diffLayout), scopeAppearance, mode + ' Git layout matches the reference');
 

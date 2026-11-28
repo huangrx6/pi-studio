@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { ArrowLeft, ChevronLeft, ChevronRight, GitBranch, GitCommitHorizontal, GitMerge, Search, Tag } from 'lucide-react';
+import { ArrowLeft, ChevronLeft, ChevronRight, GitCommitHorizontal, GitMerge, Search, Tag } from 'lucide-react';
+import { BranchIcon } from './git-icons';
 import { FileKindIcon } from '../../shared/FileKindIcon';
 import { LoadingState } from '../../shared/LoadingState';
-import type { GitHistoryRow } from '../../types/git-types';
+import type { GitDiffSource, GitHistoryRow } from '../../types/git-types';
 import { useGitRead } from './useGitTools';
-import { GitFileDiff } from './GitFileDiff';
 import { GitFileList } from './GitFileList';
 import './styles/git-history.css';
 
@@ -54,7 +54,7 @@ function CommitRefs({ refs }: { refs: string }) {
   const first = entries[0];
   const current = first === 'HEAD' || first.startsWith('HEAD -> ');
   const tag = first.startsWith('tag: ');
-  const Icon = tag ? Tag : GitBranch;
+  const Icon = tag ? Tag : BranchIcon;
   return <span className="git-history-refs" aria-label={refs} title={refs}>
     <span className="git-history-ref" data-kind={current ? 'current' : tag ? 'tag' : 'branch'}>
       <Icon aria-hidden="true" /><span>{first.replace(/^(HEAD -> |tag: )/, '')}</span>
@@ -63,10 +63,9 @@ function CommitRefs({ refs }: { refs: string }) {
   </span>;
 }
 
-function CommitDetail({ sessionId, hash, revision, back }: { sessionId: string; hash: string; revision: number; back: () => void }) {
+type HistoryProps = { sessionId: string; revision: number; onOpenDiff: (source: GitDiffSource) => void };
+function CommitDetail({ sessionId, hash, revision, back, onOpenDiff }: HistoryProps & { hash: string; back: () => void }) {
   const { data, error } = useGitRead(sessionId, 'detail', { hash }, revision);
-  const [picked, setPicked] = useState('');
-  const selected = (picked && data?.files.find(file => file.path === picked)) || data?.files[0];
   const backButton = useRef<HTMLButtonElement>(null);
   useEffect(() => { backButton.current?.focus(); }, []);
   return <section className="git-commit-detail" aria-label="提交详情">
@@ -89,31 +88,28 @@ function CommitDetail({ sessionId, hash, revision, back }: { sessionId: string; 
       </header>
       {data.message.includes('\n') && <p className="git-message-body">{data.message.slice(data.message.indexOf('\n')).trim()}</p>}
       {data.parents.length > 1 && <p className="git-detail-parents"><GitMerge aria-hidden="true" />合并提交 · 相对第一父提交 <code>{data.parents[0].slice(0, 8)}</code></p>}
-      <div className="git-commit-files">
-        <section className="git-detail-paths" aria-label="变更文件">
-          <h4>变更文件 <small>{data.files.length}</small></h4>
-          {!data.files.length && <p className="git-history-feedback">这次提交没有文件变更。</p>}
-          <GitFileList files={data.files} className="git-detail-file-list">{file => {
-            const split = file.path.lastIndexOf('/');
-            const directory = file.path.slice(0, split + 1);
-            const status = file.code[0];
-            return <button key={file.path} className="git-history-file" type="button" aria-pressed={selected?.path === file.path}
-              title={file.previousPath ? file.previousPath + ' → ' + file.path : file.path} onClick={() => setPicked(file.path)}>
-              <FileKindIcon path={file.path} />
-              <span className="git-detail-path"><strong>{file.path.slice(split + 1)}</strong>
-                {(file.previousPath || directory) && <small>{file.previousPath ? '原路径 ' + file.previousPath : directory}</small>}
-              </span>
-              <span className="git-detail-change" data-change={status} title={file.code}>{changeNames[status] || file.code}</span>
-            </button>;
-          }}</GitFileList>
-        </section>
-        {selected && <GitFileDiff sessionId={sessionId} source={{ layer: 'commit', hash, path: selected.path, previousPath: selected.previousPath || '' }} revision={revision} />}
-      </div>
+      <section className="git-detail-paths" aria-label="变更文件">
+        <h4>变更文件 <small>{data.files.length}</small></h4>
+        {!data.files.length && <p className="git-history-feedback">这次提交没有文件变更。</p>}
+        <GitFileList files={data.files} className="git-detail-file-list">{file => {
+          const split = file.path.lastIndexOf('/');
+          const directory = file.path.slice(0, split + 1);
+          const status = file.code[0];
+          return <button key={file.path} className="git-history-file" type="button"
+            title={file.previousPath ? file.previousPath + ' → ' + file.path : file.path} onClick={() => onOpenDiff({ layer: 'commit', hash, path: file.path, previousPath: file.previousPath })}>
+            <FileKindIcon path={file.path} />
+            <span className="git-detail-path"><strong>{file.path.slice(split + 1)}</strong>
+              {(file.previousPath || directory) && <small>{file.previousPath ? '原路径 ' + file.previousPath : directory}</small>}
+            </span>
+            <span className="git-detail-change" data-change={status} title={file.code}>{changeNames[status] || file.code}</span>
+          </button>;
+        }}</GitFileList>
+      </section>
     </>}
   </section>;
 }
 
-export function GitHistory({ sessionId, revision }: { sessionId: string; revision: number }) {
+export function GitHistory({ sessionId, revision, onOpenDiff }: HistoryProps) {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [offset, setOffset] = useState(0);
@@ -125,7 +121,7 @@ export function GitHistory({ sessionId, revision }: { sessionId: string; revisio
     return () => clearTimeout(timeout);
   }, [query]);
   const { data, error } = useGitRead(hash ? undefined : sessionId, 'history', { query: search, offset }, revision);
-  if (hash) return <CommitDetail sessionId={sessionId} hash={hash} key={hash} revision={revision}
+  if (hash) return <CommitDetail sessionId={sessionId} hash={hash} key={hash} revision={revision} onOpenDiff={onOpenDiff}
     back={() => { returnTo.current = hash; setHash(''); }} />;
   let graphColumns = 1;
   for (const row of data?.rows || []) {

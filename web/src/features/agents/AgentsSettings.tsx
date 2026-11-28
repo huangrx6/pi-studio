@@ -1,11 +1,11 @@
 import { useEffect, useId, useState } from 'react';
-import { ChevronRight, Code2, RotateCcw, ShieldCheck, Wrench } from 'lucide-react';
+import { ChevronRight, RotateCcw } from 'lucide-react';
+import { Accordion } from '../../shared/Accordion';
 import { errorText } from '../../shared/error-text';
 import { LoadingState } from '../../shared/LoadingState';
 import { runtimeRefreshFailure } from '../../shared/runtime-refresh';
 import { Select, type SelectOption } from '../../shared/Select';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
-import { automaticProfileIcon, SettingsProfileMark } from '../../shared/SettingsProfileIcon';
 import { SettingsTabs } from '../../shared/SettingsTabs';
 import { useSettingsToast } from '../../shared/SettingsToast';
 import type { AgentConfigSection, SettingsTab } from '../../shell/app-shell-config';
@@ -14,7 +14,7 @@ import type { TemporaryCapabilitiesSnapshot, ToolProfilesSnapshot } from '../../
 import type { HarnessSettingsSnapshot } from '../../types/harness-types';
 import type { ModelOption } from '../../types/model-types';
 import type { PermissionProfilesSnapshot } from '../../types/permission-types';
-import type { ProfileIcon, ProfileIconGroup } from '../../types/profile-icon';
+import { PermissionPresetGlyph } from '../permissions/PermissionPresetGlyph';
 import { SubagentSettings } from '../subagents/SubagentSettings';
 import './styles/agents-settings.css';
 
@@ -25,15 +25,15 @@ const AGENT_SECTIONS: ReadonlyArray<{ value: AgentConfigSection; label: string }
 ];
 
 const EXTENSION_MODE_LABEL: Record<string, string> = {
-  'all-enabled': '全部已启用扩展',
+  'all-enabled': '全部已启用',
   'safe-only': '仅安全扩展',
-  none: '禁用扩展',
+  none: '已禁用',
 };
 
 const MCP_MODE_LABEL: Record<string, string> = {
-  'follow-server': '跟随全局 MCP',
-  picked: '指定 MCP 服务器',
-  none: '禁用 MCP',
+  'follow-server': '跟随全局',
+  picked: '指定服务',
+  none: '已禁用',
 };
 
 const PRESET_LABEL: Record<string, string> = {
@@ -42,11 +42,119 @@ const PRESET_LABEL: Record<string, string> = {
   full: '完全权限',
 };
 
-function profileOptions(group: ProfileIconGroup, profiles: ReadonlyArray<{ id: string; name: string; icon?: ProfileIcon | null }> = []): SelectOption[] {
+const CORE_CODE_TOOLS = new Set(['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls']);
+
+function groupEffectiveTools(enabled: ReadonlyArray<string> = []) {
+  const code: string[] = [];
+  const browser: string[] = [];
+  const desktop: string[] = [];
+  const other: string[] = [];
+  for (const name of enabled) {
+    if (CORE_CODE_TOOLS.has(name)) code.push(name);
+    else if (name.startsWith('browser_')) browser.push(name);
+    else if (name.startsWith('desktop_')) desktop.push(name);
+    else other.push(name);
+  }
+  return [
+    { key: 'code', label: '编码与文件', tools: code },
+    { key: 'browser', label: '浏览器', tools: browser },
+    { key: 'desktop', label: '电脑操控', tools: desktop },
+    { key: 'other', label: '扩展与其他', tools: other },
+  ];
+}
+
+function EffectiveCapabilitySummary({
+  profileName,
+  enabledTools,
+  mcpServers,
+  ephemeral = false,
+  onOpenTab,
+}: {
+  profileName?: string;
+  enabledTools: ReadonlyArray<string>;
+  mcpServers?: ReadonlyArray<string>;
+  ephemeral?: boolean;
+  onOpenTab: (tab: SettingsTab) => void;
+}) {
+  const groups = groupEffectiveTools(enabledTools);
+  const nonEmptyGroups = groups.filter(group => group.tools.length > 0);
+  const totalTools = enabledTools.length;
+  const hasDetails = nonEmptyGroups.length > 0 || Boolean(mcpServers && mcpServers.length > 0);
+
+  return <section
+    className={`settings-preference-card agents-summary-card${ephemeral ? ' is-ephemeral' : ''}`}
+    aria-label="当前生效能力概览"
+  >
+    <header className="agents-summary-head">
+      <div className="agents-summary-title">
+        <h3>当前生效能力概览</h3>
+        <span>{profileName ? `基于「${profileName}」 · ${totalTools} 项工具` : `共 ${totalTools} 项工具`}</span>
+      </div>
+      <div className="agents-summary-links">
+        <button type="button" className="agents-slot-link" onClick={() => onOpenTab('extensions')}>
+          插件与扩展<ChevronRight aria-hidden="true" />
+        </button>
+        <button type="button" className="agents-slot-link" onClick={() => onOpenTab('mcp')}>
+          MCP 服务器<ChevronRight aria-hidden="true" />
+        </button>
+      </div>
+    </header>
+
+    <div className="agents-summary-strip">
+      {groups.map(group => {
+        const on = group.tools.length > 0;
+        return <div key={group.key} className={`agents-summary-cell${on ? ' is-on' : ''}`}>
+          <span className="agents-summary-label"><i aria-hidden="true" />{group.label}</span>
+          <strong>{on ? `${group.tools.length} 项` : '关闭'}</strong>
+        </div>;
+      })}
+    </div>
+
+    {hasDetails && <Accordion
+      className="agents-temp-detail-disclosure"
+      summary="查看生效工具明细"
+      badge={`${totalTools} 项`}
+      compact
+    >
+      <div className="agents-temp-detail-body">
+        {nonEmptyGroups.map(group => (
+          <div key={group.key} className="agents-temp-detail-group">
+            <span>{group.label} ({group.tools.length})</span>
+            <div className="agents-manifest-chips">
+              {group.tools.map(name => <code key={name}>{name}</code>)}
+            </div>
+          </div>
+        ))}
+        {mcpServers && mcpServers.length > 0 && <div className="agents-temp-detail-group">
+          <span>MCP 服务 ({mcpServers.length})</span>
+          <div className="agents-manifest-chips">
+            {mcpServers.map(name => <code key={name}>{name}</code>)}
+          </div>
+        </div>}
+      </div>
+    </Accordion>}
+  </section>;
+}
+
+function ShieldDial({ preset }: { preset?: string }) {
+  return <PermissionPresetGlyph preset={preset} className="agents-shield-glyph" />;
+}
+
+function PromptMatrix({ sections, enabledMap }: {
+  sections: ReadonlyArray<{ id: string }>;
+  enabledMap?: Record<string, boolean>;
+}) {
+  return <span className="agents-prompt-matrix" aria-hidden="true">
+    {sections.map(section => (
+      <i key={section.id} className={enabledMap && enabledMap[section.id] !== false ? 'is-on' : ''} />
+    ))}
+  </span>;
+}
+
+function profileOptions(profiles: ReadonlyArray<{ id: string; name: string }> = []): SelectOption[] {
   return profiles.map(profile => ({
     value: profile.id,
     label: profile.name,
-    icon: <SettingsProfileMark group={group} icon={profile.icon ?? automaticProfileIcon(group, profile.id)} />,
   }));
 }
 
@@ -172,7 +280,7 @@ export function AgentsSettings({
   const header = <SettingsPageHeader
     title="智能体配置"
     iconPosition="end"
-    meta="为主对话、临时对话与子智能体统一装配工具、权限策略和 Harness 运行方案。"
+    meta="为主对话、临时对话与子智能体装配工具、权限与 Harness 方案。"
     icon={<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <rect x="6" y="8" width="20" height="17" rx="5" />
       <path d="M16 4v4M12 15.5h.01M20 15.5h.01" />
@@ -194,7 +302,7 @@ export function AgentsSettings({
     return <div className="settings-preference-page agents-settings agents-subagents-pane">
       {header}
       {tabs}
-      <div id={`${tabsId}-panel`} role="tabpanel" aria-labelledby={`${tabsId}-${section}`}>
+      <div key={section} id={`${tabsId}-panel`} className="agents-workspace-panel" role="tabpanel" aria-labelledby={`${tabsId}-${section}`}>
         <SubagentSettings
           cwd={cwd}
           workspaces={workspaces}
@@ -209,9 +317,9 @@ export function AgentsSettings({
   }
 
   const ready = Boolean(toolProfiles && permissionProfiles && harness);
-  const toolOptions = profileOptions('tools', toolProfiles?.profiles);
-  const permissionOptions = profileOptions('permissions', permissionProfiles?.profiles);
-  const harnessOptions = profileOptions('harness', harness?.profiles);
+  const toolOptions = profileOptions(toolProfiles?.profiles);
+  const permissionOptions = profileOptions(permissionProfiles?.profiles);
+  const harnessOptions = profileOptions(harness?.profiles);
   const currentToolId = mainScope === 'workspace'
     ? (toolProfiles?.workspaceProfileId || toolProfiles?.mainProfileId || '')
     : (toolProfiles?.mainProfileId || '');
@@ -237,265 +345,313 @@ export function AgentsSettings({
     {header}
     {tabs}
 
-    {!ready && <LoadingState variant="section">正在读取智能体装配方案…</LoadingState>}
+    {!ready && <div className="settings-loading-card"><LoadingState variant="section">正在读取智能体装配方案…</LoadingState></div>}
 
-    {ready && section === 'main' && toolProfiles && permissionProfiles && harness && <div className="settings-preference-groups">
-      <section className="settings-preference-card agents-scope-banner">
-        <div>
-          <strong>配置范围</strong>
-          <p>{mainScope === 'workspace'
-            ? `正在设置工作区「${workspaceName}」的主对话方案，未单独覆盖项自动继承全局默认。`
-            : '正在设置全局默认方案，所有未单独覆写的工作区都将继承这里的组合。'}</p>
-        </div>
-        <div className="settings-segments" role="group" aria-label="主对话配置范围">
-          <button
-            type="button"
-            aria-pressed={mainScope === 'workspace'}
-            disabled={!cwd}
-            onClick={() => setMainScope('workspace')}
-          >
-            当前工作区
-          </button>
-          <button
-            type="button"
-            aria-pressed={mainScope === 'global'}
-            onClick={() => setMainScope('global')}
-          >
-            全局默认
-          </button>
-        </div>
-      </section>
+    {ready && section === 'main' && toolProfiles && permissionProfiles && harness && (() => {
+      const overrideCount = [
+        toolProfiles.workspaceProfileId,
+        permissionProfiles.workspaceProfileId,
+        harness.workspaceProfileId,
+      ].filter(Boolean).length;
+      const harnessEnabledCount = currentHarnessProfile
+        ? harness.sections.filter(s => currentHarnessProfile.sections[s.id] !== false).length
+        : 0;
+      const permDecision = currentPermProfile
+        ? (currentPermProfile.policy.default === 'allow' ? '默认允许' : currentPermProfile.policy.default === 'deny' ? '默认拒绝' : '默认询问')
+        : '';
 
-      <section className="settings-preference-card agents-binding-list">
-        <div className="agents-binding-row">
-          <div className="agents-binding-info">
-            <div className="agents-binding-title">
-              <Wrench aria-hidden="true" />
-              <h3>工具方案</h3>
-              {mainScope === 'workspace' && (
-                <span className={`agents-scope-pill${toolProfiles.workspaceProfileId ? ' is-override' : ''}`}>
-                  {toolProfiles.workspaceProfileId ? '工作区覆盖' : '继承全局'}
-                </span>
+      return <div key={section} id={`${tabsId}-panel`} role="tabpanel" aria-labelledby={`${tabsId}-${section}`} className="agents-workspace-panel agents-rig-stack">
+        <section className="settings-preference-card agents-rig-bar">
+          <div className="agents-rig-context">
+            <span className="agents-rig-kicker">
+              <i aria-hidden="true" />
+              {mainScope === 'workspace' ? `工作区 · ${workspaceName}` : '全局默认'}
+            </span>
+            {mainScope === 'workspace' && <span className="agents-rig-note">
+              {overrideCount > 0 ? `已覆写 ${overrideCount} 项` : '继承全局默认'}
+            </span>}
+          </div>
+          <div className="agents-scope-switch" role="group" aria-label="主对话配置范围">
+            <button
+              type="button"
+              aria-pressed={mainScope === 'workspace'}
+              disabled={!cwd}
+              onClick={() => setMainScope('workspace')}
+            >
+              当前工作区
+            </button>
+            <button
+              type="button"
+              aria-pressed={mainScope === 'global'}
+              onClick={() => setMainScope('global')}
+            >
+              全局默认
+            </button>
+          </div>
+        </section>
+
+        <section className="settings-preference-card agents-deck" aria-label="主对话装配方案">
+          {/* Row 1 · 工具方案 */}
+          <div className="agents-deck-row">
+            <span className="agents-row-badge agents-row-count" aria-hidden="true">
+              {currentToolProfile ? currentToolProfile.enabled.length : 0}
+            </span>
+            <div className="agents-row-copy">
+              <div className="agents-row-head">
+                <h3>
+                  <button type="button" className="agents-row-open" onClick={() => onOpenTab('tools')}>
+                    工具方案
+                  </button>
+                </h3>
+                {mainScope === 'workspace' && (
+                  <span className={`agents-slot-state${toolProfiles.workspaceProfileId ? ' is-override' : ''}`}>
+                    {toolProfiles.workspaceProfileId ? <><i aria-hidden="true" />工作区覆盖</> : '继承全局'}
+                  </span>
+                )}
+              </div>
+              <p>{currentToolProfile
+                ? `${currentToolProfile.enabled.length} 项工具 · 扩展${EXTENSION_MODE_LABEL[currentToolProfile.extensionMode] || currentToolProfile.extensionMode} · MCP ${MCP_MODE_LABEL[currentToolProfile.mcpMode] || currentToolProfile.mcpMode}`
+                : '控制主对话可调用的内置工具、扩展与 MCP 服务。'}</p>
+            </div>
+            <div className="agents-row-controls">
+              {mainScope === 'workspace' && Boolean(toolProfiles.workspaceProfileId) && (
+                <button
+                  type="button"
+                  className="agents-row-reset"
+                  title="恢复继承全局方案"
+                  aria-label="恢复继承工具方案"
+                  disabled={Boolean(busyKey)}
+                  onClick={() => void selectToolBinding(toolProfiles.mainProfileId, 'inherit')}
+                >
+                  <RotateCcw aria-hidden="true" />
+                </button>
               )}
-            </div>
-            <p>{currentToolProfile
-              ? `${currentToolProfile.enabled.length} 项工具 · ${EXTENSION_MODE_LABEL[currentToolProfile.extensionMode] || currentToolProfile.extensionMode} · ${MCP_MODE_LABEL[currentToolProfile.mcpMode] || currentToolProfile.mcpMode}`
-              : '决定主对话可使用的内置工具、用户扩展与 MCP 服务。'}</p>
-          </div>
-          <div className="agents-binding-controls">
-            <Select
-              label="主对话工具方案"
-              disabled={Boolean(busyKey)}
-              value={currentToolId}
-              options={toolOptions}
-              onChange={value => void selectToolBinding(value, mainScope)}
-            />
-            {mainScope === 'workspace' && Boolean(toolProfiles.workspaceProfileId) && (
-              <button
-                type="button"
-                className="settings-outline"
+              <Select
+                label="主对话工具方案"
                 disabled={Boolean(busyKey)}
-                onClick={() => void selectToolBinding(toolProfiles.mainProfileId, 'inherit')}
-              >
-                <RotateCcw aria-hidden="true" />恢复继承
-              </button>
-            )}
-            <button type="button" className="settings-text-button" onClick={() => onOpenTab('tools')}>
-              管理方案<ChevronRight aria-hidden="true" />
-            </button>
+                value={currentToolId}
+                options={toolOptions}
+                onChange={value => void selectToolBinding(value, mainScope)}
+              />
+            </div>
           </div>
-        </div>
 
-        <div className="agents-binding-row">
-          <div className="agents-binding-info">
-            <div className="agents-binding-title">
-              <ShieldCheck aria-hidden="true" />
-              <h3>权限策略方案</h3>
-              {mainScope === 'workspace' && (
-                <span className={`agents-scope-pill${permissionProfiles.workspaceProfileId ? ' is-override' : ''}`}>
-                  {permissionProfiles.workspaceProfileId ? '工作区覆盖' : '继承全局'}
-                </span>
+          {/* Row 2 · 权限策略 */}
+          <div className="agents-deck-row">
+            <span className="agents-row-badge" aria-hidden="true">
+              <ShieldDial preset={currentPermProfile?.policy.preset} />
+            </span>
+            <div className="agents-row-copy">
+              <div className="agents-row-head">
+                <h3>
+                  <button type="button" className="agents-row-open" onClick={() => onOpenTab('permissions')}>
+                    权限策略
+                  </button>
+                </h3>
+                {mainScope === 'workspace' && (
+                  <span className={`agents-slot-state${permissionProfiles.workspaceProfileId ? ' is-override' : ''}`}>
+                    {permissionProfiles.workspaceProfileId ? <><i aria-hidden="true" />工作区覆盖</> : '继承全局'}
+                  </span>
+                )}
+              </div>
+              <p>{currentPermProfile
+                ? `${PRESET_LABEL[currentPermProfile.policy.preset] || currentPermProfile.policy.preset} · ${permDecision} · ${Object.keys(currentPermProfile.policy.tools || {}).length} 项例外 · ${currentPermProfile.policy.rules.length} 条规则`
+                : '控制执行工具时的自动放行与人工确认边界。'}</p>
+            </div>
+            <div className="agents-row-controls">
+              {mainScope === 'workspace' && Boolean(permissionProfiles.workspaceProfileId) && (
+                <button
+                  type="button"
+                  className="agents-row-reset"
+                  title="恢复继承全局方案"
+                  aria-label="恢复继承权限方案"
+                  disabled={Boolean(busyKey)}
+                  onClick={() => void selectPermissionBinding(permissionProfiles.mainProfileId, 'inherit')}
+                >
+                  <RotateCcw aria-hidden="true" />
+                </button>
               )}
-            </div>
-            <p>{currentPermProfile
-              ? `${PRESET_LABEL[currentPermProfile.policy.preset] || currentPermProfile.policy.preset} · ${Object.keys(currentPermProfile.policy.tools || {}).length} 项覆盖 · ${currentPermProfile.policy.rules.length} 条规则`
-              : '控制主对话执行工具时的自动放行与确认边界。'}</p>
-          </div>
-          <div className="agents-binding-controls">
-            <Select
-              label="主对话权限方案"
-              disabled={Boolean(busyKey)}
-              value={currentPermissionId}
-              options={permissionOptions}
-              onChange={value => void selectPermissionBinding(value, mainScope)}
-            />
-            {mainScope === 'workspace' && Boolean(permissionProfiles.workspaceProfileId) && (
-              <button
-                type="button"
-                className="settings-outline"
+              <Select
+                label="主对话权限方案"
                 disabled={Boolean(busyKey)}
-                onClick={() => void selectPermissionBinding(permissionProfiles.mainProfileId, 'inherit')}
-              >
-                <RotateCcw aria-hidden="true" />恢复继承
-              </button>
-            )}
-            <button type="button" className="settings-text-button" onClick={() => onOpenTab('permissions')}>
-              管理方案<ChevronRight aria-hidden="true" />
-            </button>
+                value={currentPermissionId}
+                options={permissionOptions}
+                onChange={value => void selectPermissionBinding(value, mainScope)}
+              />
+            </div>
           </div>
-        </div>
 
-        <div className="agents-binding-row">
-          <div className="agents-binding-info">
-            <div className="agents-binding-title">
-              <Code2 aria-hidden="true" />
-              <h3>Harness 方案</h3>
-              {mainScope === 'workspace' && (
-                <span className={`agents-scope-pill${harness.workspaceProfileId ? ' is-override' : ''}`}>
-                  {harness.workspaceProfileId ? '工作区覆盖' : '继承全局'}
-                </span>
+          {/* Row 3 · Harness 基线 */}
+          <div className="agents-deck-row">
+            <span className="agents-row-badge" aria-hidden="true">
+              <PromptMatrix sections={harness.sections} enabledMap={currentHarnessProfile?.sections} />
+            </span>
+            <div className="agents-row-copy">
+              <div className="agents-row-head">
+                <h3>
+                  <button type="button" className="agents-row-open" onClick={() => onOpenTab('harness')}>
+                    Harness 基线
+                  </button>
+                </h3>
+                {mainScope === 'workspace' && (
+                  <span className={`agents-slot-state${harness.workspaceProfileId ? ' is-override' : ''}`}>
+                    {harness.workspaceProfileId ? <><i aria-hidden="true" />工作区覆盖</> : '继承全局'}
+                  </span>
+                )}
+              </div>
+              <p>{currentHarnessProfile
+                ? `${harnessEnabledCount}/${harness.sections.length} 段系统提示词 · ${Object.keys(currentHarnessProfile.toolGuidance).length} 条工具说明${currentHarnessProfile.customInstructions?.trim() ? ' · 含附加指令' : ''}`
+                : '编排系统提示词段落与工具使用说明。'}</p>
+            </div>
+            <div className="agents-row-controls">
+              {mainScope === 'workspace' && Boolean(harness.workspaceProfileId) && (
+                <button
+                  type="button"
+                  className="agents-row-reset"
+                  title="恢复继承全局方案"
+                  aria-label="恢复继承 Harness 方案"
+                  disabled={Boolean(busyKey)}
+                  onClick={() => void selectHarnessBinding(harness.globalProfileId, 'inherit')}
+                >
+                  <RotateCcw aria-hidden="true" />
+                </button>
               )}
-            </div>
-            <p>{currentHarnessProfile
-              ? `${harness.sections.filter(s => currentHarnessProfile.sections[s.id] !== false).length}/${harness.sections.length} 段系统提示词 · ${Object.keys(currentHarnessProfile.toolGuidance).length} 条工具说明`
-              : '编排系统提示词段落与工具使用引导。'}</p>
-          </div>
-          <div className="agents-binding-controls">
-            <Select
-              label="主对话 Harness 方案"
-              disabled={Boolean(busyKey)}
-              value={currentHarnessId}
-              options={harnessOptions}
-              onChange={value => void selectHarnessBinding(value, mainScope)}
-            />
-            {mainScope === 'workspace' && Boolean(harness.workspaceProfileId) && (
-              <button
-                type="button"
-                className="settings-outline"
+              <Select
+                label="主对话 Harness 方案"
                 disabled={Boolean(busyKey)}
-                onClick={() => void selectHarnessBinding(harness.globalProfileId, 'inherit')}
-              >
-                <RotateCcw aria-hidden="true" />恢复继承
-              </button>
-            )}
-            <button type="button" className="settings-text-button" onClick={() => onOpenTab('harness')}>
-              管理方案<ChevronRight aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      </section>
-    </div>}
-
-    {ready && section === 'temporary' && toolProfiles && permissionProfiles && harness && <div className="settings-preference-groups">
-      <section className="settings-preference-card agents-binding-list">
-        <div className="agents-binding-row">
-          <div className="agents-binding-info">
-            <div className="agents-binding-title">
-              <Wrench aria-hidden="true" />
-              <h3>临时对话工具方案</h3>
+                value={currentHarnessId}
+                options={harnessOptions}
+                onChange={value => void selectHarnessBinding(value, mainScope)}
+              />
             </div>
-            <p>{tempToolProfile
-              ? `${tempToolProfile.enabled.length} 项工具 · ${EXTENSION_MODE_LABEL[tempToolProfile.extensionMode] || tempToolProfile.extensionMode} · ${MCP_MODE_LABEL[tempToolProfile.mcpMode] || tempToolProfile.mcpMode}`
-              : '配置临时对话能否调用内置工具、用户插件或指定 MCP 服务器。'}</p>
           </div>
-          <div className="agents-binding-controls">
-            <Select
-              label="临时对话工具方案"
-              disabled={Boolean(busyKey)}
-              value={tempToolId}
-              options={toolOptions}
-              onChange={value => void selectToolBinding(value, 'temporary')}
-            />
-            <button type="button" className="settings-text-button" onClick={() => onOpenTab('tools')}>
-              管理方案<ChevronRight aria-hidden="true" />
-            </button>
-          </div>
-        </div>
+        </section>
 
-        <div className="agents-binding-row">
-          <div className="agents-binding-info">
-            <div className="agents-binding-title">
-              <ShieldCheck aria-hidden="true" />
-              <h3>临时对话权限方案</h3>
+        <EffectiveCapabilitySummary
+          profileName={currentToolProfile?.name}
+          enabledTools={currentToolProfile?.enabled ?? []}
+          mcpServers={currentToolProfile?.mcpMode === 'picked' ? currentToolProfile.mcpServers : undefined}
+          onOpenTab={onOpenTab}
+        />
+      </div>;
+    })()}
+
+    {ready && section === 'temporary' && toolProfiles && permissionProfiles && harness && (() => {
+      const tempHarnessEnabledCount = tempHarnessProfile
+        ? harness.sections.filter(s => tempHarnessProfile.sections[s.id] !== false).length
+        : 0;
+      const tempPermDecision = tempPermProfile
+        ? (tempPermProfile.policy.default === 'allow' ? '默认允许' : tempPermProfile.policy.default === 'deny' ? '默认拒绝' : '默认询问')
+        : '';
+      const effectiveTempTools = tempCaps
+        ? [...tempCaps.builtinTools, ...tempCaps.extensionTools]
+        : (tempToolProfile?.enabled ?? []);
+      const totalTempTools = effectiveTempTools.length;
+
+      return <div key={section} id={`${tabsId}-panel`} role="tabpanel" aria-labelledby={`${tabsId}-${section}`} className="agents-workspace-panel agents-rig-stack">
+        <section className="agents-sandbox-banner">
+          <div className="agents-rig-context">
+            <span className="agents-sandbox-kicker">
+              <i aria-hidden="true" />临时对话
+            </span>
+            <span className="agents-rig-note">独立于项目 · 历史保存在本机</span>
+          </div>
+          <span className="agents-sandbox-posture">
+            {totalTempTools === 0 ? '纯对话 · 0 工具' : `已启用 ${totalTempTools} 项工具`}
+          </span>
+        </section>
+
+        <section className="settings-preference-card agents-deck is-ephemeral" aria-label="临时对话装配方案">
+          <div className="agents-deck-row">
+            <span className="agents-row-badge agents-row-count" aria-hidden="true">
+              {tempToolProfile ? tempToolProfile.enabled.length : 0}
+            </span>
+            <div className="agents-row-copy">
+              <div className="agents-row-head">
+                <h3>
+                  <button type="button" className="agents-row-open" onClick={() => onOpenTab('tools')}>
+                    工具方案
+                  </button>
+                </h3>
+              </div>
+              <p>{tempToolProfile
+                ? `${tempToolProfile.enabled.length} 项工具 · 扩展${EXTENSION_MODE_LABEL[tempToolProfile.extensionMode] || tempToolProfile.extensionMode} · MCP ${MCP_MODE_LABEL[tempToolProfile.mcpMode] || tempToolProfile.mcpMode}`
+                : '配置临时对话能否调用内置工具、扩展或 MCP 服务。'}</p>
             </div>
-            <p>{tempPermProfile
-              ? `${PRESET_LABEL[tempPermProfile.policy.preset] || tempPermProfile.policy.preset} · 默认${tempPermProfile.policy.default === 'allow' ? '允许' : tempPermProfile.policy.default === 'deny' ? '拒绝' : '询问'}`
-              : '决定临时对话调用工具或 MCP 方法时是否请求人工确认。'}</p>
-          </div>
-          <div className="agents-binding-controls">
-            <Select
-              label="临时对话权限方案"
-              disabled={Boolean(busyKey)}
-              value={tempPermId}
-              options={permissionOptions}
-              onChange={value => void selectPermissionBinding(value, 'temporary')}
-            />
-            <button type="button" className="settings-text-button" onClick={() => onOpenTab('permissions')}>
-              管理方案<ChevronRight aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-
-        <div className="agents-binding-row">
-          <div className="agents-binding-info">
-            <div className="agents-binding-title">
-              <Code2 aria-hidden="true" />
-              <h3>临时对话 Harness 方案</h3>
+            <div className="agents-row-controls">
+              <Select
+                label="临时对话工具方案"
+                disabled={Boolean(busyKey)}
+                value={tempToolId}
+                options={toolOptions}
+                onChange={value => void selectToolBinding(value, 'temporary')}
+              />
             </div>
-            <p>{tempHarnessProfile
-              ? `${harness.sections.filter(s => tempHarnessProfile.sections[s.id] !== false).length}/${harness.sections.length} 段系统提示词`
-              : '设置临时对话的系统提示词结构、编码原则与补充指令。'}</p>
           </div>
-          <div className="agents-binding-controls">
-            <Select
-              label="临时对话 Harness 方案"
-              disabled={Boolean(busyKey)}
-              value={tempHarnessId}
-              options={harnessOptions}
-              onChange={value => void selectHarnessBinding(value, 'temporary')}
-            />
-            <button type="button" className="settings-text-button" onClick={() => onOpenTab('harness')}>
-              管理方案<ChevronRight aria-hidden="true" />
-            </button>
-          </div>
-        </div>
-      </section>
 
-      <section className="settings-preference-card agents-temp-preview" aria-label="当前临时对话实际可用能力">
-        <header className="agents-temp-preview-head">
-          <div>
-            <h3>当前临时对话实际可用能力</h3>
-            <p>{tempCaps
-              ? `基于「${tempCaps.profileName}」，共 ${tempCaps.totalTools} 个工具将在新消息生效（临时对话历史仍仅存内存，不绑定项目目录）。`
-              : '正在统计当前可用的工具、扩展与 MCP 服务…'}</p>
+          <div className="agents-deck-row">
+            <span className="agents-row-badge" aria-hidden="true">
+              <ShieldDial preset={tempPermProfile?.policy.preset} />
+            </span>
+            <div className="agents-row-copy">
+              <div className="agents-row-head">
+                <h3>
+                  <button type="button" className="agents-row-open" onClick={() => onOpenTab('permissions')}>
+                    权限策略
+                  </button>
+                </h3>
+              </div>
+              <p>{tempPermProfile
+                ? `${PRESET_LABEL[tempPermProfile.policy.preset] || tempPermProfile.policy.preset} · ${tempPermDecision}`
+                : '决定临时对话调用工具时是否请求人工确认。'}</p>
+            </div>
+            <div className="agents-row-controls">
+              <Select
+                label="临时对话权限方案"
+                disabled={Boolean(busyKey)}
+                value={tempPermId}
+                options={permissionOptions}
+                onChange={value => void selectPermissionBinding(value, 'temporary')}
+              />
+            </div>
           </div>
-          <div className="agents-temp-preview-links">
-            <button type="button" className="settings-outline" onClick={() => onOpenTab('extensions')}>插件与扩展</button>
-            <button type="button" className="settings-outline" onClick={() => onOpenTab('mcp')}>MCP 服务器</button>
-          </div>
-        </header>
 
-        {tempCaps && <dl className="agents-temp-cap-grid">
-          <div>
-            <dt>内置工具 ({tempCaps.builtinTools.length})</dt>
-            <dd>{tempCaps.builtinTools.length > 0
-              ? tempCaps.builtinTools.map(name => <code key={name}>{name}</code>)
-              : <span>未启用（纯对话模式）</span>}</dd>
+          <div className="agents-deck-row">
+            <span className="agents-row-badge" aria-hidden="true">
+              <PromptMatrix sections={harness.sections} enabledMap={tempHarnessProfile?.sections} />
+            </span>
+            <div className="agents-row-copy">
+              <div className="agents-row-head">
+                <h3>
+                  <button type="button" className="agents-row-open" onClick={() => onOpenTab('harness')}>
+                    Harness 基线
+                  </button>
+                </h3>
+              </div>
+              <p>{tempHarnessProfile
+                ? `${tempHarnessEnabledCount}/${harness.sections.length} 段系统提示词 · 轻量无盘上下文`
+                : '设置临时对话的系统提示词结构与补充指令。'}</p>
+            </div>
+            <div className="agents-row-controls">
+              <Select
+                label="临时对话 Harness 方案"
+                disabled={Boolean(busyKey)}
+                value={tempHarnessId}
+                options={harnessOptions}
+                onChange={value => void selectHarnessBinding(value, 'temporary')}
+              />
+            </div>
           </div>
-          <div>
-            <dt>用户扩展工具 ({tempCaps.extensionTools.length})</dt>
-            <dd>{tempCaps.extensionTools.length > 0
-              ? tempCaps.extensionTools.map(name => <code key={name}>{name}</code>)
-              : <span>未启用</span>}</dd>
-          </div>
-          <div>
-            <dt>MCP 服务 ({tempCaps.mcpServers.length})</dt>
-            <dd>{tempCaps.mcpServers.length > 0
-              ? tempCaps.mcpServers.map(name => <code key={name}>{name}</code>)
-              : <span>未使用</span>}</dd>
-          </div>
-        </dl>}
-      </section>
-    </div>}
+        </section>
+
+        <EffectiveCapabilitySummary
+          profileName={tempCaps?.profileName || tempToolProfile?.name}
+          enabledTools={effectiveTempTools}
+          mcpServers={tempCaps?.mcpServers}
+          ephemeral
+          onOpenTab={onOpenTab}
+        />
+      </div>;
+    })()}
   </div>;
 }

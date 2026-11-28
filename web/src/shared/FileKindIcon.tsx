@@ -9,7 +9,7 @@ import {
   Video,
 } from 'lucide-react';
 import type { CSSProperties } from 'react';
-import { lightIcons, urls } from 'virtual:studio-file-icons';
+import { folderNames, folderNamesExpanded, lightIcons, urls } from 'virtual:studio-file-icons';
 import { fileIconId } from './file-icon';
 
 export type FilePreviewFormat =
@@ -40,7 +40,17 @@ export function FileFormatIcon({ format }: { format: FilePreviewFormat }) {
 
 /** Decorative identity for a specific file; the adjacent filename supplies the label. */
 export function FileKindIcon({ path, mime, className = '' }: { path: string; mime?: string; className?: string }) {
-  const id = fileIconId(path, mime);
+  return <ThemeIcon id={fileIconId(path, mime)} className={className} />;
+}
+
+export function FolderKindIcon({ path, expanded }: { path: string; expanded: boolean }) {
+  const names = path.toLowerCase().split(/[\\/]/);
+  const icons = expanded ? folderNamesExpanded : folderNames;
+  const id = icons.get(names.slice(-2).join('/')) ?? icons.get(names.at(-1)!) ?? (expanded ? 'folder-open' : 'folder');
+  return <ThemeIcon id={id} />;
+}
+
+function ThemeIcon({ id, className = '' }: { id: string; className?: string }) {
   const light = lightIcons[id];
   return <img alt="" aria-hidden="true" draggable={false} width={16} height={16} data-file-icon={id} data-light-file-icon={light}
     className={`studio-file-icon ${className}`}

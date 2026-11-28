@@ -344,9 +344,10 @@ class ExtensionDataViewService {
     await this.closeWhere((record) => record.extensionId === extensionId);
   }
 
-  async closeAll() {
-    const records = [...this.subscriptions.values()];
-    await Promise.all(records.map((record) => this.close(record.id, record.target)));
+  async closeAll({ reloading = false } = {}) {
+    // Some built-in providers live as long as the desktop process. A workspace
+    // registry rebuild must not strand their still-mounted, device-wide controls.
+    await this.closeWhere(record => !(reloading && record.owner.scope === 'builtin' && record.provider.retainOnReload?.()));
   }
 
   async refresh(filter = {}) {
@@ -398,8 +399,8 @@ function registerExtensionDataViewService(service) {
   return () => registeredServices.delete(service);
 }
 
-async function closeAllExtensionDataViewServices() {
-  await Promise.all([...registeredServices].map((service) => service.closeAll()));
+async function closeAllExtensionDataViewServices(options) {
+  await Promise.all([...registeredServices].map((service) => service.closeAll(options)));
 }
 
 async function closeExtensionDataViewServices(extensionId) {

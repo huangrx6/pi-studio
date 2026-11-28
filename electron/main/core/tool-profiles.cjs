@@ -11,9 +11,14 @@ const { getStudioDatabase } = require('./studio-db.cjs');
 
 const SETTING_KEY = 'studio.agent.tools';
 const SETTING_VERSION_KEY = 'studio.agent.tools.version';
-const SETTING_VERSION = 8;
+const SETTING_VERSION = 13;
 const MCP_RULES_KEY = 'studio.mcp.methodRules.v1';
 const TOOL_PROFILES_KEY = 'studio.agent.toolProfiles.v1';
+
+const DESKTOP_CONTROL_TOOLS = Object.freeze([
+  'desktop_status', 'desktop_apps', 'desktop_windows', 'desktop_launch', 'desktop_act', 'desktop_snapshot', 'desktop_screenshot',
+  'desktop_click', 'desktop_type', 'desktop_scroll', 'desktop_drag', 'desktop_hotkey',
+]);
 
 const DEFAULT_AGENT_TOOLS = Object.freeze([
   'read', 'write', 'edit', 'bash', 'grep', 'find', 'ls', 'todo', 'tool_search', 'workbench_refresh',
@@ -22,6 +27,7 @@ const DEFAULT_AGENT_TOOLS = Object.freeze([
   'browser_scroll', 'browser_wait', 'browser_select', 'browser_viewport',
   'browser_console', 'browser_network',
   'browser_dialog', 'browser_download', 'browser_highlight',
+  ...DESKTOP_CONTROL_TOOLS,
   'mcp__*',
 ]);
 
@@ -121,20 +127,30 @@ function normalizeSelectionVersion(value) {
   return Number.isSafeInteger(value) && value >= 1 ? value : 1;
 }
 
+function removeRetiredDesktopTool(selection) {
+  const retired = 'desktop_search_chat';
+  if (Array.isArray(selection?.enabled) && selection.enabled.includes(retired)) {
+    selection.enabled = selection.enabled.filter(name => name !== retired);
+  }
+  if (selection?.sources && Object.hasOwn(selection.sources, retired)) delete selection.sources[retired];
+}
+
 function readAgentToolSelection(db = getStudioDatabase()) {
-  const selectionExists = Object.hasOwn(db.getSettings(), SETTING_KEY);
+  const settings = db.getSettings();
+  const selectionExists = Object.hasOwn(settings, SETTING_KEY);
   const selection = db.getSettingWithRecovery(
     SETTING_KEY,
     undefined,
     normalizeSelection,
   );
-  if (!selectionExists) return selection;
+  if (!selectionExists && !Object.hasOwn(settings, TOOL_PROFILES_KEY)) return selection;
   const version = db.getSettingWithRecovery(
     SETTING_VERSION_KEY,
-    1,
+    selectionExists ? 1 : 11,
     normalizeSelectionVersion,
   );
   if (version < SETTING_VERSION) {
+    removeRetiredDesktopTool(selection);
     if (version < 2 && !selection.enabled.some((name) => name.startsWith('mcp__'))) {
       if (selection.enabled.length < MAX_AGENT_TOOLS) selection.enabled.push('mcp__*');
     }
@@ -196,33 +212,34 @@ function readAgentToolSelection(db = getStudioDatabase()) {
         selection.enabled.push(name);
       }
     }
+    for (const name of (version < 11 ? DESKTOP_CONTROL_TOOLS : [])) {
+      if (selection.enabled.some((pattern) => matches(pattern, name))) continue;
+      if (selection.enabled.length >= MAX_AGENT_TOOLS) break;
+      selection.enabled.push(name);
+    }
     const migrated = normalizeSelection(selection);
     try {
       db.transaction(() => {
-        db.setSetting(SETTING_KEY, migrated);
+        if (selectionExists) db.setSetting(SETTING_KEY, migrated);
         db.setSetting(SETTING_VERSION_KEY, SETTING_VERSION);
-        // Also upgrade existing main-default profile in studio.agent.toolProfiles.v1 if present.
-        if (version < 8) {
+        if (Object.hasOwn(settings, TOOL_PROFILES_KEY)) {
           const store = db.getSetting(TOOL_PROFILES_KEY, null);
-          const mainProfile = store?.profiles?.[MAIN_DEFAULT_PROFILE_ID];
-          if (mainProfile && Array.isArray(mainProfile.enabled) && mainProfile.enabled.some((pattern) => matches(pattern, 'browser_open'))) {
-            let changed = false;
-            const nextEnabled = [...mainProfile.enabled];
-            for (const name of ['browser_hover', 'browser_press', 'browser_drag', 'browser_viewport', 'browser_console', 'browser_network']) {
-              if (nextEnabled.some((pattern) => matches(pattern, name))) continue;
-              if (nextEnabled.length >= MAX_AGENT_TOOLS) break;
-              nextEnabled.push(name);
-              changed = true;
+          if (store?.profiles && typeof store.profiles === 'object') {
+            for (const profile of Object.values(store.profiles)) removeRetiredDesktopTool(profile);
+            const main = store.profiles[MAIN_DEFAULT_PROFILE_ID];
+            if (Array.isArray(main?.enabled)) {
+              const additions = [
+                ...(version < 8 && main.enabled.some(pattern => matches(pattern, 'browser_open'))
+                  ? ['browser_hover', 'browser_press', 'browser_drag', 'browser_viewport', 'browser_console', 'browser_network']
+                  : []),
+                ...(selectionExists && version < 11 ? DESKTOP_CONTROL_TOOLS : []),
+              ];
+              for (const name of additions) {
+                if (main.enabled.length >= MAX_AGENT_TOOLS) break;
+                if (!main.enabled.some(pattern => matches(pattern, name))) main.enabled.push(name);
+              }
             }
-            if (changed) {
-              db.setSetting(TOOL_PROFILES_KEY, {
-                ...store,
-                profiles: {
-                  ...store.profiles,
-                  [MAIN_DEFAULT_PROFILE_ID]: { ...mainProfile, enabled: nextEnabled },
-                },
-              });
-            }
+            db.setSetting(TOOL_PROFILES_KEY, store);
           }
         }
       });

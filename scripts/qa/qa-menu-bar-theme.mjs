@@ -102,9 +102,27 @@ try {
 
   const mark = await page.locator('.brand-mark').boundingBox();
   const title = await page.locator('.brand-lockup strong').boundingBox();
+  async function checkMenuFill() {
+    const fill = selector => page.locator(selector).evaluate(node => getComputedStyle(node).backgroundColor);
+    const panelFill = await fill('.popover-panel');
+    assert.match(panelFill, /^rgb\(/, 'the popover has an opaque surface');
+    assert.equal(await fill('.more-menu'), panelFill, 'the menu shares its popover surface');
+  }
+  for (const [selector, token] of [
+    ['.brand-lockup strong', '--text-subtitle'], ['.session-copy strong', '--text-label'],
+    ['.session-copy small', '--text-caption'], ['.open-main', '--text-label'],
+  ]) {
+    assert.ok(await page.locator(selector).first().evaluate((node, name) => {
+      const style = getComputedStyle(node);
+      return style.fontSize === style.getPropertyValue(name).trim();
+    }, token), selector);
+  }
   assert.ok(mark && title);
-  assert.equal(mark.width, 22);
-  assert.equal(mark.height, 22);
+  assert.equal(mark.width, 21);
+  assert.equal(mark.height, 21);
+  assert.equal((await page.locator('.icon-button svg').first().boundingBox()).width, 15);
+  assert.equal((await page.locator('.icon-button').first().boundingBox()).width, 28);
+  assert.equal((await page.locator('.open-main svg').boundingBox()).width, 13);
   assert.ok(Math.abs((mark.y + mark.height / 2) - (title.y + title.height / 2)) <= 1);
 
   await page.locator('.session-open').first().click();
@@ -115,6 +133,19 @@ try {
 
   await page.locator('#more').click();
   assert.equal(await page.locator('#more').getAttribute('aria-expanded'), 'true');
+  await checkMenuFill();
+  await page.waitForFunction(() => document.activeElement.id === 'settings');
+  await page.keyboard.press('Escape');
+  const moreFocus = () => page.locator('#more').evaluate(button => [document.activeElement === button, getComputedStyle(button).outlineStyle]);
+  assert.deepEqual(await moreFocus(), [true, 'none']);
+  await page.keyboard.press('Enter');
+  await page.waitForFunction(() => document.activeElement.id === 'settings');
+  await page.keyboard.press('Escape');
+  assert.deepEqual(await moreFocus(), [true, 'solid']);
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  assert.deepEqual(await moreFocus(), [true, 'solid']);
+  await page.locator('#more').click();
   await page.locator('#settings').click();
   assert.equal(await page.evaluate(() => window.__settingsOpened), true);
   await page.locator('#more').click();
@@ -176,6 +207,7 @@ try {
   await page.screenshot({ path: `${output}light-busy.png`, animations: 'disabled' });
 
   await page.locator('#more').click();
+  await checkMenuFill();
   await page.locator('#quit').click();
   assert.equal(await page.evaluate(() => window.__quitRequested), true);
   assert.deepEqual(errors, []);

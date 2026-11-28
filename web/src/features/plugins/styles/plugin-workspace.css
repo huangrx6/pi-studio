@@ -25,9 +25,6 @@
 .plugin-workspace .settings-page-header-icon > svg {
   stroke-width: 1.4;
 }
-.plugin-workspace .settings-page-header-icon > svg path:first-child {
-  stroke: var(--accent);
-}
 .plugin-workspace-panel {
   min-width: 0;
 }
@@ -51,26 +48,38 @@
   height: var(--icon-sm);
   flex: none;
 }
+.settings-content .plugin-workspace-actions > .settings-outline {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+.settings-content .plugin-workspace-actions > .settings-outline:hover:not(:disabled) {
+  border-color: var(--divider);
+  background: var(--surface-hover);
+  color: var(--text);
+}
 .settings-content .plugin-workspace-actions > .settings-add-button {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--on-button);
-  font-weight: var(--weight-semibold);
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+  font-weight: var(--weight-medium);
 }
 .settings-content .plugin-workspace-actions > .settings-add-button:hover:not(:disabled) {
-  border-color: var(--button-hover);
-  background: var(--button-hover);
-  color: var(--on-button);
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+  opacity: 0.88;
 }
 .settings-content .plugin-workspace-actions > .settings-add-button:disabled {
-  border-color: var(--border);
-  background: var(--settings-control-bg);
-  color: var(--muted);
+  border-color: var(--divider);
+  background: var(--surface-raised);
+  color: var(--disabled-text);
+  opacity: 1;
 }
 
 @container settings-preferences (max-width: 550px) {
   .plugin-workspace-toolbar .plugin-workspace-actions > .settings-outline {
-    inline-size: var(--settings-control-height);
+    inline-size: var(--control-sm);
     padding-inline: 0;
   }
   .plugin-workspace-actions > .settings-outline > span {
@@ -86,7 +95,7 @@
     padding-inline: var(--space-1);
   }
   .plugin-workspace-toolbar .plugin-workspace-actions > .settings-add-button {
-    inline-size: var(--settings-control-height);
+    inline-size: var(--control-sm);
     padding-inline: 0;
   }
   .plugin-workspace-actions > .settings-add-button > span {
@@ -112,10 +121,10 @@
   width: var(--settings-row-height);
   height: var(--settings-row-height);
   margin-bottom: var(--space-1);
-  border: 1px solid var(--accent-border);
+  border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  background: var(--settings-accent-soft);
-  color: var(--accent);
+  background: var(--surface-raised);
+  color: var(--text-2);
 }
 .plugin-hub-empty-mark svg {
   width: var(--icon-lg);
@@ -125,13 +134,13 @@
 .plugin-hub-empty h3 {
   margin: 0;
   color: var(--text);
-  font: var(--weight-semibold) var(--settings-section-title-size)/var(--leading-tight) var(--font);
+  font: var(--font-subtitle);
 }
 .plugin-hub-empty p {
   max-width: 34ch;
   margin: 0;
   color: var(--muted);
-  font: var(--settings-description-font);
+  font: var(--font-description);
 }
 .plugin-hub-empty-actions {
   display: flex;
@@ -144,29 +153,6 @@
 .plugin-hub-empty-actions svg {
   width: var(--icon-sm);
   height: var(--icon-sm);
-}
-
-/* 子页底部跨页提示条：收口成轻盈的一行指引，不散落成孤立段落。 */
-.plugin-workspace-crosslink {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: var(--space-1);
-  margin: 0;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--divider);
-  border-radius: var(--radius-control);
-  background: var(--settings-page-bg);
-  color: var(--muted);
-  font: var(--settings-description-font);
-}
-.plugin-workspace-crosslink > button {
-  padding: 0 var(--space-1);
-  border-radius: var(--radius-tag);
-  color: var(--accent);
-  font-weight: var(--weight-medium);
-  text-decoration: underline;
-  text-underline-offset: 2px;
 }
 
 /* 弹框扁平化表单规范：去卡片套娃，只用轻分割线划分区块。 */
@@ -188,7 +174,7 @@
 .plugin-flat-section-head h3 {
   margin: 0;
   color: var(--text);
-  font-size: var(--text-13);
+  font-size: var(--text-subtitle);
   font-weight: var(--weight-semibold);
   line-height: var(--leading-normal);
 }
@@ -200,7 +186,7 @@
 }
 .plugin-flat-section-head > span {
   color: var(--muted);
-  font: var(--settings-description-font);
+  font: var(--font-description);
   font-variant-numeric: tabular-nums;
 }
 .plugin-flat-disclosure {
@@ -238,12 +224,12 @@
 .skill-import-scope-copy .field-label-row { margin: 0; }
 .skill-import-label {
   color: var(--text);
-  font: var(--settings-label-font);
+  font: var(--font-label);
 }
 .skill-import-scope-copy p {
   margin: 0;
   color: var(--muted);
-  font: var(--settings-description-font);
+  font: var(--font-description);
 }
 .skill-import-segments > label {
   position: relative;

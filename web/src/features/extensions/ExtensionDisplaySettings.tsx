@@ -13,7 +13,7 @@ type DisplayPreferences = Pick<Preferences, 'extensionPlacements' | 'extensionAp
 type DisplayPanelEntry = { panel: ConfigurablePanel; companionIds: string[] };
 
 /**
- * When a summary panel (e.g. `status.chip`) links directly to a side panel with the
+ * When a summary panel (e.g. `status.chip`) links directly to a detail view with the
  * exact same title via `details`, present one unified appearance control and keep both
  * panel IDs in sync instead of rendering two duplicate "图标与配色" rows.
  */
@@ -33,7 +33,7 @@ function resolveDisplayPanels(item: ExtensionHostItem): DisplayPanelEntry[] {
     const detailId = panelContributionId(item.scope, manifestId, raw.details);
     const summary = byId.get(summaryId);
     const detail = byId.get(detailId);
-    if (summary && detail && detail.slot === 'panel.side' && summary.title === detail.title) {
+    if (summary && detail && (detail.slot === 'tool.view' || detail.slot === 'status.detail') && summary.title === detail.title) {
       absorbed.add(detailId);
       companions.set(summaryId, [...(companions.get(summaryId) ?? []), detailId]);
     }
@@ -63,15 +63,15 @@ export function ExtensionDisplaySettings({ item, preferences, onChange }: {
     <div className="extension-display-panels">
       {entries.map(({ panel, companionIds }) => {
         const showName = entries.length > 1 || panel.title !== item.name;
-        const current = placementFor(preferences.extensionPlacements, panel.id, panel.slots, item.id);
+        const current = placementFor(preferences.extensionPlacements, panel.id, panel.slots);
         const appearanceLabel = showName
-          ? `${panel.title} · ${panel.slot === 'panel.side' ? '工作台图标与配色' : '图标与配色'}`
+          ? `${panel.title} · ${(panel.slot === 'tool.view' || panel.slot === 'status.detail') ? '视图图标与配色' : '图标与配色'}`
           : undefined;
         return <div className="extension-display-panel" key={panel.id}>
           {panel.slots.length > 0 && <div className="extension-display-placement">
             <span>{showName ? `${panel.title} · 显示位置` : '显示位置'}</span>
             <div className="settings-segments extension-placement-options" role="group" aria-label={`${panel.title} 显示位置`}>
-              {placementOptionsFor(panel.slots, item.id).map(({ value, label }) => <button key={value} type="button" aria-pressed={current === value}
+              {placementOptionsFor(panel.slots).map(({ value, label }) => <button key={value} type="button" aria-pressed={current === value}
                 onClick={() => onChange('extensionPlacements', { ...preferences.extensionPlacements, [panel.id]: value })}>{label}</button>)}
             </div>
           </div>}

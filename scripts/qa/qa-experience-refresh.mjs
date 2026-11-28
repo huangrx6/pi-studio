@@ -1,3 +1,4 @@
+import { hideToolPanel, openToolPanel } from './fixtures/tool-panel.mjs';
 import { composerValue } from './fixtures/composer-editor.mjs';
 /**
  * First-use, settings navigation, and workbench layout regression check.
@@ -82,30 +83,24 @@ try {
   await setWindowSize(1440, 920);
 
   const welcome = page.locator('.new-conversation-welcome');
-  assert.equal(await welcome.getByRole('heading', { name: '开始一个新会话', exact: true }).count(), 1);
-  assert.match(await welcome.innerText(), /工作区/);
-  assert.match(await welcome.innerText(), /模型/);
-  await welcome.getByRole('button', { name: '选择工作区', exact: true }).waitFor();
-  assert.equal(await page.locator('.workspace-choice').count(), 0, 'initial setup does not duplicate the workspace chooser in the composer');
-  assert.equal(await page.locator('.model-label').count(), 0, 'initial setup does not duplicate the model chooser in the composer');
+  await welcome.getByRole('heading', {level:1}).waitFor();
+  await page.getByRole('button',{name:'打开工作区',exact:true}).waitFor();
+  assert.equal(await page.locator('.workspace-choice').count(),1);
+  assert.equal(await page.locator('.model-label').count(),1);
   await capture('01-first-use-light');
 
   // Only the dialog result is stubbed; workspace registration uses real IPC.
   await app.evaluate(({ dialog }, directory) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
   }, workspace);
-  await welcome.getByRole('button', { name: '选择工作区', exact: true }).click();
+  await page.getByRole('button', {name:'打开工作区', exact:true}).click();
   await page.locator('.workspace-choice.has-selection').waitFor();
-  assert.equal(await page.locator('.model-label').count(), 0, 'missing model stays in the single welcome setup path');
   const composer = page.getByRole('textbox', { name: '发送给 Pi 的消息', exact: true });
-  await welcome.getByRole('button', { name: '了解项目', exact: true }).click();
-  await page.waitForFunction(() => Boolean(document.querySelector('[role="textbox"][aria-label="发送给 Pi 的消息"]')?.value.trim()));
-  const draft = await composerValue(composer);
-  assert.equal(await page.locator('.session-row:not(.empty)').count(), 0, 'example fills a draft without creating a conversation');
-  assert.equal(await page.locator('.new-conversation-welcome').count(), 1, 'example leaves new-conversation state intact');
-  await page.locator('.new-conversation-suggestions').waitFor({ state: 'hidden' });
+  const draft='介绍这个项目。';
+  await composer.fill(draft);
+  assert.equal(await page.locator('.session-row:not(.empty)').count(), 0, 'typing a draft does not create a conversation');
 
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   const navigation = page.locator('.settings-navigation');
   await navigation.waitFor();
   assert.ok(await navigation.locator('.settings-nav-group').count() >= 3, 'settings are grouped');
@@ -123,7 +118,7 @@ try {
   assert.equal(await search.inputValue(), '', 'Escape clears search');
   assert.equal(await navigation.isVisible(), true, 'Escape keeps settings open');
   await navigation.getByRole('button', { name: '通用', exact: true }).waitFor();
-  await navigation.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await welcome.waitFor();
   assert.equal(await composerValue(composer), draft, 'returning from settings preserves the draft');
   assert.equal(await page.getByRole('button', { name: '发送消息', exact: true }).isDisabled(), true, 'ordinary prompts need a configured model');
@@ -133,7 +128,7 @@ try {
   await composer.fill('/model');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.getByRole('heading', { name: '模型配置', exact: true }).waitFor();
-  await navigation.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await welcome.waitFor();
   assert.equal(await composerValue(composer), '', '/model routes missing-model setup to full configuration and consumes the command');
   await composer.fill(draft);
@@ -144,8 +139,8 @@ try {
   const separator = page.getByRole('separator', { name: '调整右侧面板宽度' });
   await separator.focus();
   await separator.press('ArrowLeft');
-  await waitForPanelWidth(430);
-  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('pi-studio:panel-width'))), 430);
+  await waitForPanelWidth(414);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('pi-studio:panel-width'))), 414);
 
   // Reload only this disposable renderer to prove a saved width survives startup.
   await page.reload();
@@ -153,17 +148,20 @@ try {
   if (!(await page.locator('.file-panel.is-open').count())) {
     await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
   }
-  await waitForPanelWidth(430);
-  await page.emulateMedia({ reducedMotion: 'reduce' });
-  const panelTool = page.locator('.panel-start-tools').getByRole('button', { name: '浏览器', exact: true });
-  await panelTool.hover();
-  assert.equal(await panelTool.evaluate((element) => getComputedStyle(element).transform), 'none', 'reduced motion removes hover displacement');
-  await page.emulateMedia({ reducedMotion: 'no-preference' });
-  const toolStyle = await panelTool.evaluate((element) => {
-    const style = getComputedStyle(element);
-    return { transform: style.transform, shadow: style.boxShadow, border: style.borderTopWidth };
+  await waitForPanelWidth(414);
+  const tools = await openToolPanel(app, page);
+  tools.on('pageerror', error=>pageErrors.push(error.message));
+  await tools.emulateMedia({ reducedMotion: 'reduce' });
+  const browserEntry=tools.getByRole('button',{name:'新浏览器标签页',exact:true});
+  await browserEntry.hover();
+  assert.equal(await browserEntry.evaluate(element=>getComputedStyle(element).transform),'none');
+  await tools.emulateMedia({ reducedMotion: 'no-preference' });
+  const toolStyle=await browserEntry.evaluate(element=>{
+    const style=getComputedStyle(element);
+    return {transform:style.transform,shadow:style.boxShadow,border:style.borderTopWidth};
   });
-  assert.deepEqual(toolStyle, { transform: 'none', shadow: 'none', border: '0px' }, 'workbench entries stay quiet on hover');
+  assert.deepEqual(toolStyle,{transform:'none',shadow:'none',border:'0px'});
+  await hideToolPanel(page, tools);
 
   for (const [size, width, height] of [['wide', 1440, 920], ['narrow', 980, 740], ['minimum', 980, 640]]) {
     await setWindowSize(width, height);
@@ -178,11 +176,12 @@ try {
   const viewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
   assert.ok(composerBounds && composerBounds.y >= 0 && composerBounds.y + composerBounds.height <= viewport.height + 1, 'composer remains inside the minimum-height window');
   await capture('05-chat-minimum-dark');
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await navigation.waitFor();
   await page.locator('.settings-content').getByRole('button', { name: '深色', exact: true }).click();
-  const backBounds = await navigation.getByRole('button', { name: '返回对话', exact: true }).boundingBox();
-  assert.ok(backBounds && backBounds.y >= 0 && backBounds.y + backBounds.height <= viewport.height + 1, 'settings back button stays visible at minimum height');
+  const categories = await navigation.locator('.settings-navigation-pages').boundingBox();
+  const statusBar = await page.getByRole('contentinfo', { name: '状态栏' }).boundingBox();
+  assert.ok(categories && statusBar && categories.y + categories.height <= statusBar.y + 1, 'settings categories fit above the status bar at minimum height');
   await capture('06-settings-minimum-dark');
   assert.deepEqual(pageErrors, [], 'renderer has no uncaught errors');
   console.log(`Experience refresh QA passed; screenshots: ${output}`);

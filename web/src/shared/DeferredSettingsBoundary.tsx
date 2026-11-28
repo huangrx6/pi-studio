@@ -4,13 +4,11 @@ import './styles/deferred-settings-boundary.css';
 
 type DeferredSettingsBoundaryProps = {
   children: ReactNode;
-  onBack: () => void;
   onOpenGeneral: () => void;
   isGeneral: boolean;
 };
 
 function SettingsUnavailable({
-  onBack,
   onOpenGeneral,
   isGeneral,
 }: Omit<DeferredSettingsBoundaryProps, 'children'>) {
@@ -19,11 +17,8 @@ function SettingsUnavailable({
 
   return <div className="deferred-settings-state" role="alert">
     <h2 ref={heading} tabIndex={-1}>这个设置页暂时无法打开</h2>
-    <p>可以返回对话，或切换到其他设置。保存工作后重启应用可重新加载页面。</p>
-    <div className="deferred-settings-actions">
-      <button type="button" className="secondary-button" onClick={onBack}>返回对话</button>
-      {!isGeneral && <button type="button" className="secondary-button" onClick={onOpenGeneral}>打开通用设置</button>}
-    </div>
+    <p>可以切换到其他设置。保存工作后重启应用可重新加载此页。</p>
+    {!isGeneral && <button type="button" className="secondary-button" onClick={onOpenGeneral}>打开通用设置</button>}
   </div>;
 }
 
@@ -43,13 +38,16 @@ export class DeferredSettingsBoundary extends Component<DeferredSettingsBoundary
   render() {
     if (this.state.failed) {
       return <SettingsUnavailable
-        onBack={this.props.onBack}
         onOpenGeneral={this.props.onOpenGeneral}
         isGeneral={this.props.isGeneral}
       />;
     }
     return <Suspense fallback={
-      <LoadingState variant="section">正在打开设置…</LoadingState>
+      <div className="settings-page-frame">
+        <div className="settings-loading-panel">
+          <LoadingState variant="panel">正在打开设置…</LoadingState>
+        </div>
+      </div>
     }>{this.props.children}</Suspense>;
   }
 }

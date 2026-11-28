@@ -11,6 +11,7 @@ export type BrowserHistoryEntry = {
 
 export type BrowserLibraryView = 'history' | 'downloads';
 export const BROWSER_HISTORY_CLEARED = 'pi-studio:browser-history-cleared';
+export const BROWSER_HISTORY_UPDATED = 'pi-studio:browser-history-updated';
 export const BROWSER_CLEAR_DESCRIPTION = '将清除工作台浏览器的 Cookie、缓存、站点数据和最近访问记录。下载的文件会保留。';
 
 const STORAGE_KEY = 'pi.studio.browser.history.v1';
@@ -71,6 +72,17 @@ export function recordBrowserHistoryVisit(
     { url, title: title || without.find((entry) => entry.url === url)?.title || url, visitedAt },
     ...without,
   ].slice(0, MAX_ENTRIES);
+}
+
+export function removeBrowserHistoryEntry(
+  entries: BrowserHistoryEntry[],
+  target: { url: string; visitedAt: number },
+  store: Storage | null = storage(),
+): BrowserHistoryEntry[] {
+  const next = entries.filter(
+    (entry) => !(entry.url === target.url && entry.visitedAt === target.visitedAt),
+  );
+  return saveBrowserHistory(next, store);
 }
 
 export function clearBrowserHistory(store: Storage | null = storage()): BrowserHistoryEntry[] {

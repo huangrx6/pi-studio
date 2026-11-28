@@ -80,6 +80,7 @@ export function SkillCatalogDialog({ catalog, catalogs, error, refreshing, onRef
   }
 
   return <DetailDialog className="skill-catalog-dialog" onClose={onClose}>
+    {close => <>
     <header className="detail-header">
       <div className="detail-heading">
         <span className="detail-icon is-skill"><Icon aria-hidden="true" /></span>
@@ -90,7 +91,7 @@ export function SkillCatalogDialog({ catalog, catalogs, error, refreshing, onRef
             : `${catalogs.length} 个技能源 · ${items.length} 个技能`}{installed > 0 && ` · ${installed} 个已安装`}</p>
         </div>
       </div>
-      <button type="button" className="icon-button" aria-label="关闭技能目录" onClick={onClose}><X /></button>
+      <button type="button" className="icon-button" aria-label="关闭技能目录" onClick={close}><X /></button>
     </header>
     <div className="skill-catalog-toolbar">
       <div className="skill-hub-search">
@@ -123,5 +124,6 @@ export function SkillCatalogDialog({ catalog, catalogs, error, refreshing, onRef
         <p>没有匹配“{query.trim()}”的技能。</p><button type="button" className="settings-outline" onClick={clearSearch}>清除搜索</button>
       </div> : !readError && !refreshing && <div className="skill-catalog-empty"><p>{source ? '这个源还没有可浏览的技能。' : '当前没有可浏览的技能。'}</p></div>}
     </div>
+    </>}
   </DetailDialog>;
 }

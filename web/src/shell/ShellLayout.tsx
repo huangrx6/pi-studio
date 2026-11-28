@@ -1,7 +1,9 @@
 import type { ReactNode, Ref } from 'react';
-import { PanelLeft } from 'lucide-react';
+import { PanelLeftClose, PanelLeftOpen, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { HintButton } from '../shared/HintButton';
 import { BrandMark } from './app-shell-config';
 import { SurfaceActiveContext } from '../shared/surface-visibility';
+import { ToolPanelAnchor } from './ToolPanelLauncher';
 
 /** The sidebar and title band surround the same inset canvas in both views. */
 export function ShellLayout({ sidebar, resizeHandle, isNewConversation, active = true, children }: {
@@ -11,20 +13,22 @@ export function ShellLayout({ sidebar, resizeHandle, isNewConversation, active =
   active?: boolean;
   children: ReactNode;
 }) {
-  return <SurfaceActiveContext.Provider value={active}>
+  return <>
     {sidebar}
     {resizeHandle}
-    <div className={isNewConversation ? 'content-region is-new-conversation' : 'content-region'}>
-      {children}
-    </div>
-  </SurfaceActiveContext.Provider>;
+    <ToolPanelAnchor />
+    <SurfaceActiveContext.Provider value={active}>
+      <div className={isNewConversation ? 'content-region is-new-conversation' : 'content-region'} hidden={!active}>
+        {children}
+      </div>
+    </SurfaceActiveContext.Provider>
+  </>;
 }
 
-export function ShellSidebar({ className, label, onCollapse, collapseRef, children }: {
+export function ShellSidebar({ className, label, onCollapse, children }: {
   className: string;
   label?: string;
   onCollapse: () => void;
-  collapseRef?: Ref<HTMLButtonElement>;
   children: ReactNode;
 }) {
   return <aside className={`shell-sidebar ${className}`} aria-label={label}>
@@ -33,10 +37,10 @@ export function ShellSidebar({ className, label, onCollapse, collapseRef, childr
         <BrandMark />
         <span className="brand-name">Pi Studio</span>
       </div>
-      <button ref={collapseRef} type="button" className="icon-button sidebar-top-toggle"
-        aria-label="收起侧边栏" title="收起侧边栏" onClick={onCollapse}>
-        <PanelLeft />
-      </button>
+      <HintButton className="icon-button shell-panel-toggle sidebar-top-toggle"
+        aria-label="收起侧边栏" aria-expanded={true} onClick={onCollapse}>
+        <PanelLeftClose aria-hidden="true" />
+      </HintButton>
     </div>
     {children}
   </aside>;
@@ -46,13 +50,25 @@ export function ShellHeader({ className, onExpandSidebar, expandRef, children }:
   className: string;
   onExpandSidebar?: () => void;
   expandRef?: Ref<HTMLButtonElement>;
-  children: ReactNode;
+  children?: ReactNode;
 }) {
   return <header className={`shell-header ${className}`}>
-    {onExpandSidebar && <button ref={expandRef} type="button" className="icon-button sidebar-expand"
-      aria-label="展开侧边栏" title="展开侧边栏" onClick={onExpandSidebar}>
-      <PanelLeft />
-    </button>}
+    {onExpandSidebar && <HintButton ref={expandRef} className="icon-button shell-panel-toggle sidebar-expand"
+      aria-label="展开侧边栏" aria-expanded={false} onClick={onExpandSidebar}>
+      <PanelLeftOpen aria-hidden="true" />
+    </HintButton>}
     {children}
   </header>;
+}
+
+export function WorkspacePanelToggle({ expanded, onToggle, toggleRef }: {
+  expanded: boolean;
+  onToggle: () => void;
+  toggleRef: Ref<HTMLButtonElement>;
+}) {
+  return <HintButton ref={toggleRef} className="icon-button shell-panel-toggle workspace-panel-toggle"
+    aria-label={expanded ? '收起右侧面板' : '打开右侧面板'}
+    aria-expanded={expanded} aria-controls={expanded ? 'workspace-side-panel' : undefined} onClick={onToggle}>
+    {expanded ? <PanelRightClose aria-hidden="true" /> : <PanelRightOpen aria-hidden="true" />}
+  </HintButton>;
 }

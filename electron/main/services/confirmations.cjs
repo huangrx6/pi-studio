@@ -34,15 +34,6 @@ function registerConfirmationIpc(ipcMain) {
 }
 
 /**
- * 请求一次确认。
- * @returns Promise<boolean> 用户点「确认」为 true
- */
-function requestConfirmation({ sessionId, title, message }) {
-  return requestPolicyConfirmation({ sessionId, title, message })
-    .then((result) => result.accepted);
-}
-
-/**
  * 请求一次带风险上下文的确认，并返回用户是否希望记住此决定。
  * `remember` 只表示用户选择的范围，实际规则仍由权限引擎收窄后写入。
  */
@@ -56,9 +47,10 @@ function requestPolicyConfirmation({
   rememberScopes,
   title,
   message,
-}) {
+}, signal) {
+  if (signal?.aborted) return Promise.resolve({ accepted: false });
   return new Promise((resolve) => {
-    queue.push({
+    const request = {
       id: randomUUID(),
       sessionId,
       cwd,
@@ -69,8 +61,19 @@ function requestPolicyConfirmation({
       rememberScopes,
       title,
       message,
-      resolve,
-    });
+      resolve(result) {
+        signal?.removeEventListener('abort', onAbort);
+        resolve(result);
+      },
+    };
+    function onAbort() {
+      if (active === request) { settle(request.id, { accepted: false, cancelled: true }); return; }
+      const index = queue.indexOf(request);
+      if (index >= 0) queue.splice(index, 1);
+      request.resolve({ accepted: false });
+    }
+    queue.push(request);
+    signal?.addEventListener('abort', onAbort, { once: true });
     pump();
   });
 }
@@ -86,7 +89,8 @@ function pump() {
 
   active = queue.shift();
   active.win = win;
-  active.timer = setTimeout(() => settle(active.id, { accepted: false, timedOut: true }), CONFIRM_TIMEOUT_MS);
+  const id = active.id;
+  active.timer = setTimeout(() => settle(id, { accepted: false, timedOut: true }), CONFIRM_TIMEOUT_MS);
   active.onClosed = () => settle(active.id, { accepted: false, windowClosed: true });
   win.once('closed', active.onClosed);
   if (active.sessionId) {
@@ -118,13 +122,15 @@ function settle(id, result) {
   active = null;
   clearTimeout(current.timer);
   try { current.win.removeListener('closed', current.onClosed); } catch { /* 窗口已销毁 */ }
+  if ((result?.cancelled || result?.timedOut) && !current.win.isDestroyed() && !current.win.webContents.isDestroyed()) {
+    current.win.webContents.send('pi:confirm-dismissed', id);
+  }
   if (current.sessionId) publishMenuBarEvent({ type: 'attention-cleared', id: current.sessionId });
-  current.resolve(typeof result === 'boolean' ? { accepted: result } : result);
+  current.resolve(result);
   pump();
 }
 
 module.exports = {
   registerConfirmationIpc,
-  requestConfirmation,
   requestPolicyConfirmation,
 };

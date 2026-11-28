@@ -7,6 +7,7 @@ const status = document.querySelector('#status');
 const more = document.querySelector('#more');
 const moreMenu = document.querySelector('#more-menu');
 const clearRecent = document.querySelector('#clear-recent');
+let moreFocusVisible = false;
 
 const DEFAULT_RADII = { tag: 4, control: 8, card: 12, panel: 16, round: 999 };
 let currentState = {
@@ -163,18 +164,19 @@ function render() {
 function closeMoreMenu({ restoreFocus = false } = {}) {
   moreMenu.hidden = true;
   more.setAttribute('aria-expanded', 'false');
-  if (restoreFocus) more.focus();
+  if (restoreFocus) more.focus({ preventScroll: true, focusVisible: moreFocusVisible });
 }
 
-function toggleMoreMenu() {
+function toggleMoreMenu(event) {
   const opening = moreMenu.hidden;
   if (!opening) {
     closeMoreMenu({ restoreFocus: true });
     return;
   }
+  moreFocusVisible = event.detail === 0 || window.matchMedia('(forced-colors: active)').matches;
   moreMenu.hidden = false;
   more.setAttribute('aria-expanded', 'true');
-  requestAnimationFrame(() => moreMenu.querySelector('button:not(:disabled)')?.focus());
+  moreMenu.querySelector('button:not(:disabled)')?.focus({ preventScroll: true });
 }
 
 more.addEventListener('click', toggleMoreMenu);

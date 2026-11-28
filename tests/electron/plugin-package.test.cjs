@@ -6,7 +6,6 @@ const { test, after } = require('node:test');
 const { installElectronSafeStorage } = require('./helpers/electron-safe-storage.cjs');
 installElectronSafeStorage({ after });
 const { validatePluginDirectory } = require('../../electron/main/core/plugin-package.cjs');
-const { createStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
 const {
   preparePluginInstall,
   installPreparedPlugin,
@@ -137,4 +136,22 @@ test('soft-disable hides plugin skills from discovery but keeps package files', 
   setPluginEnabled('example.toolkit-starter', true);
   const restored = discoverSkills(directory).skills.map((item) => item.name);
   assert.ok(restored.includes('toolkit-demo'), `re-enabled plugin skill missing: ${JSON.stringify(restored)}`);
+});
+
+test('plugin distribution extracts skill descriptions and extension tool/panel/command details', () => {
+  const { readSkillMeta, readExtensionSummaryFromDisk } = require('../../electron/main/services/plugin-distribution.cjs');
+  const taskBoardRoot = path.join(__dirname, '../../assets/official-plugins/packages/task-board');
+  const skill = readSkillMeta(path.join(taskBoardRoot, 'skills/task-board-reporting'));
+  assert.equal(skill.name, 'task-board-reporting');
+  assert.ok(skill.description.length > 0, 'skill description should be extracted');
+
+  const ext = readExtensionSummaryFromDisk(taskBoardRoot, 'extension');
+  assert.ok(ext, 'extension summary should load');
+  assert.equal(ext.panels.length, 1);
+  assert.equal(ext.panels[0].title, '任务看板');
+  assert.equal(ext.panels[0].scope, 'global');
+  assert.equal(ext.commands.length, 1);
+  assert.equal(ext.commands[0].id, 'taskboard');
+  assert.equal(ext.toolDetails.length, 7);
+  assert.ok(ext.toolDetails.every(tool => tool.name && tool.description.length > 0), 'every tool should include its description');
 });

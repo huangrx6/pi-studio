@@ -25,12 +25,12 @@ try {
   }, workspace);
   await page.getByRole('button', { name: '打开工作区', exact: true }).click();
   await page.locator('[data-workspace-cwd]').waitFor();
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   const nav = page.locator('.settings-navigation');
   await nav.locator('[data-settings-page="harness"]').click();
   const harness = page.locator('.harness-settings');
-  const cards = harness.locator('.settings-profile-card');
-  const grid = harness.locator('.settings-profile-grid');
+  const cards = harness.locator('button[aria-label^="编辑"][aria-haspopup="dialog"]');
+  const grid = harness.locator('.harness-workspace');
   const baseline = cards.filter({ hasText: 'studio-coding' });
   const actions = harness.locator('.settings-profile-toolbar .settings-profile-actions');
   const create = actions.getByRole('button', { name: '新建配置', exact: true });
@@ -46,11 +46,6 @@ try {
     await page.locator('.settings-toast').first().waitFor({ state: 'hidden' });
     await target.screenshot({ path: path.join(output, name + '.png'), animations: 'disabled' });
   }
-  const markOf = card => card.locator('.settings-profile-icon').evaluate(node => ({
-    shape: node.dataset.shape,
-    image: node.querySelector('img').currentSrc,
-  }));
-  const iconButton = dialog => dialog.getByRole('button', { name: '更换方案图标' });
   async function checkMoreMenu(dialog, captureName) {
     const trigger = dialog.getByRole('button', { name: '更多配置操作' });
     const menu = dialog.getByRole('menu', { name: '更多配置操作' });
@@ -121,16 +116,6 @@ try {
   await id.fill('studio-coding');
   assert.ok(await newProfile.getByRole('button', { name: '创建配置' }).isDisabled());
   await id.fill('qa-review');
-  const automaticMark = await markOf(iconButton(newProfile));
-  await iconButton(newProfile).click();
-  assert.equal(await newProfile.getByRole('group', { name: '图案', exact: true }).getByRole('radio').count(), 6);
-  await newProfile.getByText('流程图', { exact: true }).click();
-  await newProfile.getByRole('button', { name: '恢复自动匹配' }).click();
-  assert.deepEqual(await markOf(iconButton(newProfile)), automaticMark);
-  await newProfile.getByText('指令册', { exact: true }).click();
-  assert.ok(await newProfile.getByRole('radio', { name: '指令册' }).isChecked());
-  await capture('icon-picker-light', newProfile.locator('.settings-form-section').first());
-  await iconButton(newProfile).click();
   assert.notEqual(await newProfile.locator('.harness-composition').getAttribute('open'), null);
   await checkSectionHover(newProfile, 'light');
   await newProfile.locator('.harness-section-toggle').first().press('Enter');
@@ -175,9 +160,6 @@ try {
   await newProfile.waitFor({ state: 'detached' });
   const custom = cards.filter({ hasText: 'qa-review' });
   await custom.waitFor();
-  let originalMark = await markOf(custom);
-  assert.equal(originalMark.shape, 'ascending');
-  assert.ok(originalMark.image && originalMark.image !== (await markOf(baseline)).image);
   assert.ok(await create.isVisible());
   let snapshot = await saved();
   assert.notEqual(snapshot.globalProfileId, 'qa-review');
@@ -196,23 +178,15 @@ try {
   assert.equal(await edit.getByLabel('编码身份覆盖内容').inputValue(), '请先核对改动范围。');
   await capture('editor');
   await edit.getByLabel('方案名称').fill('发布审查');
-  await iconButton(edit).click();
-  await edit.getByRole('radio', { name: '指令册' }).press('ArrowLeft');
-  assert.ok(await edit.getByRole('radio', { name: '流程图' }).isChecked());
-  originalMark = await markOf(iconButton(edit));
-  await iconButton(edit).click();
   await edit.getByRole('button', { name: '保存配置' }).click();
   await edit.waitFor({ state: 'detached' });
-  await harness.getByRole('button', { name: '编辑发布审查', exact: true }).waitFor();
-  assert.deepEqual(await markOf(custom), originalMark);
-  assert.deepEqual((await saved()).profiles.find(row => row.id === 'qa-review').icon, { shape: 'stagger' });
-  await capture('marks-light', grid);
+  await harness.getByLabel('编辑发布审查', { exact: true }).waitFor();
+  await capture('profiles-light', grid);
   await nav.locator('[data-settings-page="general"]').click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await nav.locator('[data-settings-page="harness"]').click();
   await custom.waitFor();
-  assert.deepEqual(await markOf(custom), originalMark);
-  await capture('marks-dark', grid);
+  await capture('profiles-dark', grid);
   await capture('cards');
 
   await page.emulateMedia({ reducedMotion: 'no-preference' });
@@ -223,13 +197,11 @@ try {
   await custom.click();
   await checkMoreMenu(edit, 'more-menu-dark');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await iconButton(edit).click();
-  await capture('icon-picker-dark', edit.locator('.settings-form-section').first());
-  await edit.getByText('运行', { exact: true }).click();
+  await edit.getByLabel('方案名称', { exact: true }).fill('未保存的名称');
   await edit.getByRole('button', { name: '取消', exact: true }).click();
   await page.getByRole('alertdialog', { name: '放弃未保存的 Harness 更改？' }).getByRole('button', { name: '放弃更改' }).click();
   await edit.waitFor({ state: 'detached' });
-  assert.deepEqual(await markOf(custom), originalMark);
+  assert.equal((await saved()).profiles.find(row => row.id === 'qa-review').name, '发布审查');
   await custom.click();
   await checkSectionHover(edit, 'dark');
   await edit.locator('.harness-composition > summary').click();
@@ -255,7 +227,7 @@ try {
   assert.equal(snapshot.globalProfileId, 'qa-review');
   assert.equal(snapshot.activeProfileId, 'studio-coding');
   await cancel(edit);
-  assert.match(await baseline.innerText(), /当前工作区使用/);
+  assert.match(await baseline.innerText(), /当前工作区/);
   assert.match(await custom.innerText(), /全局默认/);
 
   await policyButton.click();
@@ -276,10 +248,6 @@ try {
   assert.equal((await saved()).runtimePolicy.compaction.autoCompactPercent, 75);
   await custom.click();
   assert.ok(await checkWidth(edit));
-  await iconButton(edit).click();
-  assert.ok(await checkWidth(edit));
-  await capture('icon-picker-narrow', edit.locator('.profile-identity-grid'));
-  await iconButton(edit).click();
   await edit.locator('.harness-guidance > summary').click();
   await edit.getByRole('button', { name: '编辑 read 的工具说明' }).click();
   await capture('guidance-narrow', edit.locator('.harness-guidance'));
@@ -292,7 +260,6 @@ try {
   await cdp.send('Emulation.clearDeviceMetricsOverride');
   await edit.getByRole('button', { name: '更多配置操作' }).click();
   await page.getByRole('menuitem', { name: '复制为新配置' }).click();
-  assert.deepEqual(await markOf(iconButton(newProfile)), originalMark);
   await newProfile.locator('.harness-guidance > summary').click();
   await newProfile.getByRole('button', { name: '编辑 read 的工具说明' }).click();
   assert.equal(await note.inputValue(), '先核对文件路径。');
@@ -315,7 +282,7 @@ try {
   assert.equal(snapshot.globalProfileId, 'studio-coding');
   assert.equal(snapshot.workspaceProfileId, 'studio-coding');
   assert.deepEqual(errors, []);
-  console.log('Passed Harness cards, icon selection and persistence, anchored footer menus, prompt hover, tool guidance, profile lifecycle, scope, policy and narrow dialogs. Captures in ' + output);
+  console.log('Passed Harness profile lifecycle, scope, policy, tool guidance, keyboard menus and narrow dialogs. Captures in ' + output);
 } finally {
   await app?.close();
   await rm(base, { recursive: true, force: true });

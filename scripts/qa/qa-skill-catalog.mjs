@@ -80,7 +80,7 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.addInitScript({ content: `(${installPerformanceFixture})({sessionCount:1,turnCount:2});(${installSettingsResourcesFixture})();(${installCatalogFixture})();` });
   await page.goto(server.origin);
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await page.locator('.settings-navigation').getByRole('button', { name: '插件', exact: true }).click();
   await page.getByRole('tablist', { name: '插件与资源' }).getByRole('tab', { name: '技能', exact: true }).click();
   const hub = page.locator('.skill-hub-card');

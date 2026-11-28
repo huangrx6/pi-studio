@@ -3,7 +3,7 @@
   "format": 1,
   "id": "pi-quota-status",
   "name": "额度状态",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "description": "按当前会话模型来源保存的接口和字段显示额度。",
   "author": "huangrx6",
   "publisher": "Pi Studio",
@@ -20,7 +20,7 @@
       {
         "id": "quota-detail",
         "title": "额度状态",
-        "slot": "panel.side",
+        "slot": "status.detail",
         "icon": "gauge",
         "size": "regular",
         "priority": 20,

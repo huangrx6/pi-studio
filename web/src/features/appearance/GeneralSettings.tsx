@@ -7,7 +7,7 @@ import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { Select } from '../../shared/Select';
 import { Stepper } from '../../shared/Stepper';
 import { RangeControl } from '../../shared/RangeControl';
-import { DEFAULT_PREFERENCES, PALETTE_PRESETS, type BackgroundMedia, type Preferences } from '../../shared/preferences';
+import { CHAT_FONT_SIZE_RANGE, DEFAULT_PREFERENCES, PALETTE_PRESETS, type BackgroundMedia, type Preferences } from '../../shared/preferences';
 import { BackgroundMediaPreview } from '../../shell/BackgroundLayer';
 import { TERMINAL_THEMES, STUDIO_TERMINAL_THEME } from '../terminal/terminal-themes';
 import { ThemeModePicker } from './ThemeModePicker';
@@ -116,6 +116,8 @@ export function GeneralSettings({
   onOpenBrowserSettings,
 }: Props) {
   const media = preferences.backgroundMedia;
+  const defaultChatFontSize = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--text-body'));
+  const chatFontSize = preferences.fontSize ?? defaultChatFontSize;
   const initialMediaUrl = useRef(media?.url);
   const windows = desktopPlatform() === 'win32';
   const trayLabel = windows ? '系统托盘图标' : '菜单栏图标';
@@ -246,9 +248,10 @@ export function GeneralSettings({
         )}
       </PreferenceGroup>
 
-      <PreferenceGroup title="对话" summary={`${preferences.fontSize} px · ${stepDisplay}步骤`} defaultOpen>
+      <PreferenceGroup title="对话" summary={`${chatFontSize} px · ${stepDisplay}步骤`} defaultOpen>
         <SettingRow label="对话字号">
-          <Stepper label="字号" value={preferences.fontSize} min={12} max={20} unit=" px" onChange={(value) => onChange('fontSize', value)} />
+          <Stepper label="字号" value={chatFontSize} {...CHAT_FONT_SIZE_RANGE} unit=" px"
+            onChange={(value) => onChange('fontSize', value === defaultChatFontSize ? null : value)} />
         </SettingRow>
         <SettingRow label="工作步骤" description="选择对话中显示多少过程信息。">
           <SegmentedOptions

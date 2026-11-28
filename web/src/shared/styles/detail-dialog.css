@@ -6,12 +6,12 @@
 .detail-dialog .detail-heading { align-items: center; min-height: var(--settings-icon-hit); }
 .detail-dialog .detail-heading h2 {
   margin: 0;
-  font: var(--weight-semibold) var(--text-lg)/var(--leading-tight) var(--font);
+  font: var(--font-heading);
   overflow-wrap: anywhere;
 }
 .detail-dialog .detail-heading p {
   margin: var(--space-1) 0 0;
-  font: var(--settings-description-font);
+  font: var(--font-description);
   overflow-wrap: anywhere;
 }
 .detail-dialog .detail-header > .icon-button { width: var(--settings-icon-hit); height: var(--settings-icon-hit); }
@@ -22,8 +22,37 @@
   padding: var(--space-3) var(--settings-group-gap);
 }
 .detail-dialog > .detail-footer > :is(.settings-outline, .settings-save) {
-  min-height: var(--settings-control-height);
+  min-height: var(--control-sm);
   height: auto;
-  padding: var(--space-1) var(--space-4);
-  font: var(--settings-label-font);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+}
+.detail-dialog > .detail-footer > .settings-outline {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+}
+.detail-dialog > .detail-footer > .settings-outline:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.detail-dialog > .detail-footer > .settings-save {
+  border: 1px solid var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+.detail-dialog > .detail-footer > .settings-save:hover:not(:disabled) {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+  opacity: 0.88;
+}
+.detail-dialog > .detail-footer > .settings-save:disabled {
+  border-color: var(--divider);
+  background: var(--surface-raised);
+  color: var(--disabled-text);
+  opacity: 1;
 }

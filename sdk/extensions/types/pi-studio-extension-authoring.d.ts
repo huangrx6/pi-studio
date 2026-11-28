@@ -213,7 +213,7 @@ export type PiStudioExtensionContent =
     };
 
 export type PiStudioExtensionSummarySlot = 'status.chip' | 'composer.above' | 'composer.below';
-export type PiStudioExtensionUiSlot = PiStudioExtensionSummarySlot | 'panel.side';
+export type PiStudioExtensionUiSlot = PiStudioExtensionSummarySlot | 'tool.view' | 'status.detail';
 
 export type PiStudioExtensionCommandPlacement =
   | 'composer'
@@ -236,6 +236,7 @@ export interface PiStudioExtensionCommandContribution {
   action?: PiStudioExtensionAction;
 }
 
+
 export type PiStudioExtensionPanelContribution = {
   id: string;
   title: string;
@@ -248,7 +249,7 @@ export type PiStudioExtensionPanelContribution = {
   details?: string;
   visibility?: 'always' | 'while-active';
   /** A sandboxed custom view served from this extension's `ui/` directory via `pi-ext://`. */
-  view?: { entry: string; sourceId: string; scope?: 'session' | 'global'; fullscreen?: boolean };
+  view?: { entry: string; sourceId: string; scope?: 'session' | 'global' };
 } & ({ slot: PiStudioExtensionUiSlot; slots?: never } | { slot?: never; slots: PiStudioExtensionSummarySlot[] });
 
 export interface PiStudioExtensionSettingContribution {

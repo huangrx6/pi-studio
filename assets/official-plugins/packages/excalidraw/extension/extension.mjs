@@ -212,6 +212,7 @@ function openBoards(directory) {
       activeBoardId: activate ? targetBoardId : index.activeBoardId,
       boards: nextBoards,
     });
+    clearLive(id, targetBoardId);
     return read(id, activate ? targetBoardId : undefined);
   }
 
@@ -355,7 +356,7 @@ function openBoards(directory) {
 function drawTool(boards, { revealPanel }) {
   return {
     name: 'excalidraw_draw',
-    description: 'Preferred tool whenever creating or updating any Excalidraw diagram in Pi Studio (architecture, flow, dependency, state, network topology, mind map). Automatically opens the Excalidraw sidebar and animates drawing shapes, labels, and connections stroke-by-stroke in front of the user. Pass boardId or mode="new" to draw a separate diagram without overwriting an existing board. Do not use bash scripts to write standalone .excalidraw files instead of calling this tool unless the user explicitly asks only for an exported file on disk.',
+    description: 'Preferred tool whenever creating or updating any Excalidraw diagram in Pi Studio (architecture, flow, dependency, state, network topology, mind map). Automatically opens the Excalidraw tab in the floating tools panel and animates drawing shapes, labels, and connections stroke-by-stroke in front of the user. Pass boardId or mode="new" to draw a separate diagram without overwriting an existing board. Do not use bash scripts to write standalone .excalidraw files instead of calling this tool unless the user explicitly asks only for an exported file on disk.',
     executionMode: 'sequential',
     parameters: {
       type: 'object',
@@ -474,7 +475,6 @@ function drawTool(boards, { revealPanel }) {
         const saved = boards.save(id, targetBoardId, {
           ...board, revision: before.revision + 1, drawing: false, scene: target,
         }, { activate: true });
-        boards.clearLive(id, targetBoardId);
         boards.publish(id, saved);
         const { nodes = [], edges = [] } = args.spec ?? args;
         return result(`Excalidraw canvas "${saved.title || saved.boardId}" updated (boardId: ${saved.boardId}, revision ${saved.revision}). ${nodes.length} nodes and ${edges.length} connections drawn. Total boards in session: ${saved.boards.length}.`);
@@ -491,7 +491,7 @@ function drawTool(boards, { revealPanel }) {
 function readTool(boards) {
   return {
     name: 'excalidraw_read',
-    description: 'Read an Excalidraw sidebar diagram and session board list before continuing. Returns boardId, activeBoardId, boards, revision, labels, node IDs, positions, and connections.',
+    description: 'Read an Excalidraw diagram and session board list before continuing. Returns boardId, activeBoardId, boards, revision, labels, node IDs, positions, and connections.',
     replay: 'safe',
     parameters: {
       type: 'object',

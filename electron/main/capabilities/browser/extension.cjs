@@ -7,6 +7,7 @@ const {
   assertSiteActionAllowed,
   attachExternalChromeTarget,
   beginBrowserActivity,
+  beginBrowserSession,
   captureBrowserScreenshot,
   captureBrowserSnapshot,
   clearBrowserHighlights,
@@ -15,6 +16,7 @@ const {
   detachExternalChrome,
   dragBrowserRefs,
   endBrowserActivity,
+  endBrowserSession,
   evaluateBrowserScript,
   evaluateExternalChrome,
   getBrowserPreferences,
@@ -52,6 +54,7 @@ const {
   systemBrowserOpenBlockMessage,
   typeBrowserRef,
   waitBrowser,
+  withBrowserOwner,
 } = require('../../services/browser/index.cjs');
 
 function textResult(text, details) {
@@ -73,8 +76,14 @@ function ensureAgentBrowser() {
   assertBrowserAgentControlEnabled();
 }
 
-function createBrowserTools(durable) {
-  const { defineExtension, defineTool } = durable;
+function createBrowserTools(durable, { temporary = false } = {}) {
+  const { defineExtension } = durable;
+  function defineTool(spec) {
+    return durable.defineTool({ ...spec, execute(args, api, context) {
+      const owner = require('../../services/tool-window.cjs').browserConversationOwner(api.conversationId, temporary);
+      return withBrowserOwner(owner, () => spec.execute(args, api, context));
+    } });
+  }
   const Type = toolSchema;
 
   const browserTabs = defineTool({
@@ -106,7 +115,7 @@ function createBrowserTools(durable) {
 
   const browserOpen = defineTool({
     name: 'browser_open',
-    description: 'PRIMARY browser tool: open a page in the Studio workbench browser (right-side panel) where the user watches and interacts live. Always prefer Studio workbench browser_* tools over external Chrome DevTools MCP for opening pages, UI testing, clicking, forms, screenshots, console/network checks, and responsive viewport inspection.',
+    description: 'PRIMARY browser tool: open a page in the Studio tool window browser where the user watches and interacts live. Always prefer Studio workbench browser_* tools over external Chrome DevTools MCP for opening pages, UI testing, clicking, forms, screenshots, console/network checks, and responsive viewport inspection.',
     parameters: Type.Object({
       url: Type.String({ description: 'http(s) URL, about:blank, file:// HTML URL, or absolute/relative path to a .html file' }),
       newTab: Type.Optional(Type.Boolean({ description: 'Force a new tab even if URL is already open' })),
@@ -173,11 +182,13 @@ function createBrowserTools(durable) {
 
   const browserSnapshot = defineTool({
     name: 'browser_snapshot',
-    description: 'Capture a bounded structural snapshot of the current browser page. Elements get ref ids for later click/type. mode=a11y emphasizes roles/names; same-origin iframes are included when possible.',
+    description: 'PRIMARY page reading & targeting tool. Captures a compact structural outline of the page with element ref ids (e.g. [e12]) for browser_click/browser_type/browser_scroll. Use viewportOnly=true after scrolling long pages to inspect on-screen elements, selector to scope to a region (e.g. main/table/form), or mode="text" to extract clean readable prose and Markdown tables. Prefer browser_snapshot over browser_screenshot for reading text, tables, and locating interactive controls.',
     parameters: Type.Object({
       tabId: Type.Optional(Type.String({ description: 'Target tab id; defaults to the active tab' })),
-      mode: Type.Optional(Type.String({ description: 'dom_lite (default) or a11y' })),
-      maxChars: Type.Optional(Type.Number({ minimum: 2000, maximum: 40000, description: 'Soft size budget for the JSON snapshot' })),
+      mode: Type.Optional(Type.String({ description: 'dom_lite (default) | a11y | text (clean main text & Markdown tables)' })),
+      viewportOnly: Type.Optional(Type.Boolean({ description: 'Only include elements currently visible in the viewport (recommended after scrolling long pages)' })),
+      selector: Type.Optional(Type.String({ description: 'Optional CSS selector to scope the snapshot (e.g. main, article, table, form)' })),
+      maxChars: Type.Optional(Type.Number({ minimum: 2000, maximum: 40000, description: 'Soft size budget for the snapshot output' })),
       includeIframes: Type.Optional(Type.Boolean({ description: 'Walk same-origin iframes (default true)' })),
     }),
     replay: 'safe',
@@ -190,6 +201,8 @@ function createBrowserTools(durable) {
       const snapshot = await captureBrowserSnapshot(contents, {
         maxChars: args.maxChars,
         mode: args.mode,
+        viewportOnly: args.viewportOnly === true,
+        selector: args.selector,
         includeIframes: args.includeIframes,
       });
       const details = {
@@ -197,6 +210,8 @@ function createBrowserTools(durable) {
         url: snapshot.url,
         title: snapshot.title,
         mode: snapshot.mode,
+        viewportOnly: Boolean(snapshot.viewportOnly),
+        scroll: snapshot.scroll,
         truncated: snapshot.truncated,
         omittedCount: snapshot.omittedCount,
         stampedCount: snapshot.stampedCount,
@@ -205,13 +220,20 @@ function createBrowserTools(durable) {
         tree: snapshot.tree,
         warnings: snapshot.warnings,
       };
+      const scrollLine = snapshot.scroll
+        ? `viewport: ${snapshot.scroll.viewportWidth}×${snapshot.scroll.viewportHeight}, scroll: ${snapshot.scroll.y}/${Math.max(0, snapshot.scroll.height - snapshot.scroll.viewportHeight)}px (total height ${snapshot.scroll.height}px)`
+        : '';
+      const body = snapshot.mode === 'text'
+        ? (snapshot.text || '（页面无可读文本）')
+        : (snapshot.outline || JSON.stringify({ refs: snapshot.refs, tree: snapshot.tree }));
       const summary = [
         `url: ${snapshot.url || entry.url || ''}`,
         `title: ${snapshot.title || entry.title || ''}`,
-        `mode: ${snapshot.mode || 'dom_lite'}`,
-        `nodes: ${details.nodeCount}${snapshot.truncated ? ' (truncated)' : ''}`,
+        `mode: ${snapshot.mode || 'dom_lite'}${snapshot.viewportOnly ? ' (viewportOnly)' : ''}`,
+        scrollLine,
+        snapshot.mode !== 'text' ? `nodes: ${details.nodeCount}${snapshot.truncated ? ' (truncated)' : ''}` : '',
         snapshot.warnings?.length ? `warnings: ${snapshot.warnings.join('; ')}` : '',
-        JSON.stringify({ refs: snapshot.refs, tree: snapshot.tree }, null, 2),
+        body,
       ].filter(Boolean).join('\n');
       return textResult(summary, details);
     },
@@ -219,7 +241,7 @@ function createBrowserTools(durable) {
 
   const browserScreenshot = defineTool({
     name: 'browser_screenshot',
-    description: 'Capture a JPEG screenshot of the current workbench browser viewport or a specific element by ref.',
+    description: 'Capture a JPEG screenshot of the current workbench browser viewport or a specific element by ref. Use for visual layout verification, charts/canvas, or when the user asks for a screenshot — prefer browser_snapshot for routine reading and element targeting.',
     parameters: Type.Object({
       tabId: Type.Optional(Type.String({ description: 'Target tab id; defaults to the active tab' })),
       ref: Type.Optional(Type.String({ description: 'Optional element ref from browser_snapshot to crop the screenshot to that element' })),
@@ -301,10 +323,10 @@ function createBrowserTools(durable) {
 
   const browserType = defineTool({
     name: 'browser_type',
-    description: 'Type text into an element from browser_snapshot by ref.',
+    description: 'Type a full text string in one call with live cursor feedback into an element by ref, or into the currently focused input when ref is omitted (e.g. after pressing "/" to open search). Always use browser_type for entering words or queries instead of calling browser_press letter-by-letter.',
     parameters: Type.Object({
-      ref: Type.String({ description: 'Element ref from browser_snapshot' }),
-      text: Type.String({ description: 'Text to type' }),
+      ref: Type.Optional(Type.String({ description: 'Optional element ref from browser_snapshot; omit to type into the currently focused input' })),
+      text: Type.String({ description: 'Full text to type in one call' }),
       tabId: Type.Optional(Type.String()),
       clear: Type.Optional(Type.Boolean({ description: 'Clear existing value first (default true)' })),
       submit: Type.Optional(Type.Boolean({ description: 'Press Enter / submit form after typing' })),
@@ -317,13 +339,13 @@ function createBrowserTools(durable) {
         submit: args.submit,
         snapshot: args.snapshot,
       });
-      return textResult(`已输入到 ${args.ref}`, result);
+      return textResult(args.ref ? `已输入到 ${args.ref}` : '已输入到当前聚焦输入框', result);
     },
   });
 
   const browserPress = defineTool({
     name: 'browser_press',
-    description: 'Send a native keyboard key or shortcut to the workbench browser (e.g. Escape, Tab, Shift+Tab, Enter, ArrowDown, Meta+K, Control+A).',
+    description: 'Send a single keyboard special key or shortcut to the workbench browser (e.g. Escape, Tab, Shift+Tab, Enter, ArrowDown, /, Meta+K, Control+A). Never call browser_press repeatedly letter-by-letter to type words — use browser_type instead.',
     parameters: Type.Object({
       key: Type.String({ description: 'Key or chord such as Escape, Tab, Shift+Tab, Enter, Space, ArrowDown, Meta+K' }),
       ref: Type.Optional(Type.String({ description: 'Optional element ref to focus before pressing the key' })),
@@ -358,7 +380,7 @@ function createBrowserTools(durable) {
 
   const browserViewport = defineTool({
     name: 'browser_viewport',
-    description: 'Emulate a specific viewport size or responsive preset in the workbench browser (e.g. desktop 1440×900, laptop 1280×800, tablet 768×1024, mobile 390×844, or reset).',
+    description: 'Emulate a specific viewport size or responsive preset in the workbench browser (desktop 1440×900, laptop 1280×800, tablet 768×1024, mobile 390×844, or reset). Because the right-side workbench panel is narrower than a desktop screen, call browser_viewport(preset="laptop" or "desktop") before performing desktop UI testing, layout inspection, or visual screenshots; reset afterwards if appropriate.',
     parameters: Type.Object({
       preset: Type.Optional(Type.String({ description: 'desktop | laptop | tablet | mobile | reset' })),
       width: Type.Optional(Type.Number({ minimum: 320, maximum: 2560, description: 'Viewport width in CSS pixels' })),
@@ -378,7 +400,7 @@ function createBrowserTools(durable) {
 
   const browserConsole = defineTool({
     name: 'browser_console',
-    description: 'Read captured console logs, warnings, uncaught errors, and load failures from the workbench browser tab (works without enabling CDP).',
+    description: 'Read the current page’s console logs, warnings, uncaught errors, and load failures, even when its DevTools window is closed. Use level="error" to check a test for runtime failures.',
     parameters: Type.Object({
       tabId: Type.Optional(Type.String({ description: 'Target tab id; defaults to the active tab' })),
       level: Type.Optional(Type.String({ description: 'Filter by level: error | warning | info | verbose' })),
@@ -389,9 +411,7 @@ function createBrowserTools(durable) {
     replay: 'safe',
     async execute(args) {
       ensureAgentBrowser();
-      const entry = resolveBrowserTab(args.tabId);
-      assertSiteActionAllowed(entry.url, 'read');
-      const result = listBrowserConsole(entry.id, args);
+      const result = listBrowserConsole(args.tabId, args);
       const lines = result.entries.map((item) => {
         const loc = item.source ? ` (${item.source}${item.line ? `:${item.line}` : ''})` : '';
         return `[${item.level}] ${item.message}${loc}`;
@@ -430,17 +450,32 @@ function createBrowserTools(durable) {
 
   const browserScroll = defineTool({
     name: 'browser_scroll',
-    description: 'Scroll the page or scroll an element into view.',
+    description: 'Scroll the page by direction/amount, jump directly to top/bottom (position), or scroll a specific ref or CSS selector (e.g. #browser_compatibility) into view.',
     parameters: Type.Object({
       tabId: Type.Optional(Type.String()),
       ref: Type.Optional(Type.String({ description: 'If set, scroll this ref into view' })),
+      selector: Type.Optional(Type.String({ description: 'Optional CSS selector (e.g. #browser_compatibility, h2) to scroll directly into view' })),
+      position: Type.Optional(Type.String({ description: 'top | bottom to jump directly to the top or bottom of the page' })),
       direction: Type.Optional(Type.String({ description: 'down | up | left | right' })),
       amount: Type.Optional(Type.Number({ minimum: 1, maximum: 4000 })),
     }),
     async execute(args) {
       ensureAgentBrowser();
       const result = await scrollBrowser(args.tabId, args);
-      return textResult(result.mode === 'ref' ? `已滚到 ${args.ref}` : `已滚动 ${args.direction || 'down'}`, result);
+      const maxScroll = Math.max(0, (result.scrollHeight || 0) - (result.viewportHeight || 0));
+      const pos = Number.isFinite(result.y) && result.scrollHeight
+        ? `（scrollY=${result.y}/${maxScroll}px）`
+        : '';
+      const label = result.mode === 'ref'
+        ? `已滚到 ${args.ref}`
+        : result.mode === 'selector'
+          ? `已滚到 ${args.selector}`
+          : result.mode === 'top'
+            ? '已滚回顶部'
+            : result.mode === 'bottom'
+              ? '已滚到底部'
+              : `已滚动 ${args.direction || 'down'}`;
+      return textResult(`${label}${pos}`, result);
     },
   });
 
@@ -680,14 +715,25 @@ function createBrowserTools(durable) {
     ],
     hooks: [
       durable.hook(durable.ToolTask, {
-        async beforeTool(call) {
-          if (call?.name !== 'bash') return;
+        async beforeTool(call, api) {
+          const name = String(call?.name || '');
+          if (name.startsWith('browser_')) {
+            beginBrowserSession(api?.conversationId || 'default');
+            return;
+          }
+          if (name !== 'bash') return;
           const command = String(call.arguments?.command || '');
           // Controlled by Settings → 浏览器 →「拦截外部打开」(+ open targets).
           if (!shouldBlockSystemBrowserOpen(command)) return;
           return {
             block: systemBrowserOpenBlockMessage(command),
           };
+        },
+      }),
+      durable.hook(durable.GenerationTask, {
+        async afterRun(_run, api) {
+          endBrowserSession(api?.conversationId || 'default');
+          return undefined;
         },
       }),
     ],

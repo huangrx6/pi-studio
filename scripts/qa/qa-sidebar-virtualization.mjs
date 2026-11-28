@@ -19,6 +19,7 @@ let page;
 const shell = (index) => page.locator(`[data-session-id="perf-${index}"]`);
 const row = (index) => shell(index).locator('.session-row');
 const trigger = (index) => shell(index).getByRole('button', { name: /的更多操作$/ });
+const selectedChat = (name) => page.getByRole('tab', { name, selected: true, exact: true });
 async function settle() { await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))); }
 async function scrollTo(position) {
   await page.locator('.workspace-list').evaluate((element, value) => { element.scrollTop = value === 'bottom' ? element.scrollHeight : value; }, position);
@@ -65,7 +66,7 @@ try {
   await visibleInViewport(1259);
   await bounded('far end viewport');
   await row(1259).click();
-  await page.locator('.chat-heading h1').filter({ hasText: '性能会话 1259' }).waitFor();
+  await selectedChat('性能会话 1259').waitFor();
   const composer = page.getByRole('textbox', { name: '发送给 Pi 的消息', exact: true });
   const draft = '1260 条会话滚动和筛选时保留的草稿';
   await page.locator('.assistant-response').first().waitFor();
@@ -78,27 +79,27 @@ try {
   assert.equal(await shell(1259).count(), 0, 'active row does not stay mounted or snap scroll back during ordinary scrolling');
   await page.evaluate(() => window.__sidebarQa.open('perf-600'));
   await visibleInViewport(600);
-  await page.locator('.chat-heading h1').filter({ hasText: '性能会话 0600' }).waitFor();
+  await selectedChat('性能会话 0600').waitFor();
   await settle();
   await page.evaluate(() => window.__sidebarQa.open('perf-1259'));
   await visibleInViewport(1259);
-  await page.locator('.chat-heading h1').filter({ hasText: '性能会话 1259' }).waitFor();
-  await page.waitForFunction((expected) => document.querySelector('[role="textbox"][aria-label="发送给 Pi 的消息"]').value === expected, draft);
+  await selectedChat('性能会话 1259').waitFor();
+  await page.waitForFunction((expected) => document.querySelector('[role="textbox"][aria-label="发送给 Pi 的消息"]').textContent === expected, draft);
   assert.equal(await composerValue(composer), draft);
   result.checks.push('external active changes scroll into view; ordinary scrolling stays free; drafts survive navigation');
 
   await composer.focus();
   await page.keyboard.press('Meta+Shift+[');
-  await page.locator('.chat-heading h1').filter({ hasText: '性能会话 1258' }).waitFor();
+  await selectedChat('性能会话 1258').waitFor();
   const otherDraft = '键盘切换后另一个会话的独立草稿';
   await composer.fill(otherDraft);
   await page.keyboard.press('Meta+Shift+]');
-  await page.locator('.chat-heading h1').filter({ hasText: '性能会话 1259' }).waitFor();
-  await page.waitForFunction((expected) => document.querySelector('[role="textbox"][aria-label="发送给 Pi 的消息"]').value === expected, draft);
+  await selectedChat('性能会话 1259').waitFor();
+  await page.waitForFunction((expected) => document.querySelector('[role="textbox"][aria-label="发送给 Pi 的消息"]').textContent === expected, draft);
   await page.keyboard.press('Meta+n');
-  await page.getByRole('heading', { name: '开始一个新会话', exact: true }).waitFor();
+  await page.getByRole('region', { name: '开始新会话', exact: true }).waitFor();
   await page.evaluate(() => window.__sidebarQa.open('perf-1259'));
-  await page.locator('.chat-heading h1').filter({ hasText: '性能会话 1259' }).waitFor();
+  await selectedChat('性能会话 1259').waitFor();
   assert.equal(await composerValue(composer), draft);
   result.checks.push('real previous/next/new-chat shortcuts retain independent drafts');
 
@@ -254,9 +255,9 @@ try {
   await scrollTo(0);
 
   await capture('01-sidebar-light-980');
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
-  await page.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await capture('02-sidebar-dark-980');
   assert.equal(await composerValue(composer), draft);
   assert.equal(await page.evaluate(() => window.__performanceQa.submitCalls), 0);

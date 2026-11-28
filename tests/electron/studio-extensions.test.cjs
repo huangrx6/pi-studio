@@ -101,8 +101,8 @@ test('manifest rejects duplicate contribution identities within one extension', 
       permissions: ['ui.panels'],
       contributes: {
         panels: [
-          { id: 'main', title: 'Main', slot: 'panel.side', content: [] },
-          { id: 'main', title: 'Main again', slot: 'panel.side', content: [] },
+          { id: 'main', title: 'Main', slot: 'tool.view', content: [] },
+          { id: 'main', title: 'Main again', slot: 'tool.view', content: [] },
         ],
       },
       message: /panels 贡献重复：main/,
@@ -185,7 +185,7 @@ test('manifest rejects contribution ids reused across UI contribution kinds', ()
     permissions: ['ui.commands', 'ui.panels'],
     contributes: {
       commands: [{ id: 'inspect', title: 'Inspect', action: { kind: 'openSettings' } }],
-      panels: [{ id: 'inspect', title: 'Inspect panel', slot: 'panel.side', content: [] }],
+      panels: [{ id: 'inspect', title: 'Inspect panel', slot: 'tool.view', content: [] }],
     },
   }), '/tmp/demo', 'user'), /贡献 ID 跨类型重复：inspect/);
 });
@@ -305,7 +305,7 @@ test('manifest UI actions stay inside the declaring extension and required permi
       panels: [{
         id: 'main',
         title: 'Main',
-        slot: 'panel.side',
+        slot: 'tool.view',
         content: [{
           kind: 'actions',
           buttons: [{
@@ -325,7 +325,7 @@ test('manifest UI actions stay inside the declaring extension and required permi
       panels: [{
         id: 'main',
         title: 'Main',
-        slot: 'panel.side',
+        slot: 'tool.view',
         content: [{
           kind: 'actions',
           buttons: [{
@@ -344,7 +344,7 @@ test('manifest UI actions stay inside the declaring extension and required permi
       panels: [{
         id: 'main',
         title: 'Main',
-        slot: 'panel.side',
+        slot: 'tool.view',
         content: [{
           kind: 'actions',
           buttons: [{
@@ -408,7 +408,7 @@ test('workbench and composer summaries use separate layouts', () => {
         {
           id: 'detail',
           title: '详情',
-          slot: 'panel.side',
+          slot: 'tool.view',
           content: [{
             kind: 'metricGrid',
             metrics: [{
@@ -434,7 +434,7 @@ test('workbench and composer summaries use separate layouts', () => {
 
   assert.deepEqual(
     normalized.contributes.panels.map((panel) => panel.slot),
-    ['panel.side', 'composer.below'],
+    ['tool.view', 'composer.below'],
   );
   assert.equal(normalized.contributes.panels[0].content[0].kind, 'metricGrid');
   assert.equal(normalized.contributes.panels[1].content.length, 2);
@@ -503,7 +503,7 @@ test('status.chip points at its own detail panel and accepts a visibility window
         {
           id: 'detail',
           title: '详情',
-          slot: 'panel.side',
+          slot: 'tool.view',
           content: [{ kind: 'text', text: '完整内容' }],
         },
         {
@@ -527,7 +527,7 @@ test('status.chip points at its own detail panel and accepts a visibility window
   }), '/tmp/demo', 'user');
 
   const [detail, chip, footer] = normalized.contributes.panels;
-  assert.equal(detail.slot, 'panel.side');
+  assert.equal(detail.slot, 'tool.view');
   assert.equal(chip.slot, 'status.chip');
   assert.equal(chip.details, 'detail');
   assert.equal(chip.icon, 'activity');
@@ -536,7 +536,7 @@ test('status.chip points at its own detail panel and accepts a visibility window
     permissions: ['ui.panels'], contributes: { panels: [{
       id: 'chip-bad-color', title: '状态', slot: 'status.chip', color: '#ffcc00', details: 'detail', content: [{ kind: 'text', text: 'x' }],
     }, {
-      id: 'detail', title: '详情', slot: 'panel.side', content: [{ kind: 'text', text: 'd' }],
+      id: 'detail', title: '详情', slot: 'tool.view', content: [{ kind: 'text', text: 'd' }],
     }] },
   }), '/tmp/demo', 'user'), /color/);
   assert.equal(chip.visibility, undefined, 'chip defaults to always visible');
@@ -554,7 +554,7 @@ test('status.chip points at its own detail panel and accepts a visibility window
         content: [{ kind: 'text', text: 'x' }],
       }],
     },
-  }), '/tmp/demo', 'user'), /details 必须指向本扩展的 panel\.side 面板/);
+  }), '/tmp/demo', 'user'), /details 必须指向本扩展的详情视图/);
 
   // chip 只收单行摘要，最多两块
   assert.throws(() => normalizeManifest(manifest({
@@ -592,12 +592,12 @@ test('status.chip points at its own detail panel and accepts a visibility window
       panels: [{
         id: 'detail',
         title: '详情',
-        slot: 'panel.side',
+        slot: 'tool.view',
         visibility: 'while-active',
         content: [{ kind: 'text', text: 'x' }],
       }],
     },
-  }), '/tmp/demo', 'user'), /只有顶栏或输入框摘要可以声明 visibility/);
+  }), '/tmp/demo', 'user'), /只有状态栏或输入框摘要可以声明 visibility/);
 
   assert.throws(() => normalizeManifest(manifest({
     permissions: ['ui.panels'],
@@ -753,6 +753,60 @@ test('project extension trust is invalidated when code changes without a version
   assert.notEqual(changed.contentHash, initial.contentHash);
 });
 
+test('upgrading an installed side panel preserves its package digest and exposes its tool view', async t => {
+  const { getStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
+  const { validateExtensionDirectory } = require('../../electron/main/core/extension-package.cjs');
+  const db = getStudioDatabase();
+  const pluginId = 'test.legacy-board';
+  const id = 'user:' + pluginId;
+  const directory = fs.mkdtempSync(path.join(userRoot, 'legacy-board-'));
+  const source = path.join(directory, 'pi-studio.extension.json');
+  const view = { entry: 'ui/index.html', sourceId: 'live', scope: 'global' };
+  const panel = { id: 'board', title: 'Board', slot: 'tool.view', view };
+  const raw = manifest({ id: pluginId, publisher: 'Test', permissions: ['ui.panels', 'ui.data'],
+    runtime: { durableEntry: 'extension.mjs' },
+    contributes: { panels: [panel], dataSources: [{ id: 'live', title: 'Board data' }] } });
+  const normalized = normalizeManifest(raw, directory, 'user');
+  const oldPanel = { ...panel, slot: 'panel.side', view: { ...view, fullscreen: true } };
+  raw.contributes.panels = [oldPanel];
+  const bytes = JSON.stringify(raw);
+  fs.mkdirSync(path.join(directory, 'ui'));
+  fs.writeFileSync(path.join(directory, 'ui/index.html'), '<!doctype html><title>Board</title>');
+  fs.writeFileSync(source, bytes);
+  writeEntry(directory, 'export const dataSources = { live: { read: () => ({ viewData: [] }) } };');
+  assert.throws(() => validateExtensionDirectory(directory), /未知 slot/);
+  const { treeSha256 } = validateExtensionDirectory(directory, { normalizeManifest: () => normalized });
+  normalized.contributes.panels = [{ ...normalized.contributes.panels[0], ...oldPanel, slots: ['panel.side'] }];
+  db.upsertPlugin({ id: pluginId, name: 'Board', version: raw.version, provides: { extension: { panels: [oldPanel] } } });
+  db.upsertExtension({ id, name: 'Board', version: raw.version, scope: 'user', source, manifest: normalized,
+    ownerPluginId: pluginId, origin: 'plugin', managed: true, enabled: true, trusted: true, contentHash: treeSha256 });
+  t.after(async () => {
+    await studioExtensions.uninstallStudioExtensions();
+    db.removeExtension(id);
+    db.removePlugin(pluginId);
+  });
+
+  db.migrate(32);
+  assert.equal(db.getPlugin(pluginId).provides.extension.panels[0].slot, 'tool.view');
+  assert.equal(db.getExtension(id).contentHash, treeSha256);
+  assert.equal(fs.readFileSync(source, 'utf8'), bytes);
+  const runtime = { registry: { install() {}, uninstall() {} }, builtinExtensions: new Map() };
+  await studioExtensions.reloadStudioExtensions(runtime, '');
+  const snapshot = studioExtensions.extensionUiSnapshot();
+  assert.deepEqual(snapshot.errors.filter(error => error.id === id), []);
+  const item = snapshot.items.find(item => item.extensionId === id);
+  assert.equal(item.slot, 'tool.view');
+  assert.deepEqual(item.slots, ['tool.view']);
+  assert.equal(item.view.scope, 'global');
+  assert.equal(Object.hasOwn(item.view, 'fullscreen'), false);
+
+  fs.appendFileSync(source, '\n');
+  await ensureStudioExtensionIntegrity(runtime, '');
+  const changed = studioExtensions.extensionUiSnapshot();
+  assert.match(changed.errors.find(error => error.id === id)?.message, /摘要|代码已改变/);
+  assert.equal(changed.items.some(item => item.extensionId === id), false);
+});
+
 test('submission-time integrity verification unloads changed project extensions and dependents once', async (t) => {
   const { getStudioDatabase } = require('../../electron/main/core/studio-db.cjs');
   const cwd = fs.mkdtempSync(path.join(os.tmpdir(), 'pi-studio-project-runtime-integrity-'));
@@ -818,6 +872,7 @@ test('submission-time integrity verification unloads changed project extensions 
     [...installed.keys()].sort(),
     ['studio-extension:project:runtime-base', 'studio-extension:project:runtime-consumer'],
   );
+  assert.equal(studioExtensions.availableExtensionRow(consumerId)?.id, consumerId);
 
   fs.writeFileSync(
     path.join(baseDirectory, 'extension.mjs'),
@@ -834,6 +889,8 @@ test('submission-time integrity verification unloads changed project extensions 
   const consumer = snapshot.extensions.find((item) => item.id === consumerId);
   assert.equal(consumer.available, false);
   assert.deepEqual(consumer.untrustedDependencies, [baseId]);
+  assert.equal(studioExtensions.availableExtensionRow(baseId), undefined);
+  assert.equal(studioExtensions.availableExtensionRow(consumerId), undefined);
 });
 
 test('submission-time integrity verification rejects tampered managed project code', async (t) => {
@@ -1209,7 +1266,7 @@ test('command result panelId is confined to a panel declared by that extension',
     manifest: {
       id: 'demo.extension',
       permissions: ['ui.panels'],
-      contributes: { panels: [{ id: 'main', slot: 'panel.side' }] },
+      contributes: { panels: [{ id: 'main', slot: 'tool.view' }] },
     },
   };
   assert.deepEqual(normalizeCommandResult({ panelId: 'user:demo.extension/main' }, row), {
@@ -1218,14 +1275,14 @@ test('command result panelId is confined to a panel declared by that extension',
   });
   assert.throws(
     () => normalizeCommandResult({ panelId: 'user:other/main' }, row),
-    /本扩展声明的 panel.side/,
+    /本扩展声明的详情视图/,
   );
   assert.throws(
     () => normalizeCommandResult({ panelId: 'user:demo.extension/main' }, {
       ...row,
       manifest: { ...row.manifest, permissions: [] },
     }),
-    /本扩展声明的 panel.side/,
+    /本扩展声明的详情视图/,
   );
 });
 
@@ -1241,7 +1298,7 @@ test('command results accept only whitelisted UI actions', () => {
           { id: 'runtime-command', title: 'Runtime' },
           { id: 'static-command', title: 'Static', action: { kind: 'openSettings' } },
         ],
-        panels: [{ id: 'detail', title: 'Detail', slot: 'panel.side' }, { id: 'summary', slot: 'composer.above' }],
+        panels: [{ id: 'detail', title: 'Detail', slot: 'tool.view' }, { id: 'summary', slot: 'composer.above' }],
       },
     },
   };
@@ -1272,7 +1329,7 @@ test('command results accept only whitelisted UI actions', () => {
   });
   assert.throws(
     () => normalizeCommandResult({ action: { kind: 'openPanel', panelId: 'summary' } }, row),
-    /本扩展声明的 panel.side/,
+    /本扩展声明的详情视图/,
   );
   assert.deepEqual(normalizeCommandResult({
     action: { kind: 'runCommand', commandId: 'runtime-command' },
@@ -1293,7 +1350,7 @@ test('command results accept only whitelisted UI actions', () => {
     () => normalizeCommandResult({
       action: { kind: 'openPanel', panelId: 'user:demo.extension/missing' },
     }, row),
-    /openPanel 必须指向本扩展声明的 panel.side/,
+    /openPanel 必须指向本扩展声明的详情视图/,
   );
 });
 
@@ -1656,7 +1713,7 @@ test('installed quota 0.5.5 exposes the settings switch without activating its a
     runtime: { durableEntry: 'extension.mjs' },
     contributes: {
       dataSources: [{ id: 'live', title: '额度' }],
-      panels: [{ id: 'quota-detail', title: '额度', slot: 'panel.side', icon: 'gauge', color: 'accent',
+      panels: [{ id: 'quota-detail', title: '额度', slot: 'tool.view', icon: 'gauge', color: 'accent',
         content: [{ kind: 'dataView', sourceId: id + '/live' }] }],
     },
   })));
@@ -1671,4 +1728,18 @@ test('installed quota 0.5.5 exposes the settings switch without activating its a
   studioExtensions.setStudioExtensionEnabled(id, false, '');
   assert.equal(studioExtensions.providerQuotaExtensionAvailable(), false);
   assert.equal(studioExtensions.extensionUiSnapshot().items.some(item => item.extensionId === id), false);
+});
+
+test('extension views open in the tool window or the status details popover', () => {
+  function panels(items) {
+    return normalizeManifest(manifest({
+      id: 'view-positions', permissions: ['ui.panels'], contributes: { panels: items },
+    }), '/tmp/view-positions', 'user').contributes.panels;
+  }
+  assert.deepEqual(panels([
+    { id: 'app', title: 'App', slot: 'tool.view' },
+    { id: 'usage', title: 'Usage', slot: 'status.detail' },
+  ]).map(item => item.slot), ['tool.view', 'status.detail']);
+  assert.throws(() => panels([{ id: 'app', title: 'App', slot: 'panel.side' }]), /未知 slot/);
+  assert.throws(() => panels([{ id: 'app', title: 'App', slot: 'tool.view', surface: 'inspector' }]), /surface/);
 });

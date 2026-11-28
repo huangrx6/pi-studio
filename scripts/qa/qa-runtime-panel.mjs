@@ -1,9 +1,10 @@
 /**
- * Real Electron check for the terminal and runtime-service workbench tabs.
+ * Real Electron check for the terminal and the runtime-service status popover.
  * The terminal starts a local HTTP listener; the service panel must attribute
  * it to the Studio process tree and closing the terminal tab must stop it.
  */
 
+import { hideToolPanel, openToolPanel } from './fixtures/tool-panel.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -74,7 +75,7 @@ function ownedTerminalServer(pid) {
     return ['QA_FIRST', 'QA_SECOND'].some(label => command.includes(path.join(workspace, `${label}.cjs`))) || (defaultPromptDiagnostic && /QA_(FIRST|SECOND)_PORT/.test(command));
   } catch { return false; }
 }
-let page;
+let page; let main;
 let electronApp;
 let serverPid;
 let firstServerPid;
@@ -86,34 +87,30 @@ try {
   page.setDefaultTimeout(30_000);
   const errors = result.errors;
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.locator('.brand').waitFor();
+  await page.getByRole('navigation', { name: '主导航' }).waitFor();
   result.initialViewport = await page.evaluate(() => ({ width: innerWidth, height: innerHeight, deviceScaleFactor: devicePixelRatio }));
   await electronApp.evaluate(({ dialog }, directory) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
   }, workspace);
   await page.getByRole('button', { name: '打开工作区', exact: true }).click();
-  await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
-  await page.locator('.panel-launcher').waitFor();
-  await page.waitForFunction(() => (document.querySelector('.file-panel')?.getBoundingClientRect().width || 0) > 300);
-  const toolTiles = page.locator('.panel-launcher-tile');
-  assert.ok(await toolTiles.count() >= 5);
-  result.toolLabels = await page.locator('.panel-launcher-label').allTextContents();
-  assert.ok(result.toolLabels.includes('新建终端'));
-  result.checks.push('Launcher tiles expose the built-in workbench apps.');
+  main = page;
+  page = await openToolPanel(electronApp, main);
+  page.setDefaultTimeout(30000);
+  page.on('pageerror', error => errors.push(error.message));
+  await page.getByRole('button', {name:'新终端', exact:true}).waitFor();
+  result.toolLabels = await page.locator('.tool-picker button').allTextContents();
   await page.screenshot({ path: path.join(output, 'start.png'), animations: 'disabled' });
-  for (const width of [480, 320]) {
-    const handle = await page.locator('.panel-resize-handle').boundingBox();
-    const bounds = await page.locator('.file-panel').boundingBox();
-    await page.mouse.move(handle.x + handle.width / 2, handle.y + 100);
-    await page.mouse.down();
-    await page.mouse.move(bounds.x + bounds.width - width, handle.y + 100, { steps: 8 });
-    await page.mouse.up();
-    await page.screenshot({ path: path.join(output, `start-${width}.png`), animations: 'disabled' });
-  }
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  await page.screenshot({ path: path.join(output, 'start-320-dark.png'), animations: 'disabled' });
-
-  await page.locator('.panel-launcher-tile, .panel-tool').filter({ hasText: /新建终端|终端/ }).first().click();
+  result.checks.push('New terminal is available in the floating tool panel.');
+  // The terminal portion inspects DOM glyphs and scrollback. Exercise xterm's
+  // built-in software renderer in this test window for repeatable text checks.
+  await page.evaluate(() => {
+    const getContext = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+      if (type === 'webgl2' || type === 'webgl' || type === 'experimental-webgl') return null;
+      return getContext.call(this, type, ...args);
+    };
+  });
+  await page.getByRole('button', {name:'新终端', exact:true}).click();
   await page.locator('.terminal-host .xterm').waitFor();
   await page.locator('.xterm-helper-textarea').focus();
   await page.evaluate(() => document.fonts.load('14px "Studio Terminal Symbols"', '\uf07b\uf15b\ue0b0\udb80\udf7b'));
@@ -146,30 +143,32 @@ try {
   result.servers.push({ label: 'first PTY child', pid: firstServerPid, port: firstPort });
   await page.screenshot({ path: path.join(output, 'terminal.png'), animations: 'disabled' });
 
-  await page.getByRole('button', { name: '打开工具', exact: true }).click();
-  await page.getByRole('menuitem', { name: '运行服务', exact: true }).click();
-  const serviceRow = page.locator('.runtime-service-row').filter({ has: page.locator('.runtime-service-port', { hasText: new RegExp(`^${firstPort}$`) }) });
+  const servicesTrigger = main.getByRole('button', { name: /^运行服务(?:，|$)/ });
+  await hideToolPanel(main, page);
+  await servicesTrigger.click();
+  const serviceRow = main.locator('.runtime-service-row').filter({ has: main.locator('.runtime-service-port', { hasText: new RegExp(`^${firstPort}$`) }) });
   await serviceRow.waitFor();
   assert.match(await serviceRow.locator('.runtime-service-open').getAttribute('title'), /Studio 子进程/);
   assert.match(await serviceRow.innerText(), new RegExp(`PID ${firstServerPid}`));
-  assert.equal(await page.locator('.runtime-service-row').filter({ hasText: 'Studio 主进程' }).count(), 0);
-  await page.screenshot({ path: path.join(output, 'services.png'), animations: 'disabled' });
+  assert.equal(await main.locator('.runtime-service-row').filter({ hasText: 'Studio 主进程' }).count(), 0);
+  await main.screenshot({ path: path.join(output, 'services.png'), animations: 'disabled' });
   await electronApp.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0]?.setContentSize(1_100, 760);
+    BrowserWindow.getAllWindows().find(win => win.webContents.getURL().endsWith('index.html'))?.setContentSize(1_100, 760);
   });
-  await page.waitForTimeout(350);
-  assert.equal(await page.locator('.runtime-services-panel').evaluate((panel) => (
+  await main.waitForTimeout(350);
+  assert.equal(await main.locator('.runtime-services-panel').evaluate((panel) => (
     panel.scrollWidth <= panel.clientWidth + 1
   )), true);
   assert.equal(await serviceRow.evaluate((row) => row.scrollWidth <= row.clientWidth + 1), true);
-  await page.screenshot({ path: path.join(output, 'services-compact.png'), animations: 'disabled' });
+  await main.screenshot({ path: path.join(output, 'services-compact.png'), animations: 'disabled' });
   await serviceRow.screenshot({ path: path.join(output, 'service-row-dark.png'), animations: 'disabled' });
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
+  await main.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await serviceRow.screenshot({ path: path.join(output, 'service-row-light.png'), animations: 'disabled' });
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  await main.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
 
-  // Switching away unmounts the renderer TerminalPanel, but the main-owned PTY must survive.
-  await page.getByRole('tab').filter({ hasText: '终端' }).click();
+  // Closing the service popover leaves the active terminal and its scrollback in place.
+  await main.getByRole('button', { name: '关闭运行服务' }).click();
+  await openToolPanel(electronApp, main);
   await page.locator('.terminal-host .xterm').waitFor();
   await page.waitForFunction(() => [...document.querySelectorAll('.xterm-rows > div')].some(row => row.textContent.trim() === 'QA_STABLE_HISTORY'));
   assert.ok(ownedTerminalServer(firstServerPid), 'tab switch must retain the same PTY child');
@@ -183,9 +182,10 @@ try {
   await page.keyboard.type('printf "QA_%s\\n" RECONNECTED_OK'); await page.keyboard.press('Enter');
   await page.waitForFunction(() => document.querySelector('.xterm-rows')?.textContent.includes('QA_RECONNECTED_OK'));
   result.checks.push('Services→terminal switch and explicit reconnect retain stable foreground history, original cwd and the same live PTY child; input remains usable.');
-  await page.getByRole('tab').filter({ hasText: '服务' }).click(); await serviceRow.waitFor();
+  await hideToolPanel(main, page);
+  await servicesTrigger.click(); await serviceRow.waitFor();
   await serviceRow.locator('.runtime-service-stop').click();
-  const terminateDialog = page.getByRole('alertdialog', { name: /终止 node/ });
+  const terminateDialog = main.getByRole('alertdialog', { name: /终止 node/ });
   await terminateDialog.waitFor();
   assert.match(await terminateDialog.innerText(), /PID \d+/);
   const dialogLayout = await terminateDialog.evaluate((dialog) => {
@@ -207,8 +207,8 @@ try {
   assert.ok(dialogLayout.overlayLeft === 0 && dialogLayout.overlayTop === 0);
   assert.ok(dialogLayout.overlayWidth === dialogLayout.viewportWidth);
   assert.ok(dialogLayout.overlayHeight === dialogLayout.viewportHeight);
-  await page.screenshot({ path: path.join(output, 'terminate-confirm.png'), animations: 'disabled' });
-  await page.getByRole('button', { name: '终止服务', exact: true }).click();
+  await main.screenshot({ path: path.join(output, 'terminate-confirm.png'), animations: 'disabled' });
+  await main.getByRole('button', { name: '终止服务', exact: true }).click();
   await serviceRow.waitFor({ state: 'detached' });
   await waitForProcessGone(firstServerPid);
   result.checks.push('Service panel attributes own PTY child, shows native destructive confirmation, and stops exactly the fixture PID.');
@@ -220,18 +220,19 @@ try {
     localServer.stdout.once('data', (data) => resolve(Number(data.toString().trim())));
   }), new Promise((_, reject) => setTimeout(() => reject(new Error('Local QA server did not listen')), 10000))]);
   assert.ok(localPort); result.servers.push({ label: 'own external sibling', pid: localServer.pid, port: localPort });
-  await page.getByRole('button', { name: /^全部/ }).click();
-  const localRow = page.locator('.runtime-service-row').filter({ hasText: `PID ${localServer.pid}` });
+  await main.getByRole('button', { name: /^本机全部/ }).click();
+  const localRow = main.locator('.runtime-service-row').filter({ hasText: `PID ${localServer.pid}` });
   await localRow.waitFor();
   assert.match(await localRow.innerText(), new RegExp(String(localPort)));
   await localRow.getByText('本机', { exact: true }).first().waitFor();
   await localRow.locator('.runtime-service-stop').click();
-  await page.getByRole('alertdialog').getByText(/工作区以外的本机服务/).waitFor();
-  await page.getByRole('button', { name: '终止服务', exact: true }).click();
+  await main.getByRole('alertdialog').getByText(/工作区以外的本机服务/).waitFor();
+  await main.getByRole('button', { name: '终止服务', exact: true }).click();
   await localRow.waitFor({ state: 'detached' });
   await waitForProcessGone(localServer.pid);
 
-  await page.getByRole('tab').filter({ hasText: '终端' }).click();
+  await main.getByRole('button', { name: '关闭运行服务' }).click();
+  await openToolPanel(electronApp, main);
   await page.locator('.terminal-host .xterm').waitFor();
   await page.locator('.xterm-helper-textarea').focus();
   result.checks.push('A separate process launched by this QA is classified as local and terminated only after its own PID-specific confirmation.');

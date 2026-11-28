@@ -1,4 +1,5 @@
 // Run after pnpm run build on macOS. Exercises real keyboard -> xterm -> PTY -> vi.
+import { openToolPanel } from './fixtures/tool-panel.mjs';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -27,7 +28,7 @@ try {
   }
   await writeFile(sample, 'alpha\nbravo\ncharlie\n');
   app = await _electron.launch({ executablePath, args: executablePath ? [] : [root], cwd: profile, env });
-  const page = await app.firstWindow();
+  let page = await app.firstWindow();
   page.setDefaultTimeout(15000);
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -35,8 +36,9 @@ try {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
   }, profile);
   await page.getByRole('button', { name: '打开工作区', exact: true }).click();
-  await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
-  await page.locator('.panel-launcher-tile, .panel-tool').filter({ hasText: /新建终端|终端/ }).first().click();
+  page = await openToolPanel(app, page);
+  page.on('pageerror', error => errors.push(error.message));
+  await page.getByRole('button', {name:'新终端', exact:true}).click();
   await page.locator('.terminal-live-state').filter({ hasText: '运行中' }).waitFor();
   await page.locator('.terminal-host').click();
   await page.evaluate(() => {
@@ -51,9 +53,9 @@ try {
   // Vim sends DECRQM after its initial screen. Exiting too soon misses the
   // production-bundle parser crash and only verifies that input reaches the PTY.
   await page.waitForFunction(() => window.viOutput.includes('\u001b[?12$p'));
-  await page.getByRole('button', { name: '打开工具', exact: true }).click();
-  await page.getByRole('menuitem', { name: '运行服务', exact: true }).click();
-  const terminalTab = page.getByRole('tab').filter({ hasText: '终端' });
+  await page.getByRole('button', { name: '新建工具标签页', exact:true }).click();
+  await page.getByRole('menuitem', { name: '新浏览器标签页', exact:true }).click();
+  const terminalTab = page.locator('.tool-tab:has(.lucide-square-terminal) button').first();
   await terminalTab.click();
   await page.waitForFunction(() => document.activeElement?.classList.contains('xterm-helper-textarea'));
   // Selecting an already-active tab used to leave all input on the tab header.

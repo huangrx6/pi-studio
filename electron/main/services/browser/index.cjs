@@ -25,6 +25,7 @@ const {
   subscribeBrowserDownloads,
 } = require('./downloads.cjs');
 const {
+  withBrowserOwner,
   activeBrowserTab,
   controlBrowserTab,
   getBrowserTab,
@@ -43,10 +44,10 @@ const {
 const {
   captureBrowserScreenshot,
   captureBrowserSnapshot,
+  formatSnapshotOutline,
   trimSnapshot,
 } = require('./snapshot.cjs');
 const {
-  acknowledgeBrowserCommand,
   requestCloseBrowserTab,
   requestFocusBrowserTab,
   requestOpenBrowserTab,
@@ -80,7 +81,6 @@ const {
   listBrowserNetwork,
 } = require('./telemetry.cjs');
 const {
-  isSystemHtmlOpenCommand,
   browserPreferenceInstructions,
   isSystemBrowserOpenCommand,
   preferWorkbenchForLocalHtml,
@@ -90,7 +90,6 @@ const {
   isWorkbenchBrowsableTarget,
   shouldBlockSystemBrowserOpen,
   systemBrowserOpenBlockMessage,
-  systemHtmlOpenBlockMessage,
 } = require('./open-target.cjs');
 const {
   assertBrowserAgentControlEnabled,
@@ -141,10 +140,13 @@ const {
 } = require('./extensions.cjs');
 const {
   beginBrowserActivity,
+  beginBrowserSession,
   endBrowserActivity,
+  endBrowserSession,
   enqueueBrowserAction,
   getBrowserActivityState,
   getBrowserControlState,
+  hasActiveBrowserSession,
   isBrowserControlPaused,
   setBrowserControlPaused,
   subscribeBrowserControl,
@@ -169,9 +171,10 @@ function initializeBrowserService() {
 module.exports = {
   BROWSER_PARTITION,
   VIEWPORT_PRESETS,
-  acknowledgeBrowserCommand,
+  withBrowserOwner,
   activeBrowserTab,
   beginBrowserActivity,
+  beginBrowserSession,
   browserPreferenceInstructions,
   assertBrowserAgentControlEnabled,
   assertBrowserCdpAllowed,
@@ -183,6 +186,7 @@ module.exports = {
   cancelBrowserDownload,
   captureBrowserScreenshot,
   captureBrowserSnapshot,
+  formatSnapshotOutline,
   clearBrowserData,
   clearBrowserDownload,
   clearBrowserDownloads,
@@ -194,6 +198,7 @@ module.exports = {
   downloadsDirectory,
   dragBrowserRefs,
   endBrowserActivity,
+  endBrowserSession,
   enqueueBrowserAction,
   evaluateBrowserScript,
   evaluateExternalChrome,
@@ -206,6 +211,7 @@ module.exports = {
   getElementRect,
   getTabWebContents,
   handleBrowserDialog,
+  hasActiveBrowserSession,
   highlightBrowserRef,
   hoverBrowserRef,
   initializeBrowserService,
@@ -213,7 +219,6 @@ module.exports = {
   isAllowedRequest,
   isBrowserAgentControlEnabled,
   isSystemBrowserOpenCommand,
-  isSystemHtmlOpenCommand,
   isBrowserCdpEnabled,
   isBrowserControlPaused,
   isBrowserEvaluateEnabled,
@@ -278,7 +283,6 @@ module.exports = {
   subscribeBrowserTabs,
   subscribeExternalChromeSessions,
   systemBrowserOpenBlockMessage,
-  systemHtmlOpenBlockMessage,
   trimSnapshot,
   typeBrowserRef,
   unregisterBrowserTab,

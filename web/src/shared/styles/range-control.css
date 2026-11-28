@@ -17,12 +17,12 @@
 
 .settings-range-copy { display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3); }
 .settings-range-heading { display: grid; min-width: 0; gap: var(--space-1); }
-.settings-range-heading strong { color: var(--text); font: var(--settings-label-font); }
-.settings-range-description { color: var(--muted); font: var(--settings-description-font); }
+.settings-range-heading strong { color: var(--text); font: var(--font-label); }
+.settings-range-description { color: var(--muted); font: var(--font-description); }
 .settings-range-copy output {
   flex: none;
   color: var(--muted);
-  font-size: var(--settings-description-size);
+  font-size: var(--text-description);
   font-weight: var(--weight-medium);
   font-variant-numeric: tabular-nums;
 }

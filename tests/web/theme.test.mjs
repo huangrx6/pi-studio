@@ -25,6 +25,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { runInNewContext } from 'node:vm';
 import { normalizePreferences, PALETTE_PRESETS } from '../../web/src/shared/preferences.ts';
+import { applyStudioTheme, studioViewTokens } from '../../sdk/extensions/view-theme.mjs';
 const require = createRequire(import.meta.resolve('vite'));
 const postcss = require('postcss');
 const palette = postcss.parse(fs.readFileSync('web/src/styles/palette.css', 'utf8'));
@@ -32,6 +33,32 @@ const paletteIds = PALETTE_PRESETS.map(preset => preset.id);
 const sourceFiles = fs.readdirSync('web/src', { recursive: true })
   .filter((file) => /\.(css|tsx|ts)$/.test(file))
   .map((file) => path.join('web/src', file));
+
+test('the sandbox theme SDK follows the host palette, scopes exports and clears missing roles', () => {
+  const definitions = new Set();
+  for (const file of ['palette', 'tokens', 'typography', 'icon-sizes']) {
+    postcss.parse(fs.readFileSync('web/src/styles/' + file + '.css', 'utf8'))
+      .walkDecls(decl => definitions.add(decl.prop));
+  }
+  for (const role of studioViewTokens) assert.ok(definitions.has(role), 'missing Studio role ' + role);
+  const applied = new Map();
+  const root = { dataset: {}, style: {
+    setProperty: (name, value) => applied.set(name, value),
+    removeProperty: name => applied.delete(name),
+  } };
+  for (const theme of ['dark', 'light']) {
+    const values = tokens(theme, 'berry');
+    applyStudioTheme({ theme, tokens: { ...values, '--private': 'never exported' } }, root);
+    assert.equal(root.dataset.theme, theme);
+    assert.equal(root.style.colorScheme, theme);
+    for (const role of ['--surface-canvas', '--surface-chrome', '--surface-raised', '--surface-floating', '--accent', '--scrim']) {
+      assert.equal(applied.get(role), values[role]);
+    }
+    assert.equal(applied.has('--private'), false);
+  }
+  applyStudioTheme({ theme: 'light', tokens: { '--surface': 'ButtonFace' } }, root);
+  assert.deepEqual([...applied], [['--surface', 'ButtonFace']]);
+});
 
 /**
  * 收集某个主题下所有 `--token` 的最终值。
@@ -138,10 +165,9 @@ test('all CSS color literals and color calculations live in palette.css', () => 
 });
 
 // 所有被 var(--x) 引用的 token 都必须在某个 CSS 文件里声明，防止拼写错误导致
-// 样式静默失效。--chat-font-size 由 App.tsx 在运行时写到根元素，
-// --provider-icon-size 由 ProviderIcon.tsx 以内联 style 注入，二者按约定列入白名单。
+// 样式静默失效。以下两个变量由对应组件的内联样式注入。
 test('all referenced design tokens resolve', () => {
-  const declared = new Set(['--chat-font-size', '--provider-icon-size', '--terminal-fg']);
+  const declared = new Set(['--provider-icon-size', '--terminal-fg']);
   const used = new Set();
   for (const file of sourceFiles.filter((item) => item.endsWith('.css'))) {
     postcss.parse(fs.readFileSync(file, 'utf8')).walkDecls((decl) => {
@@ -154,17 +180,22 @@ test('all referenced design tokens resolve', () => {
   assert.deepEqual([...used].filter((key) => !declared.has(key)), []);
 });
 
-// 字体层级只允许使用 tokens.css 声明的字号和字重；页面 CSS 不能再悄悄引入
-// 9.5px、550 之类局部档位，避免设置页和工作区出现难以察觉的视觉跳变。
+// 同一套字号和字重也适用于独立窗口和官方插件自有的界面。
 test('all page typography consumes shared size and weight tokens', () => {
-  for (const file of sourceFiles.filter((item) => item.endsWith('.css') && !item.endsWith('/tokens.css'))) {
+  const styles = sourceFiles.filter(item => item.endsWith('.css')).concat(
+    'web/menubar/styles/popover.css',
+    'electron/main/capabilities/keep-awake/ui/styles.css',
+    'scripts/build/notes-plugin-ui/styles.css',
+    'scripts/build/excalidraw-plugin-ui/styles.css',
+    'assets/official-plugins/packages/task-board/extension/ui/styles.css',
+  );
+  for (const file of styles) {
     postcss.parse(fs.readFileSync(file, 'utf8')).walkDecls((decl) => {
       // @font-face descriptors define a font resource and its variable weight
       // range; they are not page typography declarations.
       if (decl.parent?.type === 'atrule' && decl.parent.name === 'font-face') return;
       if (decl.prop === 'font-size') {
-        const sharedSize = decl.value.replace(/var\(--chat-font-size(?:,\s*[^)]+)?\)/g, 'var(--chat-font-size)');
-        assert.doesNotMatch(sharedSize, /\b\d+(?:\.5)?px\b/, `${file}: ${decl.prop}: ${decl.value}`);
+        assert.doesNotMatch(decl.value, /\d+(?:\.\d+)?(?:px|rem)\b/, `${file}: ${decl.prop}: ${decl.value}`);
       }
       if (decl.prop === 'font-weight') {
         assert.match(decl.value, /^var\(--weight-(?:regular|medium|semibold|bold)\)$/, `${file}: ${decl.prop}: ${decl.value}`);
@@ -190,7 +221,7 @@ for (const paletteName of paletteIds) {
       const t = tokens(mode, paletteName);
       for (const key of ['--bg', '--surface', '--sidebar-bg']) {
         const color = t[key].slice(1).match(/../g).map((value) => parseInt(value, 16));
-        // 允许 ≤12/255 的冷色偏移：规范的四级表面就是冷灰，不能让品牌色再叠一层色相。
+        // 允许中性灰的各通道相差最多 12/255。
         assert.ok(Math.max(...color) - Math.min(...color) <= 12, `${mode} ${key} must stay near-neutral`);
       }
       const pairs = [
@@ -257,15 +288,20 @@ test('palette presets keep semantic status colors stable', () => {
   }
 });
 
-// 换壁纸不改变窗口内颜色：四级表面必须是实色，不能是 rgba 或 color-mix。
-test('the four shared surfaces stay opaque in both themes', () => {
+test('the workbench uses only canvas and sidebar fills for its resting surfaces', () => {
   for (const mode of ['light', 'dark']) {
-    const t = tokens(mode);
-    for (const key of ['--surface-canvas', '--surface-chrome', '--surface-raised', '--surface-floating']) {
-      assert.match(t[key], /^#[\da-f]{6}$/i, `${mode} ${key} must be an opaque hex color`);
-    }
-    for (const key of ['--bg', '--surface', '--sidebar-bg']) {
-      assert.match(t[key], /^#[\da-f]{6}$/i, `${mode} ${key} resolves to an opaque surface`);
+    const fill = tokens(mode)['--surface-chrome'];
+    for (const paletteName of paletteIds) {
+      const t = tokens(mode, paletteName);
+      for (const key of ['--bg', '--sidebar-bg', '--surface-canvas', '--surface-chrome', '--surface-raised']) {
+        assert.match(t[key], /^#[\da-f]{6}$/i, `${mode} ${paletteName} ${key} must be opaque`);
+      }
+      assert.equal(t['--bg'], t['--surface-canvas']);
+      assert.notEqual(t['--bg'], fill);
+      for (const key of ['--sidebar-bg', '--surface', '--surface-soft', '--surface-raised', '--surface-floating', '--overlay-surface', '--dialog-surface', '--composer-surface', '--settings-card-bg', '--settings-control-bg', '--inline-code-bg']) {
+        assert.equal(t[key], fill, `${mode} ${paletteName} ${key} must use the shared fill`);
+      }
+      assert.notEqual(t['--surface-hover'], fill, `${mode} hover must be visible on a card`);
     }
   }
 });

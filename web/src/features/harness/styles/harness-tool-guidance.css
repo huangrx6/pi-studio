@@ -1,8 +1,8 @@
 .harness-guidance-list { display: grid; min-width: 0; gap: var(--space-2); padding-bottom: var(--space-3); }
-.harness-guidance-list code { overflow-wrap: anywhere; font: var(--weight-medium) var(--settings-description-size)/var(--leading-normal) var(--mono); }
+.harness-guidance-list code { overflow-wrap: anywhere; font: var(--weight-medium) var(--text-description)/var(--leading-normal) var(--mono); }
 .harness-guidance-list svg { flex: none; width: var(--icon-sm); height: var(--icon-sm); color: var(--muted); }
 .harness-note-summary, .harness-note-tool, .harness-add-guidance {
-  display: flex; align-items: center; gap: var(--space-2); min-width: 0; color: var(--text); font: var(--settings-preference-body-font); text-align: start;
+  display: flex; align-items: center; gap: var(--space-2); min-width: 0; color: var(--text); font: var(--font-body); text-align: start;
 }
 .harness-note-summary {
   min-height: var(--settings-row-height); padding: var(--space-1) 0; border-bottom: 1px solid var(--divider);
@@ -26,7 +26,7 @@
 .harness-note-remove:hover svg { color: var(--error); }
 .harness-settings .harness-note-editor .harness-note-text {
   display: block; width: 100%; min-height: calc(var(--space-8) * 2); padding: var(--space-2) var(--space-3);
-  border: 0; border-radius: 0 0 var(--radius-control) var(--radius-control); font: var(--settings-preference-body-font);
+  border: 0; border-radius: 0 0 var(--radius-control) var(--radius-control); font: var(--font-body);
 }
 .harness-note-editor:has(.harness-note-text:focus-visible) { border-color: var(--focus-color); }
 .harness-guidance-list .harness-add-guidance {
@@ -42,7 +42,7 @@
 .harness-tool-search > svg, .harness-tool-search > button { position: absolute; top: 50%; transform: translateY(-50%); }
 .harness-tool-search > svg { inset-inline-start: var(--space-2); pointer-events: none; }
 .harness-tool-search > button { inset-inline-end: var(--space-1); }
-.harness-tool-search input { width: 100%; padding-inline: var(--space-8); font: var(--settings-preference-body-font); }
+.harness-tool-search input { width: 100%; padding-inline: var(--space-8); font: var(--font-label); }
 .harness-tool-options { display: grid; max-height: calc(var(--settings-control-height) * 5); overflow-y: auto; overscroll-behavior: contain; }
 .harness-tool-options:not(:empty) { margin-top: var(--space-1); }
 .harness-tool-options button {

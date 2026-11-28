@@ -6,13 +6,13 @@ import type { SidebarWorkspaceActions } from './SidebarWorkspaceList';
 
 type SidebarWorkspaceActionsOptions = {
   workspaces: PiWorkspace[];
-  isNewConversation: boolean;
+  openWorktree: (cwd: string) => Promise<void>;
   sidebarFiltering: boolean;
   dragPreviewRef: MutableRefObject<HTMLDivElement | null>;
   setExpanded: Dispatch<SetStateAction<Set<string>>>;
   setSearchCollapsed: Dispatch<SetStateAction<Set<string>>>;
-  selectDraftWorkspace: (cwd: string) => void;
   openSession: (item: PiWorkspace['sessions'][number]) => Promise<boolean>;
+  inspectSession: (id: string) => Promise<void>;
   prefetchSession: (sessionId: string) => void;
   startSession: (cwd: string) => Promise<void>;
   sidebarAction: (
@@ -25,15 +25,14 @@ type SidebarWorkspaceActionsOptions = {
   reorderWorkspaces: (source: string, target: string) => void;
   reorderSessions: (cwd: string, source: string, target: string) => void;
   clearSidebarFilters: () => void;
-  makeDragPreview: (event: React.DragEvent, label: string, kind: '工作区' | '会话' | '标签') => void;
+  makeDragPreview: (event: React.DragEvent, label: string, kind: '工作区' | '会话') => void;
 };
 
 export function useSidebarWorkspaceActions(options: SidebarWorkspaceActionsOptions) {
   const latest = useRef<SidebarWorkspaceActions>(null!);
   latest.current = {
-    onToggleWorkspace(cwd, isOpen) {
-      if (options.isNewConversation) options.selectDraftWorkspace(cwd);
-      if (options.sidebarFiltering) {
+    onToggleWorkspace(cwd, isOpen, filtering = options.sidebarFiltering) {
+      if (filtering) {
         options.setSearchCollapsed((current) => {
           const next = new Set(current);
           if (isOpen) next.add(cwd); else next.delete(cwd);
@@ -47,6 +46,8 @@ export function useSidebarWorkspaceActions(options: SidebarWorkspaceActionsOptio
         });
       }
     },
+    onInspectSession: id => { void options.inspectSession(id); },
+    onOpenWorktree: cwd => { void options.openWorktree(cwd); },
     onOpenSession: (item) => { void options.openSession(item); },
     onPrefetchSession: (id) => options.prefetchSession(id),
     onStartSession: (cwd) => { void options.startSession(cwd); },
@@ -63,6 +64,8 @@ export function useSidebarWorkspaceActions(options: SidebarWorkspaceActionsOptio
 
   return useMemo<SidebarWorkspaceActions>(() => ({
     onToggleWorkspace: (...args) => latest.current.onToggleWorkspace(...args),
+    onInspectSession: id => latest.current.onInspectSession(id),
+    onOpenWorktree: cwd => latest.current.onOpenWorktree(cwd),
     onOpenSession: (...args) => latest.current.onOpenSession(...args),
     onPrefetchSession: (...args) => latest.current.onPrefetchSession(...args),
     onStartSession: (...args) => latest.current.onStartSession(...args),

@@ -14,6 +14,8 @@ process.env.PI_STUDIO_DB = database;
 const calls = [];
 const runtimes = [];
 let activeStorage;
+let nextId = 1;
+let rejectNextSubmission = false;
 let model = {
   provider: 'mock',
   id: 'text-model',
@@ -32,13 +34,15 @@ function deferred() {
   return { promise, reject, resolve };
 }
 
-class MockMemoryStorage {
+class MockStorage {
   constructor() {
-    this.kind = 'memory';
+    this.kind = 'sqlite';
     this.closed = false;
     activeStorage = this;
     calls.push(['storage', 'create']);
   }
+
+  async submissionByRequest() { return undefined; }
 
   async close() {
     this.closed = true;
@@ -63,7 +67,6 @@ function createMockRuntime() {
           return runtime.harness;
         },
       },
-      MemoryStorage: MockMemoryStorage,
       createRegistry() {
         calls.push(['registry', 'create']);
         const installed = new Map();
@@ -86,8 +89,11 @@ function createMockRuntime() {
         assert.equal(doc, runtime.durable.ProviderDoc);
         return { sessionId: `provider-${id}` };
       },
+      async conversation(id) {
+        return conversations.find(conversation => conversation.id === id);
+      },
       async createConversation(options) {
-            const id = `conversation-${conversations.length + 1}`;
+            const id = nextId++;
             const conversation = {
               id,
               options,
@@ -99,6 +105,10 @@ function createMockRuntime() {
                 calls.push(['conversation', 'configure', id]);
               },
               async submit(payload) {
+                if (rejectNextSubmission) {
+                  rejectNextSubmission = false;
+                  throw new Error('admission failed');
+                }
                 this.submissions.push(structuredClone(payload));
                 const settlement = deferred();
                 pendingSubmits.push({ conversation: this, payload, settlement });
@@ -154,6 +164,13 @@ let currentRuntime = createMockRuntime();
 
 const originalLoad = Module._load;
 Module._load = function patchedLoad(request, parent, isMain) {
+  if (request === '../runtime/durable-storage.cjs') {
+    return { openDurableStorage: async (filename, options) => {
+      assert.equal(filename, database);
+      assert.equal(options.prefix, 'pi_temporary_');
+      return new MockStorage();
+    } };
+  }
   if (request === '../runtime/durable-runtime.cjs') {
     return {
       getDurableRuntime: async () => currentRuntime,
@@ -161,6 +178,7 @@ Module._load = function patchedLoad(request, parent, isMain) {
   }
   if (request.endsWith('core/studio-models.cjs')) {
     return {
+      getStudioModelsRuntimeSync: () => ({ models: [model] }),
       getStudioModelsRuntime: async () => ({ models: [model] }),
     };
   }
@@ -226,7 +244,7 @@ test('temporary chat rejects images before creating a conversation for a text-on
   assert.equal(fs.existsSync(jsonlRoot), false);
 });
 
-test('temporary chat uses Durable MemoryStorage, supports images, and hot switches models', async () => {
+test('temporary chat uses private Durable storage, supports images, and hot switches models', async () => {
   model = {
     provider: 'mock',
     id: 'vision-model',
@@ -250,8 +268,9 @@ test('temporary chat uses Durable MemoryStorage, supports images, and hot switch
   ]);
   assert.equal(firstSubmit.conversation.options.agent.tools.length, 0);
   assert.equal(firstSubmit.conversation.options.agent.cwd, os.tmpdir());
-  assert.equal(currentRuntime.storage.kind, 'memory');
-  assert.equal(fs.existsSync(database), false);
+  assert.equal(currentRuntime.storage.kind, 'sqlite');
+  assert.equal(fs.existsSync(database), true);
+  assert.deepEqual(temporaryChat.temporaryHistory().map(chat => chat.title), ['describe this']);
   assert.equal(fs.existsSync(attachmentRoot), false);
   assert.equal(fs.existsSync(jsonlRoot), false);
 
@@ -298,6 +317,7 @@ test('temporary chat uses Durable MemoryStorage, supports images, and hot switch
   secondSubmit.settlement.resolve({ status: 'completed' });
   await second;
   await temporaryChat.closeTemporary(202, 'vision-chat');
+  await temporaryChat.shutdownTemporaryChats();
   assert.equal(currentRuntime.storage.closed, true);
   currentRuntime = createMockRuntime();
 });
@@ -319,7 +339,7 @@ test('temporary model switching resolves the target model without inheriting the
   assert.deepEqual(selection.thinkingLevels, ['default', 'low', 'high']);
 });
 
-test('stop, close, and shutdown tear down streams and the memory runtime in order', async () => {
+test('stop, close, and shutdown tear down streams and the private runtime in order', async () => {
   await temporaryChat.stopTemporary(303, 'stopped-chat');
   await temporaryChat.closeTemporary(303, 'missing-chat');
 
@@ -346,17 +366,18 @@ test('stop, close, and shutdown tear down streams and the memory runtime in orde
   await second;
 
   await temporaryChat.stopTemporary(303, 'first-chat');
-  const firstConversation = currentRuntime.conversations.find((entry) => entry.id === 'conversation-1');
+  const firstConversation = currentRuntime.conversations[0];
   assert.equal(firstConversation.aborted, true);
   assert.equal(currentRuntime.storage.closed, false);
 
   const releases = calls.length;
   await temporaryChat.closeTemporary(303, 'first-chat');
-  assert.deepEqual(calls.slice(releases).filter(call => call[0] === 'provider'), [['provider', 'release', 'provider-conversation-1']]);
-  assert.equal(currentRuntime.streams.find((entry) => entry.id === 'conversation-1').stopped, true);
+  assert.deepEqual(calls.slice(releases).filter(call => call[0] === 'provider'), [['provider', 'release', `provider-${firstConversation.id}`]]);
+  assert.equal(currentRuntime.streams.find((entry) => entry.id === firstConversation.id).stopped, true);
   assert.equal(currentRuntime.storage.closed, false);
 
   await temporaryChat.closeTemporary(303, 'second-chat');
+  await temporaryChat.shutdownTemporaryChats();
   assert.equal(currentRuntime.storage.closed, true);
   assert.ok(
     calls.findIndex((entry) => entry[0] === 'harness' && entry[1] === 'close')
@@ -403,10 +424,11 @@ test('stopping an unanswered temporary prompt is a normal cancellation', async (
   assert.deepEqual(events.at(-1), { type: 'done' });
 
   await temporaryChat.closeTemporary(505, 'stop-pending');
+  await temporaryChat.shutdownTemporaryChats();
   assert.equal(currentRuntime.storage.closed, true);
 });
 
-test('temporary chat installs safe user plugin tools into memory runtime registry and exposes them to the conversation', async () => {
+test('temporary chat installs safe user plugin tools into the private runtime registry and exposes them to the conversation', async () => {
   currentRuntime = createMockRuntime();
   safeExtensionEntries = [
     {
@@ -444,55 +466,24 @@ test('temporary chat installs safe user plugin tools into memory runtime registr
   }
 });
 
-test('real Pi Durable MemoryStorage Harness accepts temporary chat extensions and tools without strict-JSON undefined errors', async () => {
-  const durable = await import('@earendil-works/pi-durable');
-  const chordContext = await import('@earendil-works/chord/context');
-  const { builtinModels } = await import('@earendil-works/pi-ai/providers/all');
-  const storage = new durable.MemoryStorage();
-  const registry = durable.createRegistry();
-  const safeExtension = {
-    name: 'studio.task-board',
-    tools: [
-      {
-        name: 'task_board_summary',
-        description: 'Summarize task board',
-        parameters: { type: 'object', properties: {} },
-        replay: 'safe',
-        async execute() { return { output: [{ type: 'text', text: '{}' }] }; },
-      },
-    ],
-  };
-  registry.install(safeExtension);
-  const models = builtinModels({
-    credentials: { async read() { return undefined; } },
-    authContext: { async env() { return undefined; }, async fileExists() { return false; } },
-    identity: { userAgent: 'detailed', attribution: { name: 'Pi Studio Test', url: 'https://example.com', categories: ['desktop-agent'] } },
-  });
-  const harness = await durable.Harness.open(storage, {
-    models,
-    registry,
-    settings: { afterFailedRun: 'withdraw' },
-  }, chordContext.BACKGROUND_CONTEXT);
-  try {
-    const conversation = await harness.createConversation({
-      ownership: { kind: 'ownerless' },
-      agent: {
-        model: { provider: 'deepseek', modelId: 'deepseek-chat' },
-        thinkingLevel: 'off',
-        cwd: os.tmpdir(),
-        extensions: [safeExtension],
-        tools: safeExtension.tools,
-        instructions: 'Test temporary chat with safe tools',
-      },
-    }, chordContext.BACKGROUND_CONTEXT);
-    assert.ok(conversation.id);
-    await conversation.configure({
-      model: { provider: 'deepseek', modelId: 'deepseek-chat' },
-      thinkingLevel: 'off',
-      extensions: [safeExtension],
-      tools: safeExtension.tools,
-    }, chordContext.BACKGROUND_CONTEXT);
-  } finally {
-    await harness.close(chordContext.BACKGROUND_CONTEXT);
-  }
+test('a rejected first submission can retry without leaving empty history or a stale title', async () => {
+  await temporaryChat.shutdownTemporaryChats();
+  currentRuntime = createMockRuntime();
+  const input = { id: 'retry-chat', text: 'rejected', images: [], modelRef: 'mock/text-model', thinkingLevel: 'low' };
+  rejectNextSubmission = true;
+  await assert.rejects(temporaryChat.temporaryPrompt(707, input, () => {}), /admission failed/);
+  assert.equal(await temporaryChat.temporaryRead(input.id), null);
+  const next = temporaryChat.temporaryPrompt(707, { ...input, text: 'accepted' }, () => {});
+  await new Promise(resolve => setImmediate(resolve));
+  currentRuntime.pendingSubmits.shift().settlement.resolve({ status: 'completed' });
+  await next;
+  assert.equal(temporaryChat.temporaryHistory().find(chat => chat.id === input.id).title, 'accepted');
+});
+
+test('stopping during preparation leaves the draft unsent and out of temporary history', async () => {
+  const id = 'cancel-before-admission';
+  const pending = temporaryChat.temporaryPrompt(808, { id, text: 'draft', images: [] }, () => {});
+  await temporaryChat.stopTemporary(808, id);
+  await assert.rejects(pending, /发送已取消/);
+  assert.equal(await temporaryChat.temporaryRead(id), null);
 });

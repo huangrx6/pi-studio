@@ -3,7 +3,7 @@
   "kind": "plugin",
   "id": "studio.task-board",
   "name": "任务看板",
-  "version": "2.0.0",
+  "version": "2.1.4",
   "publisher": "Pi Studio",
   "description": "全局任务看板：支持需求/Bug/优化/常规分类、单/多项目关联、进展记录、归档恢复，并在会话或临时会话中按需梳理日报与周报。",
   "category": "productivity",

@@ -35,15 +35,8 @@ async function capture(name, theme, viewport, selector) {
   assert.equal(geometry.overflow, false, `${name}: detail horizontal overflow`); assert.equal(geometry.rootOverflow, false, `${name}: viewport overflow`); assert.ok(geometry.left >= -1 && geometry.right <= geometry.viewportWidth + 1, `${name}: dialog stays in viewport`);
   result.geometry.push({ name, ...geometry }); await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' }); result.screenshots.push(name);
 }
-try {
-  browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
-  page = await browser.newPage({ viewport: { width: 980, height: 760 }, deviceScaleFactor: 2, reducedMotion: 'reduce' }); page.setDefaultTimeout(15000);
-  page.on('pageerror', error => result.pageErrors.push(error.message));
-  await page.route('**/*', route => { const url = route.request().url(); if (url.startsWith(server.origin) || /^(data|blob):/.test(url)) return route.continue(); result.blockedRequests.push(url); return route.abort(); });
-  await page.addInitScript({ content: `(${installPerformanceFixture.toString()})({sessionCount:2,turnCount:4});(${installResourceDetailsFixture.toString()})();` });
-  await page.goto(server.origin); await page.locator('.session-row').filter({ hasText: '性能会话 0000' }).click(); await page.locator('.assistant-response').first().waitFor();
-  const draft = '查看资源详情时保留的会话草稿'; await composer().fill(draft);
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+async function checkResourceDialogs(draft) {
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await page.locator('.settings-navigation').getByRole('button', { name: '插件', exact: true }).click();
   await page.getByRole('tablist', { name: '插件与资源' }).getByRole('tab', { name: '技能', exact: true }).click();
   await (await opener('A')).waitFor();
@@ -144,35 +137,67 @@ try {
   result.checks.push('technical and permission headings align with facts in both themes; hover highlights text and chevron, and keyboard collapse preserves focus');
   await page.keyboard.press('Escape'); await extension.waitFor({ state: 'detached' }); await settle(); assert.equal(await extensionOpener.evaluate(node => node === document.activeElement), true);
   result.checks.push('source and technical disclosures open by keyboard, preserve execution and version information, and Tab reaches rollback then uninstall; Escape restores opener');
-  await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composerValue(composer()), draft);
+  await page.locator('[data-sidebar-section="conversations"]').click(); assert.equal(await composerValue(composer()), draft);
+}
+try {
+  browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
+  page = await browser.newPage({ viewport: { width: 980, height: 760 }, deviceScaleFactor: 2, reducedMotion: 'reduce' }); page.setDefaultTimeout(15000);
+  page.on('pageerror', error => result.pageErrors.push(error.message));
+  await page.route('**/*', route => { const url = route.request().url(); if (url.startsWith(server.origin) || /^(data|blob):/.test(url)) return route.continue(); result.blockedRequests.push(url); return route.abort(); });
+  await page.addInitScript({ content: `(${installPerformanceFixture.toString()})({sessionCount:2,turnCount:4});(${installResourceDetailsFixture.toString()})();` });
+  await page.goto(server.origin); await page.locator('.session-row').filter({ hasText: '性能会话 0000' }).click(); await page.locator('.assistant-response').first().waitFor();
+  const draft = '查看资源详情时保留的会话草稿'; await composer().fill(draft);
+  if (!process.argv.includes('--services')) await checkResourceDialogs(draft);
   // Service scope lifecycle uses only the fixture's synthetic process identities.
-  const services = () => page.locator('.runtime-services-panel');
+  const trigger = page.getByRole('button', { name: /^运行服务(?:，|$)/ });
+  const services = () => page.getByRole('dialog', { name: '运行服务', exact: true });
+  const switchScope = async id => {
+    await qa('open', id);
+    await services().waitFor({ state: 'detached' });
+    await trigger.click();
+  };
   const serviceRow = port => services().locator('.runtime-service-row').filter({ has: page.locator('.runtime-service-port', { hasText: new RegExp(`^${port}$`) }) });
   const stop = port => serviceRow(port).locator('.runtime-service-stop');
   const confirm = () => page.getByRole('alertdialog');
   const scanCount = scope => page.evaluate(scope => window.__resourceDetailsQa.calls.filter(call => call.method === 'runtimeServices' && call.scope === scope).length, scope);
   const stopCount = () => page.evaluate(() => window.__resourceDetailsQa.calls.filter(call => call.method === 'runtimeServiceStop').length);
   await qa('failUntilClear', 'runtimeServices', 'A');
-  await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
-  await page.locator('.panel-launcher-tile, .panel-tool').filter({ hasText: '运行服务' }).first().click(); await services().getByRole('alert').waitFor();
-  assert.equal(await services().getByText('当前任务还没有监听服务', { exact: true }).count(), 0, 'first scan failure is not a successful empty result');
+  await trigger.focus();
+  await trigger.press('Enter'); await services().getByRole('alert').waitFor();
+  await page.keyboard.press('Escape'); await services().waitFor({ state: 'detached' });
+  assert.ok(await trigger.evaluate(node => node === document.activeElement));
+  await trigger.click(); await services().waitFor();
+  await composer().click({ position: { x: 5, y: 5 } }); await services().waitFor({ state: 'detached' });
+  assert.ok(await composer().evaluate(node => node.contains(document.activeElement)));
+  await trigger.click(); await services().getByRole('alert').waitFor();
+  assert.equal(await services().getByText('暂无相关服务', { exact: true }).count(), 0, 'first scan failure is not a successful empty result');
+  const anchor = await trigger.boundingBox();
+  const popup = await services().boundingBox();
+  assert.ok(popup.y + popup.height <= anchor.y, 'service list opens above the status bar');
   await qa('clearFailure', 'runtimeServices', 'A'); await services().getByRole('button', { name: '重试', exact: true }).click(); await serviceRow(43001).waitFor();
   assert.equal(await services().locator('.runtime-service-row').count(), 2);
-  await services().getByRole('button', { name: /^全部/ }).click(); assert.equal(await services().locator('.runtime-service-row').count(), 3);
+  await services().getByRole('button', { name: /^本机全部/ }).click(); assert.equal(await services().locator('.runtime-service-row').count(), 3);
   await stop(45001).click(); await confirm().getByText(/当前工作区以外的本机服务/).waitFor(); await confirm().getByRole('button', { name: '取消', exact: true }).click();
-  await services().getByRole('button', { name: /^任务/ }).click();
+  await services().getByRole('button', { name: /^相关服务/ }).click();
   await qa('fail', 'runtimeServices', 'A'); await services().getByRole('button', { name: '刷新运行服务', exact: true }).click(); await services().getByText('以下显示上次扫描结果', { exact: true }).waitFor(); assert.equal(await serviceRow(43001).count(), 1);
   await services().getByRole('button', { name: '重试', exact: true }).click(); await services().getByRole('alert').waitFor({ state: 'detached' });
-  await capture('08-services-light', 'light', { width: 980, height: 760 }, '.runtime-services-panel'); await capture('09-services-dark', 'dark', { width: 980, height: 760 }, '.runtime-services-panel');
+  await capture('08-services-light', 'light', { width: 980, height: 760 }, '.runtime-status-popover'); await capture('09-services-dark', 'dark', { width: 980, height: 760 }, '.runtime-status-popover');
+  const liveStatus = services().locator('.runtime-services-live');
+  assert.equal(await liveStatus.innerText(), '自动刷新');
+  const statusBounds = await liveStatus.boundingBox();
   await qa('hold', 'runtimeServices', 'A'); await services().getByRole('button', { name: '刷新运行服务', exact: true }).click(); await pending('runtimeServices', 'A');
-  await qa('open', 'perf-1'); await serviceRow(44001).waitFor(); await qa('release', 'runtimeServices', 'A'); assert.equal(await serviceRow(43001).count(), 0); assert.equal(await serviceRow(44001).count(), 1);
-  await stop(44001).click(); await confirm().waitFor(); const beforeConfirmSwitch = await stopCount(); await qa('open', 'perf-0'); await serviceRow(43001).waitFor(); await confirm().waitFor({ state: 'detached' }); assert.equal(await stopCount(), beforeConfirmSwitch, 'unconfirmed old scope never sends stop');
+  assert.equal(await liveStatus.innerText(), '自动刷新');
+  assert.deepEqual(await liveStatus.boundingBox(), statusBounds);
+  assert.equal(await serviceRow(43001).count(), 1);
+  assert.equal(await services().getByRole('button', { name: '刷新运行服务' }).getAttribute('aria-busy'), 'true');
+  await switchScope('perf-1'); await serviceRow(44001).waitFor(); await qa('release', 'runtimeServices', 'A'); assert.equal(await serviceRow(43001).count(), 0); assert.equal(await serviceRow(44001).count(), 1);
+  await stop(44001).click(); await confirm().waitFor(); const beforeConfirmSwitch = await stopCount(); await switchScope('perf-0'); await serviceRow(43001).waitFor(); await confirm().waitFor({ state: 'detached' }); assert.equal(await stopCount(), beforeConfirmSwitch, 'unconfirmed old scope never sends stop');
   await qa('hold', 'runtimeServiceStop', 'A', '41001'); await qa('fail', 'runtimeServiceStop', 'A', '41001'); await stop(43001).click();
   assert.match(await confirm().innerText(), /43001、43002/); await confirm().getByRole('button', { name: '终止服务', exact: true }).click(); await pending('runtimeServiceStop', 'A', '41001');
-  await qa('open', 'perf-1'); await serviceRow(44001).waitFor(); const bScans = await scanCount('B'); await qa('release', 'runtimeServiceStop', 'A', '41001'); assert.equal(await services().getByRole('alert').count(), 0); assert.equal(await scanCount('B'), bScans, 'old stop rejection must not refresh new scope');
+  await switchScope('perf-1'); await serviceRow(44001).waitFor(); const bScans = await scanCount('B'); await qa('release', 'runtimeServiceStop', 'A', '41001'); assert.equal(await services().getByRole('alert').count(), 0); assert.equal(await scanCount('B'), bScans, 'old stop rejection must not refresh new scope');
   await qa('fail', 'runtimeServiceStop', 'B', '42001'); await stop(44001).click(); await confirm().getByRole('button', { name: '终止服务', exact: true }).click(); await services().getByRole('button', { name: '重新终止', exact: true }).waitFor();
   await services().getByRole('button', { name: '刷新运行服务', exact: true }).click(); await serviceRow(44001).waitFor(); await settle(); assert.equal(await services().getByRole('button', { name: '重新终止', exact: true }).count(), 1, 'successful scan cannot erase stop error');
-  await qa('open', 'perf-0'); await serviceRow(43001).waitFor();
+  await switchScope('perf-0'); await serviceRow(43001).waitFor();
   await qa('hold', 'runtimeServices', 'A'); await services().getByRole('button', { name: '刷新运行服务', exact: true }).click(); await pending('runtimeServices', 'A');
   await stop(43001).click(); await confirm().getByRole('button', { name: '终止服务', exact: true }).click();
   await page.waitForFunction(() => window.__resourceDetailsQa.pending('runtimeServices', 'A') >= 2); await qa('release', 'runtimeServices', 'A');
@@ -181,7 +206,67 @@ try {
   await qa('visibility', false); await page.waitForFunction(count => window.__resourceDetailsQa.calls.filter(call => call.method === 'runtimeServices' && call.scope === 'A').length > count, hiddenCount);
   const payloads = await page.evaluate(() => window.__resourceDetailsQa.calls.filter(call => call.method === 'runtimeServiceStopPayload'));
   assert.ok(payloads.length >= 3 && payloads.every(payload => payload.startedAt === 1780000000000 + payload.pid), 'stop always retains captured PID identity timestamp');
+  // Fill the popup with fixture-only listeners and verify actions at the end of
+  // the list without opening external pages or writing to the system clipboard.
+  await page.evaluate(() => {
+    const scan = window.piApi.runtimeServices;
+    const actions = window.__serviceActionsQa = { opened: [], copied: [] };
+    window.piApi.openExternal = async url => { actions.opened.push(url); };
+    Object.defineProperty(navigator.clipboard, 'writeText', { value: async url => { actions.copied.push(url); } });
+    window.piApi.runtimeServices = async input => {
+      const snapshot = await scan(input);
+      const sample = snapshot.services[0];
+      const services = Array.from({ length: 32 }, (_, index) => {
+        const port = 47000 + index;
+        return { ...sample, id: String(port), port, url: `http://localhost:${port}`, ownership: 'other' };
+      });
+      return { ...snapshot, services, summary: { agent: 0, workspace: 0, related: 0, other: services.length, total: services.length } };
+    };
+  });
+  await services().getByRole('button', { name: '刷新运行服务' }).click();
+  const allServices = services().getByRole('button', { name: /^本机全部/ });
+  await allServices.getByText('32').waitFor();
+  await allServices.click();
+  const list = services().locator('.runtime-services-list');
+  assert.ok(await list.evaluate(node => node.scrollHeight > node.clientHeight), 'long service list scrolls inside the popup');
+  const last = serviceRow(47031);
+  await last.getByRole('button', { name: '在浏览器打开 http://localhost:47031' }).click();
+  await last.getByRole('button', { name: '复制 http://localhost:47031' }).click();
+  assert.deepEqual(await page.evaluate(() => window.__serviceActionsQa), {
+    opened: ['http://localhost:47031'], copied: ['http://localhost:47031'],
+  });
   assert.equal(await composerValue(composer()), draft);
+  const desktop = { width: 980, height: 760 };
+  const short = { width: 980, height: 480 };
+  const longListBounds = await services().boundingBox();
+  assert.ok(longListBounds.height >= 448, 'preserve the expanded long-list height');
+  await qa('hold', 'runtimeServices', 'B');
+  await switchScope('perf-1');
+  const loading = services().getByRole('status').filter({ hasText: '正在读取运行服务…' });
+  await loading.locator('.loading-pi').waitFor();
+  assert.deepEqual(await services().boundingBox(), longListBounds, 'initial scan keeps the full panel bounds');
+  await qa('release', 'runtimeServices', 'B');
+  const empty = services().getByText('暂无相关服务', { exact: true });
+  await empty.waitFor();
+  assert.deepEqual(await services().boundingBox(), longListBounds, 'empty filter keeps the full panel bounds');
+  await capture('10-services-empty', 'dark', desktop, '.runtime-status-popover');
+  await allServices.click();
+  await last.waitFor();
+  assert.deepEqual(await services().boundingBox(), longListBounds, 'switching to all services leaves heading and filter in place');
+  await capture('11-services-all', 'dark', desktop, '.runtime-status-popover');
+  await capture('12-services-short', 'light', short, '.runtime-status-popover');
+  const shortBounds = await services().boundingBox();
+  assert.ok(shortBounds.y >= 8 && shortBounds.height < longListBounds.height);
+  assert.ok(shortBounds.y + shortBounds.height <= (await trigger.boundingBox()).y);
+  const toolbar = services().locator('.runtime-services-toolbar');
+  const toolbarBounds = await toolbar.boundingBox();
+  await last.scrollIntoViewIfNeeded();
+  assert.ok(await list.evaluate(node => node.scrollTop > 0));
+  assert.deepEqual(await toolbar.boundingBox(), toolbarBounds, 'short-window scrolling keeps filter controls visible');
+  await services().getByRole('button', { name: /^相关服务/ }).click();
+  await empty.waitFor();
+  assert.deepEqual(await services().boundingBox(), shortBounds, 'short-window empty and full bounds match');
+  result.checks.push('initial scan, empty filter, and 32 services share the same anchored bounds; short windows shrink the popover and scroll only the list');
   result.checks.push('synthetic runtime scope A/B held scan isolation, first failure vs stale projection retry, filters, outside/multiport confirmation, pre-confirm scope invalidation, late stop rejection isolation, stop error survives scans, pre-stop read cannot resurrect rows, hidden poll pauses/visible refresh, PID timestamp contract');
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.blockedRequests, []);
   result.calls = await page.evaluate(() => window.__resourceDetailsQa.calls); assert.equal(result.calls.some(call => call.method === 'conversationSubmit'), false);

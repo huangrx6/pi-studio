@@ -36,9 +36,17 @@ export async function configureTestModel(page, cwd, baseUrl) {
 }
 
 export async function selectTestSession(page, cwd, id) {
+  const conversations = page.locator('[data-sidebar-section="conversations"]');
+  if (await conversations.getAttribute('aria-current') !== 'page') await conversations.click();
+  const tree = await page.evaluate(async target => (await window.piApi.state(target)).workspaces.find(w => w.cwd === target)?.worktree, cwd);
+  if (tree) {
+    const project = page.locator('[data-sidebar-key=' + JSON.stringify('project:' + tree.projectRoot) + '] > .workspace-row');
+    if (await project.getAttribute('aria-expanded') === 'false') await project.click();
+  }
   const group = page.locator('[data-workspace-cwd="' + cwd + '"] .workspace-row');
   if (await group.getAttribute('aria-expanded') === 'false') await group.click();
-  await page.locator('[data-session-id="' + id + '"] .session-row').click();
+  const row = page.locator('[data-session-id="' + id + '"] .session-row');
+  await row.locator('.session-title').click();
   await page.waitForFunction(id => document.querySelector('.session-row.is-active')?.closest('[data-session-id]')?.dataset.sessionId === id, id);
 }
 

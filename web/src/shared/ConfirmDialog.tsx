@@ -10,9 +10,9 @@
  * 弹窗本身不做任何权限判断，只负责呈现与收集选择。
  */
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
-import { AlertTriangle, FilePenLine, FileSearch, Globe2, Save, ShieldAlert, Terminal, Trash2, X } from 'lucide-react';
+import { AlertTriangle, FilePenLine, FileSearch, Globe2, Monitor, Save, ShieldAlert, Terminal, Trash2, X } from 'lucide-react';
 import type {
   PermissionConfirmRequest,
   PermissionConfirmResponse,
@@ -108,24 +108,28 @@ function CommandPreview({ command }: { command: string }) {
   })}</pre>;
 }
 
-/** 弹窗外壳：Esc 关闭、点击遮罩关闭、打开时聚焦卡片。 */
-function ConfirmShell({
+/** 弹窗打开时聚焦指定控件或卡片，支持 Esc 和点击遮罩取消。 */
+export function ConfirmShell({
   onCancel,
   label,
   cardClassName,
+  initialFocusRef,
   role = 'dialog',
   children,
 }: {
   onCancel: () => void;
   label: string;
   cardClassName?: string;
+  initialFocusRef?: RefObject<HTMLElement>;
   role?: 'dialog' | 'alertdialog';
   children: ReactNode | ((dismiss: ModalDismiss) => ReactNode);
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const { dialogRef, onKeyDown, dismiss } = useModalDialog();
   const cancel = () => void dismiss(onCancel);
-  useEffect(() => { cardRef.current?.focus({ preventScroll: true }); }, []);
+  useLayoutEffect(() => {
+    (initialFocusRef?.current ?? cardRef.current)?.focus({ preventScroll: true });
+  }, [initialFocusRef]);
 
   return createPortal(<dialog
     ref={dialogRef}
@@ -250,17 +254,57 @@ export function ToolConfirmDialog({ request, onRespond }: { request: ConfirmRequ
   const meta = KIND_META[parsed.kind];
   const rememberOptions = (request.rememberScopes || []).filter((scope): scope is Exclude<PermissionRememberScope, 'once'> => scope !== 'once');
   const [remember, setRemember] = useState<Exclude<PermissionRememberScope, 'once'> | ''>('');
-  const respond = (accepted: boolean) => onRespond({
-    accepted,
-    ...(accepted && remember ? { remember } : {}),
-  });
+  const respond = (accepted: boolean, explicitRemember?: Exclude<PermissionRememberScope, 'once'>) => {
+    const chosen = explicitRemember || remember || undefined;
+    onRespond({
+      accepted,
+      ...(accepted && chosen ? { remember: chosen } : {}),
+    });
+  };
+
+  if (request.tool === 'desktop_control_app') {
+    return <ConfirmShell label={request.title} cardClassName="confirm-card-desktop" onCancel={() => respond(false)}>
+      {(dismiss) => <>
+      <header className="confirm-desktop-head">
+        <span className="confirm-desktop-badge" aria-hidden="true"><Monitor /></span>
+        <span className="confirm-desktop-kicker">Computer Use</span>
+        <button type="button" className="confirm-close" aria-label="关闭确认" onClick={() => void dismiss(() => respond(false))}><X /></button>
+      </header>
+      <div className="confirm-desktop-body">
+        <h2>{request.title}</h2>
+        {parsed.explanation && <p className="confirm-explanation">{parsed.explanation}</p>}
+      </div>
+      <footer className="confirm-desktop-actions">
+        <button
+          type="button"
+          className="confirm-desktop-always"
+          onClick={() => void dismiss(() => respond(true, 'always'))}
+        >
+          始终允许
+        </button>
+        <div className="confirm-desktop-right">
+          <button type="button" className="confirm-cancel" onClick={() => void dismiss(() => respond(false))}>拒绝</button>
+          <button
+            type="button"
+            className="confirm-accept"
+            onClick={() => void dismiss(() => respond(true, 'session'))}
+          >
+            允许此对话
+          </button>
+        </div>
+      </footer>
+      </>}
+    </ConfirmShell>;
+  }
+
   return <ConfirmShell label={request.title} onCancel={() => respond(false)}>
+    {(dismiss) => <>
     <header className="confirm-head">
       <span className={`confirm-icon is-${parsed.kind}`}>{meta.icon}</span>
       <div className="confirm-heading">
         <h2>{request.title}</h2>
       </div>
-      <button type="button" className="confirm-close" aria-label="关闭确认" onClick={() => respond(false)}><X /></button>
+      <button type="button" className="confirm-close" aria-label="关闭确认" onClick={() => void dismiss(() => respond(false))}><X /></button>
     </header>
 
     <div className="confirm-body">
@@ -297,9 +341,10 @@ export function ToolConfirmDialog({ request, onRespond }: { request: ConfirmRequ
     </div>
 
     <footer className="confirm-actions">
-      <button type="button" className="confirm-cancel" onClick={() => respond(false)}>取消</button>
-      <button type="button" className="confirm-accept" onClick={() => respond(true)}>{meta.acceptLabel}</button>
+      <button type="button" className="confirm-cancel" onClick={() => void dismiss(() => respond(false))}>取消</button>
+      <button type="button" className="confirm-accept" onClick={() => void dismiss(() => respond(true))}>{meta.acceptLabel}</button>
     </footer>
+    </>}
   </ConfirmShell>;
 }
 
@@ -311,12 +356,13 @@ export function FullPermissionDialog({ acknowledged, onAcknowledgedChange, onCon
   onCancel: () => void;
 }) {
   return <ConfirmShell label="确认启用完全权限" onCancel={onCancel}>
+    {(dismiss) => <>
     <header className="confirm-head">
       <span className="confirm-icon is-danger"><AlertTriangle /></span>
       <div className="confirm-heading">
         <h2>确认启用完全权限？</h2>
       </div>
-      <button type="button" className="confirm-close" aria-label="关闭确认" onClick={onCancel}><X /></button>
+      <button type="button" className="confirm-close" aria-label="关闭确认" onClick={() => void dismiss(onCancel)}><X /></button>
     </header>
 
     <div className="confirm-body">
@@ -328,8 +374,9 @@ export function FullPermissionDialog({ acknowledged, onAcknowledgedChange, onCon
     </div>
 
     <footer className="confirm-actions">
-      <button type="button" className="confirm-cancel" onClick={onCancel}>取消</button>
-      <button type="button" className="confirm-accept is-danger" disabled={!acknowledged} onClick={onConfirm}>启用完全权限</button>
+      <button type="button" className="confirm-cancel" onClick={() => void dismiss(onCancel)}>取消</button>
+      <button type="button" className="confirm-accept is-danger" disabled={!acknowledged} onClick={() => void dismiss(onConfirm)}>启用完全权限</button>
     </footer>
+    </>}
   </ConfirmShell>;
 }

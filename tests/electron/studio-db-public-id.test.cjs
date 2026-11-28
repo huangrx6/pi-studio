@@ -130,3 +130,99 @@ test('the v10 migration backfills UUIDs and moves legacy session keys', () => {
     db.close();
   }
 });
+
+test('session layouts survive restart and cannot be recreated by late writes after deletion', () => {
+  const filename = path.join(temporary, 'layouts.sqlite');
+  let db = createStudioDatabase(filename);
+  try {
+    const session = db.insertConversation({id:'88', workspace:temporary, kind:'durable', title:'Layout'});
+    const owner = 'conversation:' + session.publicId;
+    db.createTemporaryChat({id:'quick',durableId:'90',title:'Quick',modelRef:'demo',thinkingLevel:'default',hasImages:false});
+    db.upsertWorkspace({cwd:temporary});
+    const tree = 'worktree:' + JSON.stringify([temporary, 'directory', '']);
+    db.setSessionLayout(tree,'center',{active:'file-a'});
+    db.setSessionLayout('draft:' + temporary,'tools',{active:'browser'});
+    db.adoptDraftTools(temporary,session.publicId);
+    assert.equal(db.getSessionLayout('draft:' + temporary,'center'),null);
+    assert.equal(db.getSessionLayout('draft:' + temporary,'tools'),null);
+    db.setSessionLayout('temporary:quick','center',{active:'chat'});
+    db.setSessionLayout('studio','navigation',{sessionId:session.publicId});
+    db.close();
+    db = createStudioDatabase(filename);
+    assert.deepEqual(db.getSessionLayout(tree,'center'),{active:'file-a'});
+    assert.deepEqual(db.getSessionLayout(owner,'tools'),{active:'browser'});
+    assert.deepEqual(db.getSessionLayout('studio','navigation'),{sessionId:session.publicId});
+    assert.deepEqual(db.getSessionLayout('temporary:quick','center'),{active:'chat'});
+    db.deleteConversation(session.publicId);
+    db.removeTemporaryChatIndex('quick','90');
+    for (const key of [owner,'temporary:quick']) {
+      db.setSessionLayout(key,'center',{active:'stale'});
+      assert.equal(db.getSessionLayout(key,'center'),null);
+      assert.equal(db.getSessionLayout(key,'tools'),null);
+    }
+  } finally {
+    db.close();
+  }
+});
+
+test('v32 merges saved documents by checkout and keeps the selected file and each conversation reading position', () => {
+  const filename = path.join(temporary, 'v31-layouts.sqlite');
+  let db = createStudioDatabase(filename);
+  try {
+    const a = db.insertConversation({id:'11', workspace:temporary, kind:'durable', title:'A'});
+    const b = db.insertConversation({id:'12', workspace:temporary, kind:'durable', title:'B'});
+    db.setWorkspaceTreeRecord(temporary, {branch:'main', main:true, projectRoot:temporary, detached:false});
+    const file = {id:'readme', kind:'file', path:'README.md', cwd:temporary, source:'workspace', title:'README.md'};
+    db.setSessionLayout('conversation:' + a.publicId, 'center', {tabs:[{...file, scroll:360}], active:'readme', reading:{entry:4, offset:6}});
+    db.setSessionLayout('conversation:' + b.publicId, 'center', {tabs:[{...file, scroll:20}], active:'chat', reading:{entry:8, offset:2}});
+    db.setSessionLayout('studio', 'navigation', {sessionId:a.publicId, cwd:temporary});
+    db.db.exec('PRAGMA user_version = 31');
+    db.close();
+    db = createStudioDatabase(filename);
+    const key = 'worktree:' + JSON.stringify([temporary,'branch','main']);
+    const layout = db.getSessionLayout(key, 'center');
+    assert.equal(layout.active, 'readme');
+    assert.equal(layout.tabs.length, 3);
+    assert.equal(layout.tabs.find(t => t.id === 'readme').scroll, 360);
+    assert.equal(layout.tabs.find(t => t.sessionId === b.publicId).reading.entry, 8);
+    assert.equal(db.getSessionLayout('conversation:' + a.publicId, 'center'), null);
+    db.deleteConversation(a.publicId);
+    const remaining = db.getSessionLayout(key, 'center');
+    assert.equal(remaining.lastConversationId, b.publicId);
+    assert.equal(remaining.tabs.length, 2);
+    db.deleteConversation(b.publicId);
+    db.removeWorkspace(temporary);
+    assert.equal(db.getSessionLayout(key, 'center'), null);
+    db.setSessionLayout(key, 'center', layout);
+    assert.equal(db.getSessionLayout(key, 'center'), null);
+  } finally { db.close(); }
+});
+
+test('the inspector follows its saved conversation across migration and deletion', () => {
+  const filename = path.join(temporary, 'v33-inspector.sqlite');
+  let db = createStudioDatabase(filename);
+  try {
+    const a = db.insertConversation({id:'61', workspace:temporary, kind:'durable', title:'A'});
+    const b = db.insertConversation({id:'62', workspace:temporary, kind:'durable', title:'B'});
+    const tree = 'worktree:' + JSON.stringify([temporary, 'directory', '']);
+    db.upsertWorkspace({cwd:temporary});
+    const center = { active:'chat', lastConversationId:a.publicId, side:'git', tabs:[] };
+    db.setSessionLayout(tree, 'center', { ...center, inspector:'progress', progressPage:'tasks' });
+    db.db.exec('PRAGMA user_version = 33');
+    db.close();
+    db = createStudioDatabase(filename);
+    const owner = 'conversation:' + a.publicId;
+    const other = 'conversation:' + b.publicId;
+    assert.deepEqual(db.getSessionLayout(tree, 'center'), center);
+    assert.equal(db.getSessionLayout(owner, 'inspector').progressPage, 'tasks');
+    assert.equal(db.getSessionLayout(owner, 'inspector').mode, 'expanded');
+    assert.equal(db.getSessionLayout(other, 'inspector'), null);
+    assert.throws(() => db.setSessionLayout(tree, 'inspector', {}));
+    const view = { mode:'compact', seenTurn:'240', position:{top:10, right:20} };
+    db.setSessionLayout(other, 'inspector', view);
+    db.deleteConversation(a.publicId);
+    db.setSessionLayout(owner, 'inspector', view);
+    assert.equal(db.getSessionLayout(owner, 'inspector'), null);
+    assert.deepEqual(db.getSessionLayout(other, 'inspector'), view);
+  } finally { db.close(); }
+});

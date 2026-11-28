@@ -38,6 +38,36 @@ const {
 } = require('../../electron/main/capabilities/permissions/index.cjs');
 const { createStudioBuiltins } = require('../../electron/main/runtime/builtin-registry.cjs');
 
+test('aborting an approval removes only that request and immediately advances the desktop queue', async t => {
+  const { EventEmitter } = require('node:events');
+  const { setWindow } = require('../../electron/main/core/state.cjs');
+  const { registerConfirmationIpc, requestPolicyConfirmation } = require('../../electron/main/services/confirmations.cjs');
+  const ipc = new EventEmitter();
+  const win = new EventEmitter();
+  const sent = [];
+  win.isDestroyed = () => false;
+  win.webContents = { isDestroyed: () => false, send: (...args) => sent.push(args) };
+  setWindow(win);
+  t.after(() => setWindow(undefined));
+  registerConfirmationIpc(ipc);
+  const first = new AbortController(), queued = new AbortController();
+  const visible = requestPolicyConfirmation({ title: '计划操作' }, first.signal);
+  const withdrawn = requestPolicyConfirmation({ title: '已取消操作' }, queued.signal);
+  const other = requestPolicyConfirmation({ title: '另一项操作' });
+  queued.abort();
+  assert.equal((await withdrawn).accepted, false);
+  assert.equal(sent.length, 1);
+  const firstId = sent[0][1].id;
+  first.abort();
+  assert.equal((await visible).accepted, false);
+  assert.deepEqual(sent[1], ['pi:confirm-dismissed', firstId]);
+  assert.equal(sent[2][1].title, '另一项操作');
+  ipc.emit('pi:confirm-response', {}, { id: firstId, accepted: true });
+  ipc.emit('pi:confirm-response', {}, { id: sent[2][1].id, accepted: true });
+  assert.equal((await other).accepted, true);
+  assert.equal(win.listenerCount('closed'), 0);
+});
+
 const workspace = path.join(temporary, 'workspace');
 fs.mkdirSync(workspace, { recursive: true });
 

@@ -36,7 +36,7 @@ async function discardForNavigation() {
   const dialog = page.getByRole('alertdialog', { name: '丢弃未保存的设置更改？', exact: true });
   if (await dialog.count()) await confirm('丢弃未保存的设置更改？', '丢弃并离开');
 }
-async function openSettings(route) { if (!await nav().count()) await page.locator('.sidebar-bottom button[title="设置"]').click(); await nav().getByRole('button', { name: route, exact: true }).click(); await discardForNavigation(); }
+async function openSettings(route) { if (!await nav().count()) await page.locator('.sidebar-bottom button[aria-label="设置"]').click(); await nav().getByRole('button', { name: route, exact: true }).click(); await discardForNavigation(); }
 async function openSession(id) { await page.evaluate((id) => window.__settingsExecutionQa.open(id), id); await discardForNavigation(); await page.locator('.chat-heading h1').filter({ hasText: id === 'perf-0' ? '性能会话 0000' : '性能会话 0001' }).waitFor(); await settle(); }
 async function theme(value, route) { await openSettings('通用'); await content().getByRole('button', { name: value, exact: true }).click(); await openSettings(route); }
 async function capture(name) {
@@ -89,7 +89,7 @@ try {
   const policyDialog = page.getByRole('dialog', { name: '全局运行策略', exact: true });
   const closePolicy = () => policyDialog.getByRole('button', { name: '取消', exact: true }).click();
   await closePolicy();
-  await nav().getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await page.waitForFunction(() => document.activeElement?.classList.contains('context-usage-trigger'));
   assert.equal(await composerValue(composer), mainDraft);
   await openSettings('Harness 配置');
@@ -97,12 +97,12 @@ try {
   assert.equal(await compressionSection.evaluate(section => section.open), false);
   await closePolicy();
   assert.equal(await content().evaluate(viewport => viewport.scrollTop), 0);
-  await nav().getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await contextUsage.click();
   await compactionSettings.click();
   await page.waitForFunction(() => document.activeElement?.getAttribute('aria-label') === '自动压缩上下文');
   await closePolicy();
-  await nav().getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   result.checks.push('context usage shortcut waits for policy data, opens and focuses compression, restores trigger focus, and stays local to that visit');
 
   const permissionMode = page.getByRole('button', { name: '权限模式', exact: true });
@@ -249,7 +249,7 @@ try {
   await harness().getByRole('button', { name: '重新加载 Harness 配置', exact: true }).click();
   const harnessName = harness().getByRole('textbox', { name: '方案名称', exact: true });
   const instructions = harness().getByRole('textbox', { name: 'Harness 附加指令', exact: true });
-  const cards = harness().locator('.settings-profile-card');
+  const cards = harness().locator('button[aria-label^="编辑"][aria-haspopup="dialog"]');
   const edit = page.getByRole('dialog', { name: '编辑 Harness 配置', exact: true });
   const cancelEdit = () => edit.getByRole('button', { name: '取消', exact: true }).click();
   await cards.first().press('Enter');

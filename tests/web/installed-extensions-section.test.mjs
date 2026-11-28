@@ -72,9 +72,9 @@ test('user extensions stay visible while built-ins are grouped behind one closed
   assert.ok(html.indexOf('项目扩展') < html.indexOf('<details'));
   assert.match(html, /<details\b[^>]*\bextension-disclosure-card builtin-extension-section\b/);
   assert.doesNotMatch(html, /<details[^>]* open/);
-  assert.match(html, /内置能力/);
+  assert.match(html, /内置扩展/);
   assert.match(html, /class="pi-accordion-badge">2/);
-  assert.match(html, /Pi Studio 自带，可查看和单独启停/);
+  assert.match(html, /Pi Studio 内置提供的能力扩展，可查看提供的工具并单独启停/);
   assert.match(html, /data-extension="core"/);
   assert.match(html, /data-extension="system"/);
   assert.doesNotMatch(html, /列表视图|扩展排列方式/);

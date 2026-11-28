@@ -169,7 +169,7 @@ function openTemporarySummary(kind) {
 }
 
 function openEditor(task, initialStatus = 'todo') {
-  state.editor = {
+  const ed = {
     task: task || null,
     initialStatus,
     activities: [],
@@ -191,33 +191,37 @@ function openEditor(task, initialStatus = 'todo') {
       actualEndAt: localDateTimeInput(task?.actualEndAt),
     },
   };
-  render();
+  state.editor = ed;
+  renderEditorBody();
   const dialog = document.getElementById('tb-editor-dialog');
-  if (dialog && !dialog.open) dialog.showModal();
+  if (!dialog.open) dialog.showModal();
+  document.getElementById(task ? 'tb-editor-heading' : 'tb-ed-title').focus({ preventScroll: true });
   if (task?.id) {
     void invoke('getTaskDetail', { id: task.id })
       .then((detail) => {
-        if (!state.editor || state.editor.task?.id !== task.id) return;
-        state.editor.task = detail.task;
-        state.editor.activities = detail.activities || [];
-        state.editor.loadingActivities = false;
+        if (state.editor !== ed) return;
+        if (detail.task.revision >= ed.task.revision) {
+          ed.task = detail.task;
+          ed.activities = detail.activities || [];
+        }
+        ed.loadingActivities = false;
         renderEditorBody();
       })
       .catch(() => {
-        if (state.editor && state.editor.task?.id === task.id) {
-          state.editor.loadingActivities = false;
-          renderEditorBody();
-        }
+        if (state.editor !== ed) return;
+        ed.loadingActivities = false;
+        renderEditorBody();
       });
   }
 }
 
 function closeEditor() {
   closeActivePopover();
+  editorBodyObserver.disconnect();
   const dialog = document.getElementById('tb-editor-dialog');
   if (dialog?.open) dialog.close();
+  dialog?.replaceChildren();
   state.editor = null;
-  render();
 }
 
 function activityText(item) {
@@ -233,8 +237,9 @@ async function saveEditorForm() {
   if (!ed || ed.busy) return;
   const title = ed.form.title.trim();
   if (!title) {
-    ed.error = '请输入任务标题';
+    ed.error = missingTitle;
     renderEditorBody();
+    document.getElementById('tb-ed-title')?.focus();
     return;
   }
   ed.busy = true;
@@ -258,11 +263,11 @@ async function saveEditorForm() {
     } else {
       await invoke('createTask', { id: crypto.randomUUID(), fields });
     }
-    closeEditor();
+    if (state.editor === ed) closeEditor();
   } catch (err) {
     ed.error = err instanceof Error ? err.message : String(err);
     ed.busy = false;
-    renderEditorBody();
+    if (state.editor === ed) renderEditorBody();
   }
 }
 
@@ -283,7 +288,7 @@ async function addEditorNote() {
     ed.error = err instanceof Error ? err.message : String(err);
   } finally {
     ed.busy = false;
-    renderEditorBody();
+    if (state.editor === ed) renderEditorBody();
   }
 }
 
@@ -301,22 +306,24 @@ async function deleteEditorNote(activityId) {
     ed.error = err instanceof Error ? err.message : String(err);
   } finally {
     ed.busy = false;
-    renderEditorBody();
+    if (state.editor === ed) renderEditorBody();
   }
 }
 
 async function runLifecycleAction(method, task) {
+  const ed = state.editor;
   state.actionError = '';
   try {
     const res = await invoke(method, { id: task.id, revision: task.revision });
-    if (state.editor?.task?.id === task.id && res?.task) {
-      state.editor.task = res.task;
-      state.editor.form.status = res.task.status;
-      state.editor.form.actualStartAt = localDateTimeInput(res.task.actualStartAt);
-      state.editor.form.actualEndAt = localDateTimeInput(res.task.actualEndAt);
+    if (state.editor === ed && ed?.task?.id === task.id && res?.task) {
+      ed.task = res.task;
+      ed.form.status = res.task.status;
+      ed.form.actualStartAt = localDateTimeInput(res.task.actualStartAt);
+      ed.form.actualEndAt = localDateTimeInput(res.task.actualEndAt);
       const detail = await invoke('getTaskDetail', { id: res.task.id });
-      state.editor.task = detail.task;
-      state.editor.activities = detail.activities || [];
+      if (state.editor !== ed) return;
+      ed.task = detail.task;
+      ed.activities = detail.activities || [];
       renderEditorBody();
     }
   } catch (err) {
@@ -529,7 +536,7 @@ function renderArchiveBody() {
         value: state.archiveFrom,
         placeholder: '开始日期',
       })}
-      <span style="color:var(--muted);font-size:12px">至</span>
+      <span style="color:var(--muted);font-size:var(--text-description)">至</span>
       ${renderDateTriggerHtml({
         id: 'tb-archive-to',
         label: '完成结束日期',
@@ -593,126 +600,131 @@ function renderPagination(snap) {
   `;
 }
 
-function renderEditorBody() {
-  closeActivePopover();
-  const dialog = document.getElementById('tb-editor-dialog');
-  if (!dialog) return;
-  const ed = state.editor;
-  if (!ed) {
-    dialog.innerHTML = '';
-    return;
-  }
-  const suggestions = allKnownProjects().filter((name) => (
-    !ed.form.projects.some((existing) => existing.toLowerCase() === name.toLowerCase())
-  ));
+const editorProperties = [
+  { key: 'status', id: 'tb-ed-status', title: '状态', label: '任务状态', options: STATUSES.map(value => ({ value, label: STATUS_LABELS[value] })) },
+  { key: 'priority', id: 'tb-ed-priority', title: '优先级', label: '优先级', options: Object.entries(PRIORITY_LABELS).map(([value, label]) => ({ value, label })) },
+  { key: 'type', id: 'tb-ed-type', title: '类型', label: '任务类型', options: TYPES.map(value => ({ value, label: TYPE_LABELS[value] })) },
+];
+const editorDates = [
+  { key: 'plannedStartAt', id: 'tb-ed-ps', label: '计划开始' },
+  { key: 'plannedEndAt', id: 'tb-ed-pe', label: '计划结束' },
+  { key: 'actualStartAt', id: 'tb-ed-as', label: '实际开始' },
+  { key: 'actualEndAt', id: 'tb-ed-ae', label: '实际结束' },
+];
+const missingTitle = '请输入任务标题';
+// Reserve the actual header, footer, feedback and padding when the sticky sidebar needs to scroll.
+const editorBodyObserver = new ResizeObserver(([entry]) => {
+  const body = entry.target;
+  const chromeHeight = body.parentElement.getBoundingClientRect().height - entry.contentRect.height;
+  body.closest('dialog')?.style.setProperty('--tb-editor-chrome-height', `${chromeHeight}px`);
+});
 
+function renderProjectFields(ed, expanded) {
+  const selected = new Set(ed.form.projects.map(name => name.toLowerCase()));
+  const suggestions = allKnownProjects().filter(name => !selected.has(name.toLowerCase()));
+  return `
+    <section class="tb-projects-box" aria-labelledby="tb-ed-projects-heading">
+      <h3 class="tb-section-title" id="tb-ed-projects-heading">关联项目</h3>
+      ${selected.size ? `<div class="tb-selected-projects">${ed.form.projects.map(name => `
+        <span class="tb-chip"><span>${esc(name)}</span><button type="button" data-remove-project="${esc(name)}" aria-label="移除项目 ${esc(name)}">×</button></span>
+      `).join('')}</div>` : ''}
+      <div class="tb-project-input-row">
+        <input type="text" class="tb-input" id="tb-ed-project-input" aria-label="项目或对接方名称" placeholder="输入项目或对接方名称" maxlength="80" value="${esc(ed.projectDraft)}" />
+        <button type="button" class="tb-subtle-btn" id="tb-ed-project-add">添加</button>
+      </div>
+      ${suggestions.length ? `<details class="tb-project-options" ${expanded ? 'open' : ''}>
+        <summary id="tb-ed-project-options">选择已有项目</summary>
+        <div class="tb-project-suggestions">${suggestions.map(name =>
+          `<button type="button" class="tb-suggest-chip" data-add-project="${esc(name)}">+ ${esc(name)}</button>`
+        ).join('')}</div>
+      </details>` : ''}
+    </section>`;
+}
+
+function renderProgressSection(ed) {
+  if (!ed.task) return '';
+  return `
+    <section class="tb-progress-section" aria-labelledby="tb-ed-progress-heading">
+      <h3 class="tb-section-title" id="tb-ed-progress-heading">进展记录</h3>
+      <div class="tb-note-row">
+        <input type="text" class="tb-input" id="tb-ed-note" aria-label="新增进展" placeholder="记录最新进展…" maxlength="1000" value="${esc(ed.noteDraft)}" />
+        <button type="button" class="tb-subtle-btn" id="tb-ed-note-submit" ${ed.busy ? 'disabled' : ''}>记录</button>
+      </div>
+      ${ed.loadingActivities || !ed.activities.length
+        ? `<p class="tb-activity-empty">${ed.loadingActivities ? '正在读取记录…' : '暂无活动记录'}</p>`
+        : `<ol class="tb-activity-list">${ed.activities.map(item => `
+          <li class="tb-activity-item" data-kind="${esc(item.kind)}">
+            <div class="tb-activity-text">
+              <time datetime="${esc(item.createdAt)}">${esc(shortTimeFmt.format(new Date(item.createdAt)))}</time>
+              <p>${esc(activityText(item))}</p>
+            </div>
+            ${item.kind === 'note' ? `<button type="button" class="tb-icon-btn" data-delete-note="${esc(item.id)}" title="删除进展记录" aria-label="删除进展记录">✕</button>` : ''}
+          </li>`).join('')}</ol>`}
+    </section>`;
+}
+
+function renderEditorBody() {
+  const dialog = document.getElementById('tb-editor-dialog');
+  const ed = state.editor;
+  if (!ed) return;
+  closeActivePopover();
+  const scrolled = dialog.querySelector('.tb-dialog-body')?.scrollTop ?? 0;
+  const metaScroll = dialog.querySelector('.tb-editor-meta')?.scrollTop ?? 0;
+  const detailsScroll = dialog.querySelector('#tb-ed-details')?.scrollTop ?? 0;
+  const projectsExpanded = dialog.querySelector('.tb-project-options')?.open ?? false;
+  const active = dialog.contains(document.activeElement) ? document.activeElement : null;
+  const focusId = active?.id || (active?.closest('.tb-projects-box') ? 'tb-ed-project-input' : '');
+  const caret = active?.selectionStart != null ? [active.selectionStart, active.selectionEnd] : null;
+
+  editorBodyObserver.disconnect();
   dialog.innerHTML = `
     <div class="tb-dialog-shell">
       <header class="tb-dialog-head">
-        <h2>${ed.task ? '编辑任务' : '新增任务'}</h2>
+        <h2 id="tb-editor-heading" tabindex="-1">${ed.task ? '编辑任务' : '新增任务'}</h2>
         <button type="button" class="tb-icon-btn" id="tb-ed-close" aria-label="关闭">✕</button>
       </header>
       <div class="tb-dialog-body">
-        ${ed.error ? `<div class="tb-feedback" role="alert">${esc(ed.error)}</div>` : ''}
         ${ed.task?.archivedAt ? `
           <div class="tb-archived-banner">
             <span>已于 ${esc(shortTimeFmt.format(new Date(ed.task.archivedAt)))} 归档</span>
-            <div style="display:flex;gap:6px">
+            <div class="tb-archive-buttons">
               <button type="button" class="tb-subtle-btn" id="tb-ed-restore" ${ed.busy ? 'disabled' : ''}>恢复到看板</button>
               <button type="button" class="tb-subtle-btn" id="tb-ed-reopen" ${ed.busy ? 'disabled' : ''}>重新打开</button>
             </div>
+          </div>` : ''}
+        <div class="tb-editor-layout">
+          <div class="tb-editor-content">
+            <label class="tb-title-label" for="tb-ed-title">任务标题</label>
+            <textarea class="tb-field-title" id="tb-ed-title" rows="1" required ${ed.error === missingTitle ? 'aria-invalid="true" aria-describedby="tb-ed-error"' : ''} placeholder="输入任务标题" maxlength="160">${esc(ed.form.title)}</textarea>
+            <label class="tb-section-title" for="tb-ed-details">任务描述</label>
+            <textarea class="tb-textarea" id="tb-ed-details" rows="4" placeholder="添加任务详情、背景或对接说明…" maxlength="4000">${esc(ed.form.details)}</textarea>
+            ${renderProjectFields(ed, projectsExpanded)}
           </div>
-        ` : ''}
-        <input type="text" class="tb-field-title" id="tb-ed-title" placeholder="任务标题（必填）" maxlength="160" value="${esc(ed.form.title)}" />
-        <textarea class="tb-textarea" id="tb-ed-details" placeholder="添加任务详情、背景或对接说明…" maxlength="4000">${esc(ed.form.details)}</textarea>
-
-        <div class="tb-prop-grid">
-          <div class="tb-prop">
-            <span>类型</span>
-            ${renderSelectTriggerHtml({
-              id: 'tb-ed-type',
-              label: '任务类型',
-              value: ed.form.type,
-              options: TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] })),
-            })}
+          <div class="tb-editor-meta">
+            <section class="tb-properties" aria-labelledby="tb-ed-props-heading">
+              <h3 class="tb-section-title" id="tb-ed-props-heading">任务属性</h3>
+              ${editorProperties.map(({ key, id, title, label, options }) => `
+                <div class="tb-prop" data-field="${key}" data-value="${esc(ed.form[key])}">
+                  <label for="${id}">${title}</label>
+                  ${renderSelectTriggerHtml({ id, label, value: ed.form[key], options })}
+                </div>`).join('')}
+            </section>
+            <section class="tb-schedule" aria-labelledby="tb-ed-schedule-heading">
+              <h3 class="tb-section-title" id="tb-ed-schedule-heading">时间安排</h3>
+              ${editorDates.map(({ key, id, label }) => `
+                <div class="tb-prop">
+                  <label for="${id}">${label}</label>
+                  ${renderDateTriggerHtml({ id, label, value: ed.form[key], includeTime: true, placeholder: '选择时间' })}
+                </div>`).join('')}
+            </section>
           </div>
-          <div class="tb-prop">
-            <span>状态</span>
-            ${renderSelectTriggerHtml({
-              id: 'tb-ed-status',
-              label: '任务状态',
-              value: ed.form.status,
-              options: STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] })),
-            })}
-          </div>
-          <div class="tb-prop">
-            <span>优先级</span>
-            ${renderSelectTriggerHtml({
-              id: 'tb-ed-priority',
-              label: '优先级',
-              value: ed.form.priority,
-              options: Object.entries(PRIORITY_LABELS).map(([k, v]) => ({ value: k, label: v })),
-            })}
-          </div>
+          ${renderProgressSection(ed)}
         </div>
-
-        <section class="tb-projects-box" aria-label="关联项目">
-          <h3 class="tb-section-title">关联项目（可多选，适用于对接型任务）</h3>
-          ${ed.form.projects.length ? `
-            <div class="tb-selected-projects">
-              ${ed.form.projects.map((p) => `
-                <span class="tb-chip">${esc(p)}<button type="button" data-remove-project="${esc(p)}" aria-label="移除项目 ${esc(p)}">×</button></span>
-              `).join('')}
-            </div>
-          ` : ''}
-          <div class="tb-project-input-row">
-            <input type="text" class="tb-input" id="tb-ed-project-input" placeholder="输入项目或对接方名称，回车添加…" maxlength="80" value="${esc(ed.projectDraft)}" />
-            <button type="button" class="tb-subtle-btn" id="tb-ed-project-add">添加</button>
-          </div>
-          ${suggestions.length ? `
-            <div class="tb-project-suggestions">
-              ${suggestions.slice(0, 12).map((p) => `<button type="button" class="tb-suggest-chip" data-add-project="${esc(p)}">+ ${esc(p)}</button>`).join('')}
-            </div>
-          ` : ''}
-        </section>
-
-        <section aria-label="时间安排">
-          <h3 class="tb-section-title">时间安排</h3>
-          <div class="tb-schedule-grid">
-            <div class="tb-prop"><span>计划开始</span>${renderDateTriggerHtml({ id: 'tb-ed-ps', label: '计划开始', value: ed.form.plannedStartAt, includeTime: true, placeholder: '选择时间' })}</div>
-            <div class="tb-prop"><span>计划结束</span>${renderDateTriggerHtml({ id: 'tb-ed-pe', label: '计划结束', value: ed.form.plannedEndAt, includeTime: true, placeholder: '选择时间' })}</div>
-            <div class="tb-prop"><span>实际开始</span>${renderDateTriggerHtml({ id: 'tb-ed-as', label: '实际开始', value: ed.form.actualStartAt, includeTime: true, placeholder: '选择时间' })}</div>
-            <div class="tb-prop"><span>实际结束</span>${renderDateTriggerHtml({ id: 'tb-ed-ae', label: '实际结束', value: ed.form.actualEndAt, includeTime: true, placeholder: '选择时间' })}</div>
-          </div>
-        </section>
-
-        ${ed.task ? `
-          <section aria-label="进展记录">
-            <h3 class="tb-section-title">进展记录</h3>
-            <div class="tb-note-row">
-              <input type="text" class="tb-input" id="tb-ed-note" placeholder="随手记一句进展，例如：已复现，等待上游确认…" maxlength="1000" value="${esc(ed.noteDraft)}" />
-              <button type="button" class="tb-subtle-btn" id="tb-ed-note-submit" ${ed.busy ? 'disabled' : ''}>记录</button>
-            </div>
-            ${ed.loadingActivities
-              ? '<p style="margin:0;color:var(--muted);font-size:12px">正在读取记录…</p>'
-              : ed.activities.length === 0
-                ? '<p style="margin:0;color:var(--muted);font-size:12px">暂无活动记录</p>'
-                : `<ul class="tb-activity-list">${ed.activities.map((item) => `
-                    <li class="tb-activity-item" data-kind="${esc(item.kind)}">
-                      <div class="tb-activity-text">
-                        <span>${esc(activityText(item))}</span>
-                        <time datetime="${esc(item.createdAt)}">${esc(shortTimeFmt.format(new Date(item.createdAt)))}</time>
-                      </div>
-                      ${item.kind === 'note' ? `<button type="button" class="tb-icon-btn" data-delete-note="${esc(item.id)}" title="删除进展记录" aria-label="删除进展记录">✕</button>` : ''}
-                    </li>
-                  `).join('')}</ul>`}
-          </section>
-        ` : ''}
       </div>
+      ${ed.error ? `<div class="tb-feedback tb-editor-error" id="tb-ed-error" role="alert">${esc(ed.error)}</div>` : ''}
       <footer class="tb-dialog-foot">
         ${ed.task && !ed.task.archivedAt && ed.task.status === 'done'
-          ? `<button type="button" class="tb-subtle-btn" id="tb-ed-archive" ${ed.busy ? 'disabled' : ''}>归档任务</button>`
-          : '<span></span>'}
+          ? `<button type="button" class="tb-subtle-btn" id="tb-ed-archive" ${ed.busy ? 'disabled' : ''}>归档任务</button>` : ''}
         <div class="tb-dialog-foot-right">
           <button type="button" class="tb-subtle-btn" id="tb-ed-cancel">取消</button>
           <button type="button" class="tb-primary-btn" id="tb-ed-save" ${ed.busy ? 'disabled' : ''}>${ed.task ? '保存更改' : '新增任务'}</button>
@@ -720,6 +732,19 @@ function renderEditorBody() {
       </footer>
     </div>
   `;
+
+  const body = dialog.querySelector('.tb-dialog-body');
+  editorBodyObserver.observe(body);
+  if (dialog.open) {
+    const focusTarget = focusId && document.getElementById(focusId);
+    if (focusTarget) {
+      focusTarget.focus({ preventScroll: true });
+      if (caret && focusTarget.id === active.id) focusTarget.setSelectionRange(...caret);
+    }
+    body.scrollTop = scrolled;
+    dialog.querySelector('.tb-editor-meta').scrollTop = metaScroll;
+    dialog.querySelector('#tb-ed-details').scrollTop = detailsScroll;
+  }
 
   const addProjectValue = (raw) => {
     const clean = String(raw || '').trim();
@@ -734,59 +759,29 @@ function renderEditorBody() {
   dialog.querySelector('#tb-ed-close')?.addEventListener('click', closeEditor);
   dialog.querySelector('#tb-ed-cancel')?.addEventListener('click', closeEditor);
   dialog.querySelector('#tb-ed-save')?.addEventListener('click', () => void saveEditorForm());
-  dialog.querySelector('#tb-ed-title')?.addEventListener('input', (e) => { ed.form.title = e.target.value; });
+  dialog.querySelector('#tb-ed-title').addEventListener('input', (e) => {
+    ed.form.title = e.target.value;
+    if (ed.error === missingTitle && ed.form.title.trim()) {
+      ed.error = '';
+      e.target.removeAttribute('aria-invalid');
+      e.target.removeAttribute('aria-describedby');
+      dialog.querySelector('#tb-ed-error')?.remove();
+    }
+  });
   dialog.querySelector('#tb-ed-details')?.addEventListener('input', (e) => { ed.form.details = e.target.value; });
 
-  const edTypeOptions = TYPES.map((t) => ({ value: t, label: TYPE_LABELS[t] }));
-  const edStatusOptions = STATUSES.map((s) => ({ value: s, label: STATUS_LABELS[s] }));
-  const edPriorityOptions = Object.entries(PRIORITY_LABELS).map(([k, v]) => ({ value: k, label: v }));
-  mountSelect(dialog.querySelector('#tb-ed-type'), {
-    label: '任务类型',
-    value: ed.form.type,
-    options: edTypeOptions,
-    onChange: (val) => { ed.form.type = val; renderEditorBody(); },
-  });
-  mountSelect(dialog.querySelector('#tb-ed-status'), {
-    label: '任务状态',
-    value: ed.form.status,
-    options: edStatusOptions,
-    onChange: (val) => { ed.form.status = val; renderEditorBody(); },
-  });
-  mountSelect(dialog.querySelector('#tb-ed-priority'), {
-    label: '优先级',
-    value: ed.form.priority,
-    options: edPriorityOptions,
-    onChange: (val) => { ed.form.priority = val; renderEditorBody(); },
-  });
-
-  mountDatePicker(dialog.querySelector('#tb-ed-ps'), {
-    label: '计划开始',
-    value: ed.form.plannedStartAt,
-    includeTime: true,
-    placeholder: '选择时间',
-    onChange: (val) => { ed.form.plannedStartAt = val; },
-  });
-  mountDatePicker(dialog.querySelector('#tb-ed-pe'), {
-    label: '计划结束',
-    value: ed.form.plannedEndAt,
-    includeTime: true,
-    placeholder: '选择时间',
-    onChange: (val) => { ed.form.plannedEndAt = val; },
-  });
-  mountDatePicker(dialog.querySelector('#tb-ed-as'), {
-    label: '实际开始',
-    value: ed.form.actualStartAt,
-    includeTime: true,
-    placeholder: '选择时间',
-    onChange: (val) => { ed.form.actualStartAt = val; },
-  });
-  mountDatePicker(dialog.querySelector('#tb-ed-ae'), {
-    label: '实际结束',
-    value: ed.form.actualEndAt,
-    includeTime: true,
-    placeholder: '选择时间',
-    onChange: (val) => { ed.form.actualEndAt = val; },
-  });
+  for (const { key, id, label, options } of editorProperties) {
+    mountSelect(document.getElementById(id), {
+      label, value: ed.form[key], options,
+      onChange: value => { ed.form[key] = value; renderEditorBody(); },
+    });
+  }
+  for (const { key, id, label } of editorDates) {
+    mountDatePicker(document.getElementById(id), {
+      label, value: ed.form[key], includeTime: true, placeholder: '选择时间',
+      onChange: value => { ed.form[key] = value; },
+    });
+  }
 
   const projInput = dialog.querySelector('#tb-ed-project-input');
   projInput?.addEventListener('input', (e) => { ed.projectDraft = e.target.value; });
@@ -827,7 +822,7 @@ function renderEditorBody() {
 }
 
 function render() {
-  closeActivePopover();
+  if (!state.editor) closeActivePopover();
   const root = document.getElementById('app');
   if (!root) return;
   const counts = state.snapshot?.counts ?? { active: 0, doneActive: 0, archived: 0 };
@@ -857,20 +852,7 @@ function render() {
     ${state.error ? `<div class="tb-feedback" role="status"><span>无法读取任务看板：${esc(state.error)}</span><button type="button" class="tb-subtle-btn" data-action="retry">重试</button></div>` : ''}
     ${state.actionError ? `<div class="tb-feedback" role="alert"><span>${esc(state.actionError)}</span><button type="button" class="tb-icon-btn" data-action="clear-error">✕</button></div>` : ''}
     ${state.view === 'board' ? renderBoardBody() : renderArchiveBody()}
-    <dialog id="tb-editor-dialog" class="tb-dialog"></dialog>
   `;
-
-  const dialog = document.getElementById('tb-editor-dialog');
-  dialog?.addEventListener('cancel', (e) => {
-    e.preventDefault();
-    if (closeActivePopover(true)) return;
-    closeEditor();
-  });
-
-  if (state.editor) {
-    renderEditorBody();
-    if (dialog && !dialog.open) dialog.showModal();
-  }
 
   if (activeSearchEl) {
     const input = document.getElementById('tb-archive-search');
@@ -1105,10 +1087,13 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    if (closeActivePopover(true)) return;
+    if (closeActivePopover(true)) { e.preventDefault(); return; }
     if (state.menu) closeMenu();
-    else if (state.editor) closeEditor();
   }
+});
+document.getElementById('tb-editor-dialog').addEventListener('cancel', (event) => {
+  event.preventDefault();
+  if (!closeActivePopover(true)) closeEditor();
 });
 
 let lastAppliedTokens = '';
@@ -1116,18 +1101,19 @@ let lastWorkspacesSignature = '';
 
 window.addEventListener('message', (event) => {
   const msg = event.data;
-  if (!msg || typeof msg !== 'object' || msg.protocol !== PROTOCOL) return;
+  if (event.source !== window.parent || msg?.protocol !== PROTOCOL) return;
   if (msg.type === 'host:context') {
     const nextTheme = msg.theme === 'dark' ? 'dark' : 'light';
     if (document.documentElement.dataset.theme !== nextTheme) {
       document.documentElement.dataset.theme = nextTheme;
+      document.documentElement.style.colorScheme = nextTheme;
     }
     if (msg.tokens && typeof msg.tokens === 'object') {
       const nextTokensKey = JSON.stringify(msg.tokens);
       if (nextTokensKey !== lastAppliedTokens) {
         lastAppliedTokens = nextTokensKey;
         for (const [k, v] of Object.entries(msg.tokens)) {
-          document.documentElement.style.setProperty(k, String(v));
+          if (k.startsWith('--') && typeof v === 'string') document.documentElement.style.setProperty(k, v);
         }
       }
     }

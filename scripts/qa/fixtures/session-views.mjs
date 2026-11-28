@@ -33,7 +33,7 @@ export function installSessionViewsFixture() {
     goal.updatedAt++;
     for (const listener of todoListeners) listener({ conversationId: 'perf-0', type: 'todo.changed', payload: {} });
   };
-  api.conversationTodo = async id => id === 'perf-0' && goal.status !== 'completed' && !new URLSearchParams(location.search).has('empty')
+  api.conversationTodo = async id => id === 'perf-0' && goal.status !== 'completed' && !new URLSearchParams(location.search).has('empty') && !new URLSearchParams(location.search).has('inspection-events')
     ? { planId: 1, goalId: 'goal-qa', scope: 'goal', tasks } : undefined;
   qa.failHistory = false;
   api.conversationTodoHistory = async ({ id, cursor, limit }) => {
@@ -89,11 +89,6 @@ export function installSessionViewsFixture() {
     return { items, nextCursor: end || null };
   };
   api.files = async (_cwd, path) => ({ path, entries: [] });
-  qa.terminals = [];
-  api.terminalCreate = async ({ id, cwd }) => {
-    qa.terminals.push(id);
-    return { id, cwd, shell: 'qa', status: 'running', sequence: 0 };
-  };
   // Exercise the copy action without modifying the system clipboard.
   Object.defineProperty(navigator.clipboard, 'writeText', { value: async value => { qa.copied = value; } });
   const child = { runId: 'qa-run', agent: 'subagent', source: 'background', context: 'fresh', model: 'qa/reviewer',
@@ -109,7 +104,21 @@ export function installSessionViewsFixture() {
       name: '已归档检查 ' + (index + 1), status: 'completed', task: '检查附加示例。',
     })) : []),
   ].map((data, index) => ({ ...child, key: `child-${index}`, avatarId: avatarIds[index % avatarIds.length], index, ...data }));
+  const liveChildren = new Map();
+  qa.startChild = (conversationId, turn, callId) => {
+    const existing = liveChildren.get(conversationId) ?? [];
+    liveChildren.set(conversationId, [...existing, { ...child, key: callId, runId: callId, index: existing.length,
+      name: '结果复核', task: '复核结果', status: 'running', avatarId: avatarIds[0], startedAt: Date.now() }]);
+    const emit = (type, payload) => {
+      for (const listener of todoListeners) listener({ conversationId, type, payload });
+    };
+    emit('run.started', { inputs: [turn], running: true });
+    emit('assistant.completed', { message: { role: 'assistant', timestamp: Date.now(),
+      content: [{ type: 'toolCall', name: 'subagent', id: callId, arguments: { action: 'spawn', task: '复核结果' } }] } });
+    emit('tool.execution.started', { name: 'subagent', callId, status: 'running' });
+  };
   api.sessionSubagents = async id => {
+    if (new URLSearchParams(location.search).has('inspection-events')) return structuredClone(liveChildren.get(id) ?? []);
     if (qa.failList) throw new Error('暂时无法读取任务');
     return id === 'perf-0' ? structuredClone(children) : [];
   };
@@ -155,30 +164,8 @@ export function installSessionViewsFixture() {
       { role: 'user', index: 1, content: [{ type: 'text', text: '核对模块文件。' }] },
     ], tools: [{ name: 'read', description: '读取指定文件。', parameters: { type: 'object' } }] };
   };
-  const items = [
-    ['builtin:monitor', '运行监测', 'builtin', 'usage', '会话用量', '查看本轮的请求数和已记录用量。', '模型请求', '18 次'],
-    ['builtin:monitor', '运行监测', 'builtin', 'latency', '请求耗时', '查看最近一次模型响应的计时。', '首个响应', '1.42 秒'],
-    ['project:workspace', '工作区工具', 'project', 'changes', '变更摘要', '检查当前工作树中有改动的文件。', '变更文件', '3 个'],
-  ].map(([extensionId, extensionName, scope, contributionId, title, description, label, value], sourceOrder) => ({
-    id: `${extensionId}/${contributionId}`, extensionId, extensionName, scope, contributionId, title, description, sourceOrder,
-    slot: 'panel.side', slots: ['panel.side'], size: 'regular', priority: 0, content: [{ kind: 'keyValue', items: [{ label, value }] }],
-  }));
-  api.extensionsUi = async () => ({ items, errors: [], syncedAt: now, apiVersion: 1 });
-  qa.order = { version: 1, globalOrder: [] };
-  api.conversationExtensionUiPreferences = async () => structuredClone(qa.order);
-  api.saveConversationExtensionUiPreferences = async ({ globalOrder }) => {
-    if (qa.failOrderSave) throw new Error('暂时无法保存扩展顺序');
-    qa.order.globalOrder = globalOrder;
-    const saved = structuredClone(qa.order);
-    if (qa.holdNextWrite) {
-      qa.holdNextWrite = false;
-      return new Promise(resolve => { qa.releaseWrite = () => resolve(saved); });
-    }
-    return saved;
-  };
   if (new URLSearchParams(location.search).has('empty')) {
     api.sessionSubagents = async () => [];
-    api.extensionsUi = async () => ({ items: [], errors: [], syncedAt: now, apiVersion: 1 });
     for (const name of ['conversationPage', 'subscribeConversation', 'conversationSnapshot']) {
       const original = api[name];
       api[name] = async input => ({ ...await original(input), requestTraces: [], messages: [], messageCount: 0 });

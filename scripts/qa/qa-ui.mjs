@@ -1,27 +1,31 @@
 /**
  * Pi Studio 渲染进程的视觉 / 布局 QA 脚本（本地手动运行）。
  *
- * 它用 Playwright 打开 Vite 开发服务器，在页面加载前注入一整套 PiAPI mock，
+ * 它用 Playwright 打开构建后的界面，在页面加载前注入一整套 PiAPI mock，
  * 然后走一遍接近真实使用的流程：新对话空态 → 侧边栏搜索/折叠 → 模型与推理等级 →
  * 会话与文件面板 → 设置页各分页 → 小窗口紧凑布局 → 长模型列表与错误态 →
  * 首条消息。关键步骤截图到 .qa/screenshots/ui-refinement/，同时检查关键容器没有
  * 横向溢出，最后断言浏览器没有运行时错误。
  *
  * 运行方式：
- *   pnpm run web            # 终端 A：启动 http://127.0.0.1:5180
- *   node scripts/qa/qa-ui.mjs  # 终端 B：执行本脚本
+ *   pnpm run build          # 构建应用界面
+ *   node scripts/qa/qa-ui.mjs
+ *   node scripts/qa/qa-ui.mjs --session-workspace  # 仅检查会话工作区
  *
  * 可用环境变量：
- *   PREVIEW_URL   覆盖页面地址（默认 http://127.0.0.1:5180）
+ *   PREVIEW_URL   改用已有的前端服务
  *   CHROME_BIN    覆盖 Chrome 可执行文件路径（默认 macOS 的 Google Chrome）
  *
  * 依赖：playwright-core（直接依赖）、本机 Chrome、node:assert、node:fs/promises。
  * 注意：所有 Pi API 都由 addInitScript 在页面加载前替换为本地 fixture，
  * 不会读取或写入用户的 Pi 配置；本脚本不参与 `pnpm test`。
  */
+import { openSessionInspection } from './fixtures/open-session-inspection.mjs';
 import { chromium } from 'playwright-core';
 import { mkdir, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
+import { serveProductionRenderer } from './fixtures/production-renderer-server.mjs';
 
 // ---------------------------------------------------------------------------
 // 1. 浏览器初始化与全局错误收集
@@ -33,6 +37,7 @@ const browser = await chromium.launch({
   executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
+const server = process.env.PREVIEW_URL ? undefined : await serveProductionRenderer(fileURLToPath(new URL('../..', import.meta.url)));
 const page = await browser.newPage({ viewport: { width: 1440, height: 920 }, deviceScaleFactor: 2 });
 page.setDefaultTimeout(10000);
 // 收集页面未捕获异常，最后断言为空；避免“截图看着正常、控制台其实报错”。
@@ -44,6 +49,7 @@ async function checkModalBackdrop(dialog) {
   assert.equal(await dialog.evaluate(node => getComputedStyle(node, '::backdrop').backdropFilter), 'blur(3px)');
 }
 
+page.on('console', message => { if (message.type() === 'error') console.error(message.text()); });
 page.on('pageerror', (error) => {
   const message = error.stack || error.message;
   if (IGNORED_PAGE_ERRORS.some((pattern) => pattern.test(message))) return;
@@ -336,7 +342,7 @@ await page.addInitScript(() => {
       contributionId: 'status',
       title: '运行状态',
       description: '来自 Workspace Tools 的实时工作区摘要。',
-      slot: 'panel.side',
+      slot: 'tool.view',
       size: 'regular',
       priority: 10,
       sourceOrder: 0,
@@ -380,6 +386,7 @@ await page.addInitScript(() => {
       scope: 'user',
       contributionId: 'status-summary',
       title: '工作区摘要',
+      details: 'status',
       description: '运行状态的单行摘要。',
       slot: 'composer.below',
       size: 'compact',
@@ -416,7 +423,7 @@ await page.addInitScript(() => {
       contributionId: 'focus',
       title: '审查焦点',
       description: '把本轮最需要关注的改动集中到一个详情卡片。',
-      slot: 'panel.side',
+      slot: 'tool.view',
       size: 'regular',
       priority: 5,
       sourceOrder: 3,
@@ -452,7 +459,7 @@ await page.addInitScript(() => {
       contributionId: 'status-panel',
       title: '工作区运行详情',
       description: '声明式扩展面板，不执行 renderer 代码。',
-      slot: 'panel.side',
+      slot: 'tool.view',
       size: 'regular',
       priority: 10,
       sourceOrder: 5,
@@ -1131,7 +1138,11 @@ await page.addInitScript(() => {
   window.__qaPreparedSkills = preparedSkills;
   const api = {
     // 初始状态：工作区列表、当前目录与当前模型。
-    state: async () => ({ workspaces, cwd, model }),
+    state: async () => ({ workspaces, cwd, model, expandedProjects: JSON.parse(localStorage.getItem('qa:expanded-projects') ?? '[]') }),
+    saveExpandedProjects: async keys => localStorage.setItem('qa:expanded-projects', JSON.stringify(keys)),
+    readLayout: async (owner, namespace) => JSON.parse(localStorage.getItem(JSON.stringify(['qa:layout', owner, namespace])) ?? 'null'),
+    writeLayout: async (owner, namespace, value) => localStorage.setItem(JSON.stringify(['qa:layout', owner, namespace]), JSON.stringify(value)),
+    openToolWindow: async request => { window.__qaToolWindow = request ?? {}; },
     conversationList: async () => workspaces,
     createConversation: async (input = {}) => {
       draftSequence += 1;
@@ -1690,7 +1701,7 @@ await page.addInitScript(() => {
       return cloneSnapshot();
     },
     chooseWorkspace: async () => cwd,
-    // 工作区文件树保持原有右侧面板用例；技能目录返回统一预览支持的格式。
+    // 文件树和技能目录各自提供可预览的示例文件。
     files: async (root, path) => ({
       path,
       entries: root.includes('/skills/')
@@ -1957,34 +1968,22 @@ async function openSettingsSection(name) {
 // ---------------------------------------------------------------------------
 // 4. 冷启动与新对话空态
 // ---------------------------------------------------------------------------
-try {
-  await page.goto(process.env.PREVIEW_URL || 'http://127.0.0.1:5180');
+async function verifyUi() {
+  await page.goto(process.env.PREVIEW_URL || server.origin);
   await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).waitFor();
   assert.equal(await page.getByText('今天，想做点什么？', { exact: true }).count(), 0);
   // 全新启动时不应出现会话相关的容器，空态应保持干净。
-  assert.equal(await page.locator('.workspace-chip, .chat-tabs:not(.is-placeholder), .chat-scroll').count(), 0);
-  // 没有更新时不占品牌行空间；发现更新后，入口与上方侧栏开关使用相同尺寸和右边线。
-  assert.equal(await page.locator('.brand-update').count(), 0);
+  assert.equal(await page.locator('.document-tab, .chat-scroll').count(), 0);
+  // 更新入口按当前版本状态显示在顶栏。
+  assert.equal(await page.locator('.update-entry').count(), 0);
   await page.evaluate(() => window.__setUpdateState('available'));
-  const updateButton = page.getByRole('button', { name: /可以更新/ });
+  const updateButton = page.getByRole('button', { name: /有新版本/ });
   await updateButton.waitFor();
-  const [toggleBounds, updateBounds] = await Promise.all([
-    page.getByRole('button', { name: '收起侧边栏' }).boundingBox(),
-    updateButton.boundingBox(),
-  ]);
-  assert.ok(toggleBounds && updateBounds);
-  assert.equal(updateBounds.width, toggleBounds.width);
-  assert.equal(updateBounds.height, toggleBounds.height);
-  assert.ok(Math.abs((updateBounds.x + updateBounds.width) - (toggleBounds.x + toggleBounds.width)) <= 1);
-  const updateAnimation = await updateButton.evaluate((element) => ({
-    glyph: getComputedStyle(element.querySelector('svg')).animationName,
-    ring: getComputedStyle(element, '::before').animationName,
-  }));
-  assert.match(updateAnimation.glyph, /updateGlyph/);
-  assert.match(updateAnimation.ring, /updateAttention/);
   await capture('01b-update-available');
   await page.evaluate(() => window.__setUpdateState('idle'));
   await updateButton.waitFor({ state: 'detached' });
+  const updateDialog = page.getByRole('dialog', { name: '应用更新' });
+  if (await updateDialog.isVisible()) await updateDialog.getByRole('button', { name: '关闭更新窗口' }).click();
   await capture('01-welcome');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await capture('01-welcome-dark');
@@ -2084,8 +2083,8 @@ try {
   // 侧边栏搜索：空结果时展示占位文案；再次点击搜索按钮收起搜索框，
   // 然后折叠/展开侧边栏，确认折叠态布局正常。
   await page.getByRole('button', { name: '搜索工作区', exact: true }).click();
-  await page.getByRole('textbox', { name: '搜索工作区或会话' }).fill('no-match');
-  await page.getByText('没有匹配的结果').waitFor();
+  await page.getByRole('searchbox', { name: '搜索工作区或会话' }).fill('no-match');
+  await page.getByText('没有匹配的会话').waitFor();
   const sidebarEmptyAlignment = await page.evaluate(() => ({
     heading: document.querySelector('.workspace-head > span')?.getBoundingClientRect().left,
     empty: document.querySelector('.sidebar-empty > span')?.getBoundingClientRect().left,
@@ -2192,43 +2191,20 @@ try {
   await capture('04-conversation-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
 
-  const toolButton = name => page.locator('.chat-header').getByRole('button', { name, exact: true });
-  const extensions = page.getByRole('dialog', { name: '扩展', exact: true });
-  await toolButton('扩展').click();
-  assert.equal(await extensions.getByRole('article').count(), 2);
-  await extensions.getByRole('button', { name: '管理扩展', exact: true }).click();
-  const extensionOrder = page.locator('.extension-display-order');
-  await page.getByRole('button', { name: '对话显示顺序', exact: true }).click();
-  const workspaceOrderRow = extensionOrder.locator('li').filter({ hasText: 'Workspace Tools' });
-  const reviewOrderRow = extensionOrder.locator('li').filter({ hasText: 'Review Tools' });
-  const reviewDirection = await reviewOrderRow.getByRole('button', { name: /^上移/ }).isEnabled() ? /^上移/ : /^下移/;
-  await reviewOrderRow.getByRole('button', { name: reviewDirection }).click();
-  await page.waitForFunction(() => window.__conversationExtensionUiQa.globalOrder.length > 0);
-  await workspaceOrderRow.waitFor();
-  await page.getByRole('button', { name: '关闭对话显示顺序', exact: true }).click();
-  await page.getByRole('button', { name: '返回对话', exact: true }).click();
-  await toolButton('扩展').click();
-  await extensions.getByRole('button', { name: '查看 Workspace Tools 详情', exact: true }).click();
-  const extensionPanel = page.getByRole('tabpanel', { name: 'Workspace Tools', exact: true });
-  assert.match(await extensionPanel.innerText(), /main · 2 files changed/);
-  assert.match(await extensionPanel.innerText(), /42%/);
-  await extensionPanel.getByRole('button', { name: '查看详情', exact: true }).click();
-  await extensionPanel.getByText('工作区运行详情', { exact: true }).waitFor();
-  assert.equal(await page.getByRole('tab', { name: 'Workspace Tools', exact: true }).count(), 1);
-  assert.ok(await page.locator('.composer-editor').isVisible());
-  await capture('04b-extension-workbench');
-
+  await below.getByRole('button', { name: '打开 工作区摘要 详情', exact: true }).click();
+  await page.waitForFunction(() => window.__qaToolWindow?.panelId === 'user:workspace-tools/status');
+  const inspectorTabs = page.getByRole('tablist', { name: '会话检视视图' });
   async function openAgents() {
-    await toolButton('进展').click();
-    await page.getByRole('button', { name: '查看全部子智能体', exact: true }).click();
+    if (!await inspectorTabs.isVisible()) await openSessionInspection(page);
+    await inspectorTabs.getByRole('tab', { name: /^子智能体/ }).click();
   }
   await openAgents();
   await page.getByRole('heading', { name: '子智能体', exact: true }).waitFor();
   assert.equal(await page.locator('.agent-overview-head > p').count(), 0);
   assert.equal(await page.getByRole('button', { name: '刷新子智能体', exact: true }).count(), 1);
   assert.equal(await page.locator('.agent-list-row').count(), 2);
-  assert.match(await page.locator('.agent-fleet-strip').innerText(), /运行\s*1/);
-  assert.match(await page.locator('.agent-fleet-strip').innerText(), /完成\s*1/);
+  assert.match(await page.locator('.agent-fleet-strip').innerText(), /运行中\s*1/);
+  assert.match(await page.locator('.agent-fleet-strip').innerText(), /已结束\s*1/);
   const agentOverviewWidths = await page.locator('.agent-overview').evaluate((overview) => (
     [
       overview.querySelector('.agent-overview-head'),
@@ -2240,9 +2216,9 @@ try {
   assert.ok(agentOverviewWidths.every(width => width <= agentOverviewWidths[0] + 1));
   await capture('04c-subagent-overview');
 
-  // Empty views use the conversation tabs for navigation, with a compact toolbar.
+  // Each session restores its own inspector view.
   await page.locator('.session-row').filter({ hasText: '优化文件预览和设置页面的排版' }).click();
-  await page.getByRole('heading', { name: '优化文件预览和设置页面的排版', exact: true }).waitFor();
+  await page.getByRole('tab', { name: '优化文件预览和设置页面的排版', exact: true, selected: true }).waitFor();
   await openAgents();
   const emptyAgentOverview = page.locator('.agent-overview');
   await emptyAgentOverview.locator('.agent-overview-empty.is-initial').waitFor();
@@ -2255,7 +2231,8 @@ try {
       titleCenter: title ? title.top + title.height / 2 : Number.NaN,
       refreshCenter: refresh ? refresh.top + refresh.height / 2 : Number.NaN,
       headerHeight: heading?.getBoundingClientRect().height,
-      titleSize: parseFloat(getComputedStyle(heading.querySelector('h2')).fontSize),
+      titleSize: getComputedStyle(heading.querySelector('h2')).fontSize,
+      headingSize: getComputedStyle(heading).getPropertyValue('--text-heading').trim(),
       emptyWidth: empty?.width || Number.POSITIVE_INFINITY,
       fleetStrip: Boolean(overview.querySelector('.agent-fleet-strip')),
       tools: Boolean(overview.querySelector('.agent-list-tools')),
@@ -2263,7 +2240,7 @@ try {
   });
   assert.ok(Math.abs(emptyAgentLayout.titleCenter - emptyAgentLayout.refreshCenter) <= 1);
   assert.ok(emptyAgentLayout.headerHeight <= 32);
-  assert.ok(emptyAgentLayout.titleSize <= 14);
+  assert.equal(emptyAgentLayout.titleSize, emptyAgentLayout.headingSize);
   assert.equal(await emptyAgentOverview.getByRole('button', { name: '返回对话', exact: true }).count(), 0);
   assert.ok(emptyAgentLayout.emptyWidth <= 520);
   assert.equal(emptyAgentLayout.fleetStrip, false);
@@ -2278,14 +2255,14 @@ try {
   }
   await page.setViewportSize({ width: 1440, height: 920 });
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  await page.getByRole('button', { name: '收起右侧面板', exact: true }).click();
-  await page.locator('.messages').waitFor();
+  if (await inspectorTabs.isVisible()) await page.getByRole('button', { name: '关闭会话详情', exact: true }).click();
+  await page.locator('.chat-scroll .messages').waitFor();
   await page.locator('.session-row').filter({ hasText: '统一工作台的组件与视觉规范' }).click();
-  await page.getByRole('heading', { name: '统一工作台的组件与视觉规范', exact: true }).waitFor();
+  await page.getByRole('tab', { name: '统一工作台的组件与视觉规范', exact: true, selected: true }).waitFor();
   await openAgents();
   await page.locator('.agent-list-row').first().waitFor();
 
-  await page.locator('.agent-list-row.is-running .agent-list-main').click();
+  await page.getByRole('button', { name: '查看 Durable Runtime 审查 的记录' }).click();
   await page.locator('.agent-context-view').waitFor();
   assert.match(await page.locator('.agent-context-view').innerText(), /Durable Runtime 审查/);
   await page.getByText('审查 Durable 请求边界和模型热更新路径。', { exact: true }).waitFor();
@@ -2301,13 +2278,13 @@ try {
   await capture('04d-subagent-transcript');
   await page.getByRole('button', { name: '返回主智能体', exact: true }).click();
   await page.locator('.chat-scroll').waitFor();
-  await page.locator('.messages').waitFor();
+  await page.locator('.chat-scroll .messages').waitFor();
 
-  await page.getByRole('button', { name: '收起右侧面板', exact: true }).click();
-  await page.locator('.messages').waitFor();
+  if (await inspectorTabs.isVisible()) await page.getByRole('button', { name: '关闭会话详情', exact: true }).click();
+  await page.locator('.chat-scroll .messages').waitFor();
 
   // 会话动作面板搜索框聚焦样式。
-  await page.locator('.composer-more-button').click();
+  await page.keyboard.press('ControlOrMeta+k');
   const actionPalette = page.getByRole('dialog', { name: '会话动作', exact: true });
   await actionPalette.waitFor();
   const paletteSearch = actionPalette.locator('.conversation-action-search');
@@ -2320,9 +2297,11 @@ try {
     const input = search.querySelector('input');
     const probe = document.createElement('span');
     probe.style.color = 'var(--focus-color)';
+    probe.style.border = 'var(--field-border-width) solid';
     document.body.append(probe);
     const styles = {
       focusColor: getComputedStyle(probe).color,
+      expectedWidth: getComputedStyle(probe).borderWidth,
       wrapperBorderColor: getComputedStyle(search).borderColor,
       wrapperBorderWidth: getComputedStyle(search).borderWidth,
       wrapperBoxShadow: getComputedStyle(search).boxShadow,
@@ -2333,8 +2312,7 @@ try {
     probe.remove();
     return styles;
   });
-  const fieldBorderWidth = await page.evaluate(() => Math.floor(1.5 * devicePixelRatio) / devicePixelRatio + 'px');
-  assert.equal(paletteSearchFocus.wrapperBorderWidth, fieldBorderWidth);
+  assert.equal(paletteSearchFocus.wrapperBorderWidth, paletteSearchFocus.expectedWidth);
   assert.equal(paletteSearchFocus.wrapperBorderColor, paletteSearchFocus.focusColor);
   assert.equal(paletteSearchFocus.wrapperBoxShadow, 'none');
   assert.equal(paletteSearchFocus.inputBorderWidth, '0px');
@@ -2351,84 +2329,51 @@ try {
 
   // 打开文件查看器，读取根目录列表，再点开 package.json 预览代码。
   await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
-  await page.waitForFunction(() => document.querySelector('.file-panel')?.getBoundingClientRect().width >= 600);
-  // 没有工具标签时直接显示轻量入口；初始页本身不占一个标签。
-  assert.equal(await page.getByRole('tablist', { name: '右侧面板标签' }).count(), 0);
-  assert.deepEqual(
-    await page.locator('.panel-start-tools .panel-tool-label').allTextContents(),
-    ['工作区文件', '新建终端', '运行服务', '浏览器', '临时聊天'],
-  );
-  await capture('05-panel-start');
-  await page.getByRole('button', { name: /^工作区文件/ }).click();
-  await page.getByRole('button', { name: '打开工具', exact: true }).click();
-  const panelToolMenu = page.getByRole('menu');
-  assert.deepEqual(await panelToolMenu.getByRole('menuitem').allTextContents(), ['工作区文件', '新建终端', '运行服务', '浏览器', '临时聊天']);
-  await page.keyboard.press('Escape');
-  await panelToolMenu.waitFor({ state: 'detached' });
+  const modes = page.getByRole('navigation', { name: '工作区视图' });
+  await modes.getByRole('button', { name: '文件', exact: true, pressed: true }).waitFor();
+  await modes.getByRole('button', { name: 'Git', exact: true }).waitFor();
   await capture('05-files');
   // 工作区文件也走共享预览：Markdown 默认渲染，可切到源码；JSON 直接高亮。
-  await page.getByRole('button', { name: 'README.md', exact: false }).click();
-  await page.locator('.panel-file-preview .file-preview-markdown h1').waitFor();
-  assert.equal(await page.locator('.panel-file-preview .file-preview-format').innerText(), 'MD');
+  await page.locator('.file-tree').getByRole('treeitem', { name: 'README.md', exact: true }).dblclick();
+  await page.locator('.session-document .file-preview-markdown h1').waitFor();
+  assert.equal(await page.locator('.session-document .file-preview-format').innerText(), 'MD');
   await capture('06-file-preview-markdown');
   await page.getByRole('button', { name: '查看文件源码', exact: true }).click();
-  await page.locator('.panel-file-preview .file-preview-code').getByText(/^# /).first().waitFor();
+  await page.locator('.session-document .view-line').filter({hasText:/^#\s/}).first().waitFor();
   await capture('06-file-preview-markdown-source');
   await page.getByRole('button', { name: '预览渲染结果', exact: true }).click();
-  await page.locator('.panel-file-preview .file-preview-markdown h1').waitFor();
-  // 打开文件会切到文件标签，回文件树再点下一个文件。
-  await page.locator('.panel-tab').filter({ hasText: '文件' }).first().click();
+  await page.locator('.session-document .file-preview-markdown h1').waitFor();
+  // 文件树与中央文档可同时使用。
   // HTML 以只读沙箱渲染：没有 allow-scripts，脚本不会执行。
-  await page.getByRole('button', { name: 'guide.html', exact: false }).click();
-  const htmlFrame = page.locator('.panel-file-preview iframe.file-preview-frame');
+  await page.locator('.file-tree').getByRole('treeitem', { name: 'guide.html', exact: true }).click();
+  const htmlFrame = page.locator('.session-document iframe.file-preview-frame');
   await htmlFrame.waitFor();
   assert.equal(await htmlFrame.getAttribute('sandbox'), '');
   assert.match(await htmlFrame.getAttribute('srcdoc'), /静态说明/);
   assert.equal(await page.evaluate(() => window.bad === undefined), true, 'HTML 预览不执行脚本');
-  // 立刻关掉 HTML 标签，保持后面"窄边栏标签"用例的标签数量不变。
   await page.getByRole('button', { name: '关闭 guide.html', exact: true }).click();
-  await page.locator('.panel-tab').filter({ hasText: '文件' }).first().click();
-  await page.getByRole('button', { name: 'package.json', exact: false }).click();
-  await page.locator('.panel-file-preview .file-preview-code').first().waitFor();
-  assert.equal(await page.locator('.panel-file-preview .file-preview-format').innerText(), 'JSON');
+  await page.locator('.file-tree').getByRole('treeitem', { name: 'package.json', exact: true }).click();
+  await page.locator('.session-document .view-line').first().waitFor();
+  assert.equal(await page.locator('.session-document .file-preview-format').innerText(), 'JSON');
   await capture('06-file-preview');
 
-  // 右栏缩窄后，标签仍保持当前项可见；被裁切的一侧用渐隐提示横向溢出。
-  const panelTabs = page.locator('.panel-tabs');
-  const panelResizeHandle = page.locator('.panel-resize-handle');
-  const originalPanelWidth = await page.locator('.file-panel').evaluate((panel) => panel.getBoundingClientRect().width);
-  const resizeBox = await panelResizeHandle.boundingBox();
-  assert.ok(resizeBox);
-  await page.mouse.move(resizeBox.x + resizeBox.width / 2, resizeBox.y + 40);
-  await page.mouse.down();
-  await page.mouse.move(resizeBox.x + resizeBox.width / 2 + originalPanelWidth - 320, resizeBox.y + 40);
-  await page.mouse.up();
-  await page.waitForFunction(() => document.querySelector('.panel-tabs')?.dataset.overflowStart === 'true');
-  await page.waitForFunction(() => {
-    const viewport = document.querySelector('.panel-tabs')?.getBoundingClientRect();
-    const active = document.querySelector('.panel-tab.is-active')?.getBoundingClientRect();
-    return viewport && active && active.left >= viewport.left - 1 && active.right <= viewport.right + 1;
-  });
-  assert.match(await panelTabs.evaluate(node => getComputedStyle(node).maskImage), /linear-gradient/);
-  await capture('05a-narrow-panel-tabs');
-  const allTabs = page.getByRole('button', { name: /^查看全部 \d+ 个标签页$/ });
-  await allTabs.click();
-  const openTabs = page.getByRole('listbox', { name: '已打开的标签页' });
-  assert.equal(await openTabs.getByRole('option').count(), await panelTabs.getByRole('tab').count());
-  assert.match(await openTabs.locator('[aria-current="page"]').innerText(), /package\.json/);
-  await page.keyboard.press('Escape');
-  const narrowResizeBox = await panelResizeHandle.boundingBox();
-  assert.ok(narrowResizeBox);
-  await page.mouse.move(narrowResizeBox.x + narrowResizeBox.width / 2, narrowResizeBox.y + 40);
-  await page.mouse.down();
-  await page.mouse.move(narrowResizeBox.x + narrowResizeBox.width / 2 - (originalPanelWidth - 320), narrowResizeBox.y + 40);
-  await page.mouse.up();
-  // 关闭最后一个工具标签后直接收起右侧工作台。
-  await page.getByRole('button', { name: '关闭 README.md', exact: true }).click();
-  await page.getByRole('button', { name: '关闭 package.json', exact: true }).click();
-  await page.getByRole('button', { name: '关闭 文件', exact: true }).click();
-  await page.locator('.file-panel').waitFor({ state: 'detached' });
+  const docs = page.getByRole('tablist', { name: '工作树标签' });
+  assert.equal(await docs.getByRole('tab', { name: 'package.json' }).getAttribute('aria-selected'), 'true');
+  const divider = page.getByRole('separator', { name: '调整右侧面板宽度' });
+  const previousWidth = Number(await divider.getAttribute('aria-valuenow'));
+  await divider.focus();
+  await page.keyboard.press('ArrowLeft');
+  assert.ok(Number(await divider.getAttribute('aria-valuenow')) > previousWidth);
+  await docs.getByRole('button', { name: '关闭 README.md', exact: true }).click();
+  await docs.getByRole('button', { name: '关闭 package.json', exact: true }).click();
+  assert.equal(await docs.getByRole('tab').count(), 1);
+  await page.getByRole('button', { name: '收起右侧面板', expanded: true, exact: true }).click();
 
+  if (process.argv.includes('--session-workspace')) {
+    assert.deepEqual(errors, [], 'Session workspace runtime errors');
+    console.log('Session workspace checks passed.');
+    return;
+  }
   // -------------------------------------------------------------------------
   // 7. 设置页
   // -------------------------------------------------------------------------
@@ -2644,7 +2589,7 @@ try {
   // 7.1.1 方案卡片进入独立表单，全局策略单独保存。
   await openSettingsSection('Harness 配置');
   const harnessLibrary = page.locator('.harness-settings');
-  const harnessCards = harnessLibrary.locator('.settings-profile-card');
+  const harnessCards = harnessLibrary.locator('button[aria-label^="编辑"][aria-haspopup="dialog"]');
   await harnessCards.first().waitFor();
   assert.equal(await harnessCards.count(), 3);
   assert.equal(await harnessLibrary.getByRole('textbox').count(), 0);
@@ -3237,11 +3182,11 @@ try {
   await capture('23-skill-file-preview-markdown-dark');
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await skillDetail.getByRole('button', { name: '查看文件源码', exact: true }).click();
-  await skillDetail.locator('.file-preview-code').getByText(/项目规则优先于通用检查清单/).waitFor();
+  await skillDetail.locator('.view-line').filter({hasText:/项目规则优先于通用检查清单/}).first().waitFor();
   await skillDetail.getByRole('button', { name: '预览渲染结果', exact: true }).click();
 
   await skillDetail.getByRole('button', { name: /config\.json/ }).click();
-  await skillDetail.locator('.file-preview-code').getByText(/"checks": \[/).waitFor();
+  await skillDetail.locator('.view-line').filter({hasText:/"checks":\s*\[/}).first().waitFor();
   assert.equal(await skillDetail.locator('.file-preview-format').innerText(), 'JSON');
   await capture('23-skill-file-preview-json');
 
@@ -3365,8 +3310,8 @@ try {
   await dialog.waitFor({ state: 'detached' });
 
   // 关闭设置回到新对话，确认空态没有残留的旧会话容器。
-  await page.getByRole('button', { name: '返回对话' }).click();
-  await page.getByRole('button', { name: '新会话', exact: true }).first().click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
+  await page.getByRole('button', { name: '新聊天', exact: true }).first().click();
   await capture('25-compact-welcome');
 
   // 紧凑视口下模型弹层不能超出视口高度（boundingBox 需完全落在 0~640 内）。
@@ -3434,7 +3379,7 @@ try {
   // 从新对话发送第一条消息：应切换到会话视图。
   await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).fill('验证从新对话进入问答');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
-  await page.locator('.chat-tabs').waitFor();
+  await page.getByRole('tablist', { name: '工作树标签' }).waitFor();
   assert.equal(await page.locator('.workspace-chip').count(), 0);
   await page.locator('.chat-scroll').getByText('验证从新对话进入问答', { exact: true }).waitFor();
   // 新会话发完第一条消息后必须出现在侧边栏，否则用户离开就找不到入口。
@@ -3461,9 +3406,9 @@ try {
   await capture('29a-goal-lifecycle');
 
   // 点击“新会话”应回到空态，且不残留会话标签。
-  await page.getByRole('button', { name: '新会话', exact: true }).first().click();
+  await page.getByRole('button', { name: '新聊天', exact: true }).first().click();
   await page.getByRole('textbox', { name: '发送给 Pi 的消息' }).waitFor();
-  assert.equal(await page.locator('.chat-tabs:not(.is-placeholder)').count(), 0);
+  assert.equal(await page.locator('.document-tab').count(), 0);
 
   // 新会话不需要预选“长期任务”；/goal 会在第一次设置目标时按需创建普通会话并启用目标能力。
   await composerInput.fill('/goal 从新会话直接启动目标');
@@ -3475,7 +3420,7 @@ try {
   await composerInput.fill('/goal complete 新会话目标流程验证完成');
   await page.getByRole('button', { name: '发送消息', exact: true }).click();
   await page.locator('.long-task-dock').waitFor({ state: 'detached' });
-  await page.getByRole('button', { name: '新会话', exact: true }).first().click();
+  await page.getByRole('button', { name: '新聊天', exact: true }).first().click();
 
   // 没有模型来源时，新对话默认区必须显示可操作的引导空状态，
   // 而不是渲染禁用下拉框和仅有首字母的伪 Provider 图标。
@@ -3505,7 +3450,12 @@ try {
   // 整个流程中浏览器不能有未捕获异常。
   assert.deepEqual(errors, [], 'Browser runtime errors');
   console.log(`UI checks passed; screenshots saved to ${output}`);
+}
+
+try {
+  await verifyUi();
 } catch (error) {
   if (errors.length > 0) console.error('Browser runtime errors:', errors);
+  console.error((await page.locator('body').innerText()).slice(0, 1500));
   throw error;
-} finally { await browser.close(); }
+} finally { await browser.close(); await server?.close(); }

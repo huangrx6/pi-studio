@@ -74,9 +74,21 @@ function parseWorktrees(stdout, repositoryRoot) {
         branch,
         detached: lines.includes('detached'),
         locked: lines.some(line => line === 'locked' || line.startsWith('locked ')),
+        ...(lines.includes('bare') && { unavailable: 'bare' }),
+        ...(lines.some(line => line === 'prunable' || line.startsWith('prunable ')) && { unavailable: 'prunable' }),
       };
     })
     .filter(Boolean);
+}
+
+async function describeWorktrees(stdout, repositoryRoot) {
+  const trees = parseWorktrees(stdout, repositoryRoot);
+  // Git keeps locked registrations even when their volume is offline.
+  await Promise.all(trees.filter(tree => tree.locked && !tree.unavailable).map(async tree => {
+    const directory = await stat(tree.path).catch(() => null);
+    if (!directory?.isDirectory()) tree.unavailable = 'inaccessible';
+  }));
+  return trees;
 }
 
 function isWithin(parent, child) {
@@ -117,7 +129,7 @@ async function getGitWorkspaceStatus(cwd) {
     runGit(resolvedCwd, ['worktree', 'list', '--porcelain', '-z']),
   ]);
 
-  const worktrees = parseWorktrees(worktreeResult.stdout, repositoryRoot);
+  const worktrees = await describeWorktrees(worktreeResult.stdout, repositoryRoot);
   const selected = findWorktree(worktrees, repositoryRoot);
   const main = worktrees[0] || null;
   const branch = branchResult.stdout.trim() || null;
@@ -143,4 +155,4 @@ async function getGitWorkspaceStatus(cwd) {
   };
 }
 
-module.exports = { getGitWorkspaceStatus, parseStatus, parseWorktrees, runGit };
+module.exports = { getGitWorkspaceStatus, parseStatus, parseWorktrees, describeWorktrees, runGit };

@@ -38,8 +38,8 @@ const { isAllowedLocalHtmlUrl } = require('./services/local-html.cjs');
 const configuredCspSessions = new WeakSet();
 let awaitingFirstPaint;
 
-function installRendererSecurity(win, rendererUrl) {
-  const session = win.webContents.session;
+function installRendererSecurity(contents, rendererUrl) {
+  const session = contents.session;
   if (!configuredCspSessions.has(session)) {
     const filter = DEV
       ? { urls: ['http://127.0.0.1:5180/*'] }
@@ -55,7 +55,7 @@ function installRendererSecurity(win, rendererUrl) {
     configuredCspSessions.add(session);
   }
 
-  win.webContents.on('will-navigate', (event, target) => {
+  contents.on('will-navigate', (event, target) => {
     if (!isTrustedRendererUrl(target, {
       dev: DEV,
       devUrl: 'http://127.0.0.1:5180/',
@@ -64,7 +64,7 @@ function installRendererSecurity(win, rendererUrl) {
       event.preventDefault();
     }
   });
-  win.webContents.setWindowOpenHandler(({ url }) => {
+  contents.setWindowOpenHandler(({ url }) => {
     try {
       void shell.openExternal(normalizeExternalHttpUrl(url));
     } catch {
@@ -73,13 +73,13 @@ function installRendererSecurity(win, rendererUrl) {
     return { action: 'deny' };
   });
   /**
-   * Only the right-panel browser may attach a guest: it must use Studio's own
+   * Only the tool panel's browser may attach a guest: it must use Studio's own
    * partition, carry no preload and stay sandboxed with node disabled. Anything
    * else (a future stray <webview> in extension UI, a model-driven URL) is
    * refused before a guest process starts. Local browser targets are limited
    * to existing, non-protected .html/.htm files.
    */
-  win.webContents.on('will-attach-webview', (event, webPreferences, params) => {
+  contents.on('will-attach-webview', (event, webPreferences, params) => {
     const src = String(params?.src || '');
     const trusted = webPreferences?.partition === 'persist:pi-browser'
       && !webPreferences?.preload
@@ -181,9 +181,7 @@ function createWindow() {
       nodeIntegration: false,
       sandbox: true,
       webSecurity: true,
-      // The right-panel browser hosts untrusted pages in its own process and
-      // partition; the renderer only gets navigation controls.
-      webviewTag: true,
+      webviewTag: false,
     },
   });
 
@@ -215,7 +213,7 @@ function createWindow() {
   const rendererUrl = DEV
     ? 'http://127.0.0.1:5180/'
     : pathToFileURL(path.join(__dirname, '../../dist/renderer/index.html')).href;
-  installRendererSecurity(win, rendererUrl);
+  installRendererSecurity(win.webContents, rendererUrl);
   win.on('close', (event) => {
     // Keep active turns reachable from the tray. Without a tray, Windows
     // should follow its normal last-window close behaviour.
@@ -308,4 +306,4 @@ function watchSystemTheme() {
   });
 }
 
-module.exports = { createWindow, showMainWindow, installMenu, applyAppearance, watchSystemTheme, windowState };
+module.exports = { installRendererSecurity, createWindow, showMainWindow, installMenu, applyAppearance, watchSystemTheme, windowState };

@@ -1,7 +1,5 @@
 import { Accordion } from '../../shared/Accordion';
 import { ExtensionStatusIcon } from './ExtensionStatusIcon';
-import { ProviderQuotaPanel } from '../models/ProviderQuotaView';
-import { QUOTA_EXTENSION_ID } from '../../types/provider-quota';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSurfaceActive } from '../../shared/surface-visibility';
 import {
@@ -60,6 +58,7 @@ type ExtensionSlotProps = {
   selectedItemId?: string;
   extensionId?: string;
   presentation?: 'cards' | 'page' | 'compact';
+  showHeading?: boolean;
 };
 
 type ContentProps = {
@@ -256,7 +255,7 @@ function LiveDataViewConnection({
   }
   if (loading) {
     if (block.fallback?.length) {
-      return <div className="extension-data-view loading-placeholder" role="status">
+      return <div className="extension-data-view loading-placeholder" role="status" aria-busy={compact || undefined}>
         <ContentBlocks
           blocks={block.fallback}
           busyButton={busyButton}
@@ -269,7 +268,9 @@ function LiveDataViewConnection({
         />
       </div>;
     }
-    return <LoadingState variant={compact ? 'inline' : 'section'}>正在连接实时数据</LoadingState>;
+    return <div className="extension-data-view" aria-busy={compact || undefined}>
+      <LoadingState variant={compact ? 'inline' : 'section'}>正在连接实时数据</LoadingState>
+    </div>;
   }
   if (!snapshot?.content.length) {
     if (compact) return <span>{block.emptyText || '暂无实时数据'}</span>;
@@ -533,9 +534,10 @@ export function ExtensionSlot({
   selectedItemId,
   extensionId,
   presentation = 'cards',
+  showHeading = true,
 }: ExtensionSlotProps) {
   const surfaceActive = useSurfaceActive();
-  const loadedSnapshot = useExtensionUiSnapshot(cwd, !snapshot);
+  const { snapshot: loadedSnapshot } = useExtensionUiSnapshot(cwd, !snapshot);
   const surface = snapshot ?? loadedSnapshot;
   const ownerRef = useRef<ExtensionSlotOwner>({ key: '', generation: 0 });
   const mounted = useRef(false);
@@ -612,21 +614,15 @@ export function ExtensionSlot({
     modelRef,
   };
   const detailItem = items[0];
-  const providerId = modelRef?.split('/')[0];
-  const detailContent = detailItem && (
-    detailItem.extensionId === QUOTA_EXTENSION_ID && providerId
-      ? <ProviderQuotaPanel key={providerId} id={providerId} />
-      : <ContentBlocks blocks={detailItem.content} {...contentProps}
-          onAction={(action) => void activate(`${presentation}:${detailItem.id}`, action)} />
-  );
   return <>
     {presentation === 'page' && <section className="extension-page" aria-label={detailItem.title}>
-      <header className="extension-page-head">
+      {showHeading && <header className="extension-page-head">
         <h2><ExtensionStatusIcon item={detailItem} /><span>{detailItem.title}</span></h2>
         {detailItem.description && <p>{detailItem.description}</p>}
-      </header>
+      </header>}
       <div className="extension-page-body">
-        {detailContent}
+        <ContentBlocks blocks={detailItem.content} {...contentProps}
+          onAction={(action) => void activate(`${presentation}:${detailItem.id}`, action)} />
       </div>
     </section>}
     {presentation === 'compact' && items[0] && <div className="extension-compact-slot" aria-label={items[0].title}>

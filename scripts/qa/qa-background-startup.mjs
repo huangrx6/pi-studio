@@ -80,7 +80,7 @@ try {
     };
   });
   assert.deepEqual(dragRegions, { margins: ['drag', 'drag', 'drag', 'drag'], overlapsFrame: false });
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await page.locator('.settings-overlay').waitFor();
   assert.equal(await launch.count(), 0);
 

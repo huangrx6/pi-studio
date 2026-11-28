@@ -21,7 +21,7 @@ async function qa(method, ...args) { await page.evaluate(({ method, args }) => w
 async function count(method) { return page.evaluate(method => window.__extensionMutationQa.calls.filter(call => call.method === method).length, method); }
 async function twice(locator) { await locator.evaluate(node => { node.click(); node.click(); }); }
 async function openSettings() {
-  if (!(await page.locator('.settings-navigation').isVisible())) await page.locator('.sidebar-bottom button[title="设置"]').click();
+  if (!(await page.locator('.settings-navigation').isVisible())) await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await page.locator('.settings-navigation').getByRole('button', { name: '插件', exact: true }).click();
   await page.getByRole('tab', { name: '扩展', exact: true }).click();
   await page.locator('.installed-extension-card').first().waitFor();
@@ -80,7 +80,7 @@ try {
     assert.equal(await count('refreshExtensionMutation'), 2, 'ready receipt does not repeat recovery side effects');
     await closeDetail();
     assert.equal(await count(method), 1); assert.equal(await count('disposeExtensionMutationRecovery'), 1);
-    await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composerValue(composer()), draft);
+    await page.locator('[data-sidebar-section="conversations"]').click(); assert.equal(await composerValue(composer()), draft);
     result.checks.push(`${method}: committed error, synchronous lock, failed recovery then ready, failed current snapshot read retries without mutation/recovery repeat, draft retained`);
   }
   await fresh(); await qa('hold', 'rollbackExtension'); await start('rollbackExtension');
@@ -92,7 +92,7 @@ try {
   assert.equal(calls.filter(call => call.method === 'rollbackExtension').length, 1);
   assert.equal(calls.find(call => call.method === 'refreshExtensionMutation').input.cwd, '/qa/synthetic/performance', 'receipt recovery remains bound to source A');
   assert.equal(calls.filter(call => call.method === 'settings').at(-1).input.cwd, '/qa/synthetic/resource-details-b', 'current snapshot reads B');
-  await page.getByRole('button', { name: '返回对话', exact: true }).click(); assert.equal(await composerValue(composer()), 'B 工作区草稿不被 A 操作污染');
+  await page.locator('[data-sidebar-section="conversations"]').click(); assert.equal(await composerValue(composer()), 'B 工作区草稿不被 A 操作污染');
   await qa('open', 'perf-0'); await page.waitForFunction(expected => document.querySelector('.composer-editor')?.textContent === expected, draft);
   result.checks.push('held rollback after detail close/native navigation retains receipt; recovers source A then reads B, preserves both drafts');
   assert.deepEqual(result.pageErrors, []); assert.deepEqual(result.blockedRequests, []);

@@ -19,8 +19,8 @@
   outline: 0;
   color: var(--text);
   caret-color: var(--text);
-  font-size: var(--chat-font-size, 15px);
-  line-height: 1.8;
+  font-size: var(--chat-font-size);
+  line-height: var(--chat-line-height);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
@@ -32,7 +32,7 @@
   pointer-events: none;
 }
 
-.composer:has(.composer-editor:focus),
+.composer:has(:is(.composer-editor, .temporary-textarea):focus),
 .composer.is-drag-over {
   border-color: var(--accent);
   box-shadow: inset 0 1px 0 var(--composer-highlight), var(--composer-focus-shadow);

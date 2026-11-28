@@ -22,9 +22,8 @@ export function installPerformanceFixture({ sessionCount, turnCount }) {
   window.__performanceQa = qa;
   if (qa.longTaskSupported) new PerformanceObserver((list) => qa.longTasks.push(...list.getEntries().map(({ startTime, duration }) => ({ startTime, duration })))).observe({ type: 'longtask', buffered: true });
   localStorage.setItem('pi-studio:preferences', JSON.stringify({ theme: 'light', stepDisplay: 'standard', stepCollapse: 'after-answer', showCodeView: false }));
-  localStorage.setItem('pi-studio:expanded-workspaces', JSON.stringify([cwd]));
   window.piApi = new Proxy({
-    state: async () => ({ workspaces: [{ cwd, name: '合成性能数据', sessions }], model }),
+    state: async () => ({ expandedProjects: [cwd], workspaces: [{ cwd, name: '合成性能数据', sessions }], model }),
     settings: async () => ({ providers: [], customModels: [], mcp: [], skills: [] }),
     models: async () => ({ models: [], enabled: [], selection: model, defaultSelection: model }),
     conversationPage: async ({ id, limit, cursor }) => {

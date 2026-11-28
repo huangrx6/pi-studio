@@ -82,7 +82,7 @@
 }
 
 .launch-wordmark {
-  font: var(--weight-medium) var(--text-lg)/1 var(--font);
+  font: var(--weight-medium) var(--text-heading)/1 var(--font);
   letter-spacing: -.035em;
   -webkit-font-smoothing: antialiased;
 }

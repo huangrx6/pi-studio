@@ -33,7 +33,7 @@ try {
   await page.evaluate(id => window.piApi.conversationAction({ action: 'remove', kind: 'workspace', id }), removed);
   await selectTestSession(page, active, activeId);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   const nav = page.locator('.settings-navigation');
   await nav.getByRole('button', { name: '通用', exact: true }).click();
   const generalLayout = await preferenceLayout(page.locator('.general-settings-page'), {
@@ -94,7 +94,7 @@ try {
   await page.getByRole('region', { name: '本地存储与诊断信息' }).getByText(path.join(profile, 'studio.sqlite'), { exact: true }).waitFor();
   await page.screenshot({ path: path.join(output, 'runtime.png'), scale: 'css' });
   await page.reload();
-  const openSettings = page.locator('.sidebar-bottom button[title="设置"]');
+  const openSettings = page.locator('.sidebar-bottom button[aria-label="设置"]');
   if (!(await nav.isVisible())) await openSettings.click();
   await nav.getByRole('button', { name: '使用量', exact: true }).click();
   await verify('$1.50', '1,500', 2);

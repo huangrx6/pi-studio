@@ -233,14 +233,10 @@ try {
   const extensionCommand = page.getByRole('button', { name: '执行 QA 延迟命令', exact: true });
   const extensionPanelAction = page.getByRole('button', { name: '打开 QA 范围面板', exact: true });
   async function openExtensionPanel(title = '扩展归属测试') {
-    await page.locator('.chat-header').getByRole('button', { name: '扩展', exact: true }).click();
-    await page.getByRole('dialog', { name: '扩展', exact: true }).getByRole('button', { name: '查看 QA Extension 详情', exact: true }).click();
-    if (title !== '扩展归属测试') {
-      await page.getByRole('navigation', { name: '扩展面板' }).getByRole('button', { name: title, exact: true }).click();
-    }
+    await page.getByRole('button', { name: '打开 ' + title + ' 详情', exact: true }).click();
   }
-  await openExtensionPanel();
-  await fill('A 扩展面板归属草稿'); await extensionPanelAction.click(); await extensionPanel.waitFor();
+  await fill('A 扩展面板归属草稿');
+  await openExtensionPanel(); await extensionPanelAction.click(); await extensionPanel.waitFor();
   await open('perf-1'); await extensionPanel.waitFor({ state: 'detached' }); assert.equal(await composerValue(composer()), draftB);
   results.checks.push('an extension panel opened in A closes immediately when B becomes the active workspace/session/model scope');
 
@@ -266,7 +262,7 @@ try {
   await qa('release', 'runExtensionCommand'); await extensionPanel.waitFor();
   assert.equal(await composerValue(composer()), 'A 范围结果');
   await screenshot('05-extension-scope-dark');
-  await page.getByRole('button', { name: '关闭 QA Extension', exact: true }).click();
+  await page.keyboard.press('Escape');
   results.checks.push('same-scope extension results still apply prompt, panel, message, and release the action lock without enabling submission');
 
   await page.getByText('A 实时数据', { exact: true }).waitFor();
@@ -296,7 +292,7 @@ try {
   await page.getByRole('button', { name: '重试连接实时数据', exact: true }).click();
   await dataPanel.getByText('重连后的实时数据', { exact: true }).waitFor();
   assert.equal(await dataPanel.getByText('A 实时数据', { exact: true }).count(), 0);
-  await page.getByRole('button', { name: '关闭 QA Extension', exact: true }).click();
+  await page.keyboard.press('Escape');
   results.checks.push('reconnect compares revisions within the new subscription id, so lower-numbered fresh data replaces stale content instead of being ignored');
 
   const extensionSlotMetrics = await page.locator('.extension-summaries.is-composer-above').evaluate(node => ({
@@ -343,7 +339,7 @@ try {
   await page.getByRole('button', { name: '删除排队消息', exact: true }).first().click(); await page.getByRole('button', { name: '删除排队消息', exact: true }).click();
   await page.locator('.queued-panel').waitFor({ state: 'detached' });
   results.checks.push('queue uses explicit MetaEnter without dispatch, editing protects nonempty draft, compaction disables individual/all sends and keeps both queued messages and current draft');
-  await page.getByRole('button', { name: '新对话', exact: true }).click();
+  await page.getByRole('button', { name: '新聊天', exact: true }).click();
   await page.getByRole('region', { name: '开始新会话', exact: true }).waitFor();
   await fill('开始新会话的原始草稿'); await qa('hold', 'createConversation');
   await composer().press('Enter'); await pending('createConversation'); await composer().press('Enter');

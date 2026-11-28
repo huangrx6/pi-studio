@@ -335,7 +335,7 @@ try {
     let finishSettings;
     const held = new Promise(resolve => { finishSettings = resolve; });
     await page.route('**/GeneralSettings-*.js', async route => { await held; await route.continue(); });
-    await page.locator('.sidebar-bottom button[title="设置"]').click();
+    await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
     const pageIndicator = page.locator('.settings-overlay .loading-pi');
     await pageIndicator.waitFor();
     const motion = () => pageIndicator.evaluate(el => getComputedStyle(el, '::after').animationName);

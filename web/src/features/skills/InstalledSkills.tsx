@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BookOpen, ChevronRight, Folder, FolderOpen, Folders, Library, Puzzle, Trash2, X } from 'lucide-react';
+import { BookOpen, Folder, FolderOpen, Folders, Library, Puzzle, Trash2, X } from 'lucide-react';
 import { Accordion } from '../../shared/Accordion';
 import { DetailDialog } from '../../shared/DetailDialog';
 import { StatusGlyph } from '../../shared/StatusGlyph';
@@ -81,7 +81,7 @@ export function InstalledSkills<T extends InstalledSkill>({ skills, errors, path
               return <li className="installed-skill-row" data-availability={skill.available ? 'available' : 'unavailable'} data-invocation={skill.disableModelInvocation ? 'explicit' : 'auto'} key={skill.path}>
                 <div className="installed-skill-copy">
                   <button type="button" className="installed-skill-open settings-row-link" title={skill.path} aria-label={`查看技能 ${skill.name}`} onClick={() => onOpen(skill)}>
-                    <strong>{skill.name}</strong><ChevronRight className="settings-row-link-indicator" aria-hidden="true" />
+                    <strong>{skill.name}</strong>
                   </button>
                   <p title={skill.description}>{skill.description}</p>
                   {(pluginOwned || status.label !== '自动发现') && <div className="installed-skill-meta">

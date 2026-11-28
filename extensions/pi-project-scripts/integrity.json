@@ -14,13 +14,13 @@
     },
     {
       "path": "pi-studio.extension.json",
-      "sha256": "07213f27ac5aed0963f94fb1cb5bcc5997fc687b49bcbf0ffee7c083622ae2c1",
-      "size": 1504
+      "sha256": "eae82e4c8e827c8b976f9f476c2a632f586c1b9bf33aac7457321576d93b8ad4",
+      "size": 1503
     },
     {
       "path": "README.md",
-      "sha256": "31dbd2b8411c76e469ef6de02dd50499ee7ae229494337e67fede0a625bbff1e",
-      "size": 689
+      "sha256": "7f7988e33e1255eb9e50f2776e8360419cb40084517efd0d34e9ebafe6802b62",
+      "size": 668
     }
   ]
 }

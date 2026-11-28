@@ -1,7 +1,13 @@
+const { JXA_TARGET_WINDOW_GUARD, foregroundError } = require('./foreground.cjs');
 /**
  * Desktop write actions (click / type / scroll / drag / hotkey). Reuses window ownership + allow policy from observe/policy.
  */
-const { listDesktopWindowsForApp, assertWindowBelongsToApp, defaultRunner } = require('./observe.cjs');
+const {
+  JXA_DESKTOP_HELPERS,
+  assertWindowBelongsToApp,
+  defaultRunner,
+} = require('./observe.cjs');
+const { snapshotTarget, JXA_AX_IDENTITY } = require('./ax-targets.cjs');
 
 const DEFAULT_MAX_TYPE_CHARS = 2000;
 const DEFAULT_SCROLL_AMOUNT = 3;
@@ -81,49 +87,125 @@ function pointInBounds(point, bounds, pad = 2) {
     && point.y <= y + height + pad;
 }
 
-async function getWindowFrame(appTarget, windowId, deps = {}) {
+/**
+ * Convert window-normalized (0..1000), window-relative (rx, ry), or image-pixel
+ * coordinates into absolute OS screen coordinates within `bounds`.
+ */
+function resolveCoordinateFromOptions(options = {}, bounds = null) {
+  const hasNorm = options.normX != null && options.normY != null;
+  if (hasNorm) {
+    const nx = Number(options.normX);
+    const ny = Number(options.normY);
+    if (!Number.isFinite(nx) || !Number.isFinite(ny) || nx < 0 || nx > 1000 || ny < 0 || ny > 1000) {
+      const error = new Error('归一化坐标 normX/normY 必须在 0–1000 之间。');
+      error.code = 'desktop_invalid_point';
+      throw error;
+    }
+    if (!bounds || !(bounds.width > 0) || !(bounds.height > 0)) {
+      const error = new Error('无法获取目标窗口尺寸，不能换算相对坐标。');
+      error.code = 'desktop_window_bounds_missing';
+      throw error;
+    }
+    return {
+      point: {
+        x: Math.round(bounds.x + (nx / 1000) * bounds.width),
+        y: Math.round(bounds.y + (ny / 1000) * bounds.height),
+      },
+      mode: 'norm',
+    };
+  }
+
+  const hasRelative = options.rx != null && options.ry != null;
+  if (hasRelative) {
+    const rx = Number(options.rx);
+    const ry = Number(options.ry);
+    if (!Number.isFinite(rx) || !Number.isFinite(ry)) {
+      const error = new Error('窗口相对坐标 rx/ry 无效。');
+      error.code = 'desktop_invalid_point';
+      throw error;
+    }
+    if (!bounds || !(bounds.width > 0) || !(bounds.height > 0)) {
+      const error = new Error('无法获取目标窗口尺寸，不能换算相对坐标。');
+      error.code = 'desktop_window_bounds_missing';
+      throw error;
+    }
+    // Optional imageWidth/imageHeight allows passing raw pixel coordinates directly from a scaled screenshot.
+    const imgW = Number(options.imageWidth) || 0;
+    const imgH = Number(options.imageHeight) || 0;
+    const sx = imgW > 0 ? (rx / imgW) * bounds.width : rx;
+    const sy = imgH > 0 ? (ry / imgH) * bounds.height : ry;
+    return {
+      point: {
+        x: Math.round(bounds.x + sx),
+        y: Math.round(bounds.y + sy),
+      },
+      mode: imgW > 0 ? 'image' : 'relative',
+    };
+  }
+
+  if (options.x != null && options.y != null) {
+    const point = {
+      x: Math.round(Number(options.x)),
+      y: Math.round(Number(options.y)),
+    };
+    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
+      const error = new Error('点击坐标无效。');
+      error.code = 'desktop_invalid_point';
+      throw error;
+    }
+    return { point, mode: 'point' };
+  }
+
+  return null;
+}
+
+async function getWindowFrame(appTarget, windowId, deps = {}, allowOffscreen = false) {
   const owned = await assertWindowBelongsToApp(appTarget, windowId, deps);
-  if (owned.minimized || owned.visible === false) {
+  if (owned.minimized || (!allowOffscreen && owned.visible === false)) {
     const error = new Error(
       `窗口 ${windowId} 当前不可见或已最小化，无法操作。请先恢复窗口。`,
     );
-    error.code = 'desktop_window_not_visible';
+    error.code = owned.minimized ? 'desktop_window_not_visible' : 'desktop_foreground_required';
     throw error;
   }
 
   if (typeof deps.getWindowFrame === 'function') {
     const frame = await deps.getWindowFrame(appTarget, windowId);
-    return { ...owned, bounds: frame };
+    const bounds = frame && typeof frame === 'object' && frame.bounds ? frame.bounds : frame;
+    return { ...owned, bounds };
+  }
+
+  if (owned.bounds && owned.bounds.width > 0 && owned.bounds.height > 0) {
+    return owned;
   }
 
   const runner = deps.runner || defaultRunner;
   const processName = String(appTarget?.name || '').trim();
+  const bundleId = String(appTarget?.bundleId || '').trim();
+  const appPath = String(appTarget?.path || '').trim();
   const script = `
+ObjC.import('AppKit');
+ObjC.import('CoreGraphics');
+${JXA_DESKTOP_HELPERS}
 function run(argv) {
   var target = String(argv[0] || '');
   var wantWindowId = Number(argv[1] || 0);
-  var se = Application('System Events');
-  var processes = se.processes.whose({ name: target })();
-  if (!processes || !processes.length) throw new Error('process_not_found');
-  var proc = processes[0];
-  var windows = [];
-  try { windows = proc.windows(); } catch (e) { windows = []; }
-  for (var i = 0; i < windows.length; i++) {
-    var win = windows[i];
-    var id = null;
-    try { id = Number(win.attributes.byName('AXWindowNumber').value()); } catch (e) { id = null; }
-    if (id !== wantWindowId) continue;
-    var pos = [0, 0];
-    var size = [0, 0];
-    try { pos = win.position(); } catch (e) {}
-    try { size = win.size(); } catch (e) {}
-    return JSON.stringify({
-      x: Number(pos[0]) || 0,
-      y: Number(pos[1]) || 0,
-      width: Number(size[0]) || 0,
-      height: Number(size[1]) || 0,
-      title: (function () { try { return String(win.name()); } catch (e) { return ''; } })()
-    });
+  var targetBundle = String(argv[2] || '');
+  var targetPath = String(argv[3] || '');
+  var app = findRunningApp(target, targetBundle, targetPath);
+  if (!app) throw new Error('process_not_found');
+  var cgWins = listCgWindowsForPid(app.pid);
+  for (var i = 0; i < cgWins.length; i++) {
+    if (cgWins[i].windowId === wantWindowId) {
+      var cw = cgWins[i];
+      return JSON.stringify({
+        x: Number(cw.x) || 0,
+        y: Number(cw.y) || 0,
+        width: Number(cw.width) || 0,
+        height: Number(cw.height) || 0,
+        title: String(cw.title || '')
+      });
+    }
   }
   throw new Error('window_not_found');
 }
@@ -132,7 +214,7 @@ function run(argv) {
   try {
     const { stdout } = await runner(
       '/usr/bin/osascript',
-      ['-l', 'JavaScript', '-e', script, processName, String(windowId)],
+      ['-l', 'JavaScript', '-e', script, processName, String(windowId), bundleId, appPath],
       { timeout: 10000 },
     );
     const text = String(stdout || '').trim();
@@ -148,6 +230,7 @@ function run(argv) {
       },
     };
   } catch (cause) {
+    if (cause?.code === 'desktop_action_outcome_unknown') throw cause;
     const message = String(cause && cause.message ? cause.message : cause);
     if (/window_not_found/i.test(message)) {
       const error = new Error('找不到指定窗口。请先用 desktop_windows 确认 windowId。');
@@ -161,7 +244,7 @@ function run(argv) {
   }
 }
 
-async function resolveClickTarget(appTarget, options = {}, deps = {}) {
+async function resolveClickTarget(appTarget, options = {}, deps = {}, axAction = null) {
   const windowId = options.windowId != null ? Number(options.windowId) : NaN;
   if (!windowId || Number.isNaN(windowId)) {
     const error = new Error('点击需要明确的 windowId。请先用 desktop_windows 获取窗口。');
@@ -169,10 +252,12 @@ async function resolveClickTarget(appTarget, options = {}, deps = {}) {
     throw error;
   }
 
-  const frame = await getWindowFrame(appTarget, windowId, deps);
   const ref = String(options.ref || '').trim();
-  const path = String(options.path || '').trim();
-  const hasCoords = options.x != null && options.y != null;
+  const path = String(options.elementPath || options.path || '').trim();
+  const frame = await getWindowFrame(appTarget, windowId, deps, Boolean(axAction && (ref || path)));
+  const hasCoords = (options.x != null && options.y != null)
+    || (options.rx != null && options.ry != null)
+    || (options.normX != null && options.normY != null);
 
   if (ref || path) {
     if (typeof deps.resolveNode === 'function') {
@@ -210,152 +295,114 @@ async function resolveClickTarget(appTarget, options = {}, deps = {}) {
       };
     }
 
+    const expected = snapshotTarget(deps.sessionId, windowId, ref, path);
     const runner = deps.runner || defaultRunner;
-    const processName = String(appTarget?.name || '').trim();
     const script = `
+ObjC.import('AppKit');
+ObjC.import('CoreGraphics');
+${JXA_DESKTOP_HELPERS}
+${JXA_AX_IDENTITY}
 function run(argv) {
-  var target = String(argv[0] || '');
-  var wantWindowId = Number(argv[1] || 0);
-  var wantRef = String(argv[2] || '');
-  var wantPath = String(argv[3] || '');
-  var se = Application('System Events');
-  var processes = se.processes.whose({ name: target })();
-  if (!processes || !processes.length) throw new Error('process_not_found');
-  var proc = processes[0];
-  var windows = [];
-  try { windows = proc.windows(); } catch (e) { windows = []; }
-  var win = null;
-  for (var i = 0; i < windows.length; i++) {
-    var candidate = windows[i];
-    var id = null;
-    try { id = Number(candidate.attributes.byName('AXWindowNumber').value()); } catch (e) { id = null; }
-    if (id === wantWindowId) { win = candidate; break; }
+  var app = findRunningApp(argv[0], argv[1], argv[2]);
+  var windowId = Number(argv[3]);
+  var expected = JSON.parse(argv[4]);
+  var action = JSON.parse(argv[5]);
+  if (!app || app.pid !== expected.pid) throw new Error('target_not_found');
+  var windows = listCgWindowsForPid(app.pid);
+  var cgWin = windows.find(function (window) { return window.windowId === windowId; });
+  var proc = findSeProcess(Application('System Events'), app.name, app.bundleId, app.pid);
+  if (!proc || Number(proc.unixId()) !== app.pid) throw new Error('target_not_found');
+  var el = cgWin && findSeWindowForWindowId(proc, cgWin, windowId, windows);
+  if (!el) throw new Error('window_not_found');
+  var indexes = expected.path.split('/');
+  if (indexes[0] !== '1') throw new Error('target_not_found');
+  for (var i = 1; i < indexes.length; i++) {
+    el = el.uiElements()[Number(indexes[i]) - 1];
+    if (!el) throw new Error('target_not_found');
   }
-  if (!win) throw new Error('window_not_found');
-
-  var found = null;
-  var counter = 0;
-  function roleOf(el) { try { return String(el.role()); } catch (e) { return ''; } }
-  function titleOf(el) {
-    try { return String(el.title()); } catch (e) {
-      try { return String(el.name()); } catch (e2) { return ''; }
+  var role = '', name = '', subrole = '', description = '';
+  try { role = String(el.role()); } catch (e) {}
+  try { name = String(el.title()); } catch (e) { try { name = String(el.name()); } catch (err) {} }
+  try { subrole = String(el.subrole()); } catch (e) {}
+  try { description = String(el.description()); } catch (e) {}
+  if (axIdentity(el, role, name, subrole, description) !== expected.identity) throw new Error('target_not_found');
+  if (/secure|password/i.test(role + ' ' + subrole + ' ' + description) || expected.secure) throw new Error('secure_target');
+  var node = { role: role, name: name };
+  try {
+    var p = el.position(), s = el.size();
+    node.bounds = { x: Number(p[0]), y: Number(p[1]), width: Number(s[0]), height: Number(s[1]) };
+  } catch (e) {}
+  if (action && action.kind === 'press') {
+    var press = el.actions.byName('AXPress');
+    if (press.exists()) {
+      try { press.perform(); } catch (e) { throw new Error('action_outcome_unknown'); }
+      node.method = 'AXPress';
     }
   }
-  function descriptionOf(el) { try { return String(el.description()); } catch (e) { return ''; } }
-  function subroleOf(el) { try { return String(el.subrole()); } catch (e) { return ''; } }
-  function isSecure(el, role, subrole, description) {
-    var text = (String(role || '') + ' ' + String(subrole || '') + ' ' + String(description || '')).toLowerCase();
-    if (text.indexOf('secure') >= 0 || text.indexOf('password') >= 0) return true;
-    return false;
-  }
-  function boundsOf(el) {
-    try {
-      var p = el.position();
-      var s = el.size();
-      return { x: Number(p[0]), y: Number(p[1]), width: Number(s[0]), height: Number(s[1]) };
-    } catch (e) { return null; }
-  }
-  function walk(el, depth, path) {
-    if (found || depth > 40) return;
-    var role = roleOf(el);
-    var name = titleOf(el);
-    var description = descriptionOf(el);
-    var subrole = subroleOf(el);
-    var secure = isSecure(el, role, subrole, description);
-    var bounds = boundsOf(el);
-    var ref = '';
-    if (role || name || description || bounds) {
-      counter += 1;
-      ref = 'n' + counter;
-      if ((wantRef && ref === wantRef) || (wantPath && path === wantPath)) {
-        found = {
-          ref: ref,
-          path: path,
-          role: role,
-          name: name,
-          secure: secure,
-          bounds: bounds
-        };
-        return;
-      }
-    }
-    var children = [];
-    try { children = el.uiElements(); } catch (e) { children = []; }
-    for (var i = 0; i < children.length; i++) {
-      if (found) break;
-      walk(children[i], depth + 1, path ? (path + '/' + (i + 1)) : String(i + 1));
+  if (action && action.kind === 'setValue' && /^(AXTextArea|AXTextField|AXComboBox)$/.test(role)) {
+    var attr = el.attributes.byName('AXValue');
+    if (attr.exists() && attr.settable() && (action.clear || attr.value() === '')) {
+      try {
+        attr.value = action.text;
+        if (attr.value() !== action.text) throw new Error('value_mismatch');
+      } catch (e) { throw new Error('action_outcome_unknown'); }
+      node.method = 'AXValue';
     }
   }
-  walk(win, 0, '1');
-  if (!found) throw new Error('target_not_found');
-  return JSON.stringify(found);
+  return JSON.stringify(node);
 }
 `.trim();
-
     try {
-      const { stdout } = await runner(
-        '/usr/bin/osascript',
-        ['-l', 'JavaScript', '-e', script, processName, String(windowId), ref, path],
-        { timeout: 15000 },
-      );
-      const node = JSON.parse(String(stdout || '').trim());
-      if (node.secure) {
-        const error = new Error('不会点击密码或安全输入控件。');
-        error.code = 'desktop_secure_target';
-        throw error;
+      const { stdout } = await runner('/usr/bin/osascript', [
+        '-l', 'JavaScript', '-e', script, appTarget.name || '', appTarget.bundleId || '', appTarget.path || '',
+        String(windowId), JSON.stringify(expected), JSON.stringify(axAction),
+      ], { timeout: 15000 });
+      let node;
+      try {
+        node = JSON.parse(stdout);
+        if (!node || typeof node.role !== 'string') throw new Error('invalid AX node acknowledgement');
+      } catch (cause) {
+        if (axAction) {
+          throw Object.assign(new Error('未收到有效的控件操作回执，请先核对窗口。', { cause }), { code: 'desktop_action_outcome_unknown' });
+        }
+        throw cause;
       }
       const point = centerOfBounds(node.bounds);
-      if (!point) {
-        const error = new Error('目标控件没有可用位置，无法点击。');
-        error.code = 'desktop_target_no_bounds';
-        throw error;
-      }
-      if (!pointInBounds(point, frame.bounds, 8)) {
-        const error = new Error('目标控件不在指定窗口范围内，已拒绝点击。');
-        error.code = 'desktop_target_outside_window';
-        throw error;
+      if (!node.method) {
+        if (frame.visible === false) throw Object.assign(new Error('此控件需要前台窗口才能操作。'), { code: 'desktop_foreground_required' });
+        if (!point) throw Object.assign(new Error('控件没有可用位置。'), { code: 'desktop_target_no_bounds' });
+        if (!pointInBounds(point, frame.bounds, 8)) {
+          throw Object.assign(new Error('控件位置已超出目标窗口，请重新观察。'), { code: 'desktop_target_outside_window' });
+        }
       }
       return {
-        windowId,
-        point,
-        ref: node.ref || ref,
-        path: node.path || path,
-        role: node.role || '',
-        name: node.name || '',
-        title: frame.title || '',
-        mode: 'ref',
+        windowId, point, bounds: frame.bounds || null, ref: expected.ref, path: expected.path,
+        role: node.role || '', name: node.name || '', title: frame.title || '', mode: node.method ? 'accessibility' : 'ref',
+        ...(node.method ? { method: node.method } : {}),
       };
     } catch (cause) {
-      if (cause && cause.code && String(cause.code).startsWith('desktop_')) throw cause;
-      const message = String(cause && cause.message ? cause.message : cause);
-      if (/target_not_found/i.test(message)) {
-        const error = new Error('找不到指定控件。请重新 desktop_snapshot 后再用 ref/path 点击。');
-        error.code = 'desktop_target_not_found';
-        throw error;
+      if (String(cause?.code || '').startsWith('desktop_')) throw cause;
+      const message = String(cause?.stderr || cause?.message || cause);
+      if (message.includes('action_outcome_unknown')) {
+        throw Object.assign(new Error('控件操作已派发但无法确认结果，请先核对目标窗口。', { cause }), { code: 'desktop_action_outcome_unknown' });
       }
-      if (/window_not_found/i.test(message)) {
-        const error = new Error('找不到指定窗口。请先用 desktop_windows 确认 windowId。');
-        error.code = 'desktop_window_not_found';
-        throw error;
+      if (message.includes('secure_target')) {
+        throw Object.assign(new Error('不会操作密码或安全输入控件。'), { code: 'desktop_secure_target' });
       }
-      const error = new Error(`无法定位点击目标：${message}`);
-      error.code = 'desktop_target_resolve_failed';
-      error.cause = cause;
-      throw error;
+      if (message.includes('window_not_found')) {
+        throw Object.assign(new Error('无法核对指定窗口，请重新读取窗口列表。'), { code: 'desktop_window_not_found' });
+      }
+      if (message.includes('target_not_found')) {
+        throw Object.assign(new Error('目标控件已变化，请重新读取 desktop_snapshot。'), { code: 'desktop_target_not_found' });
+      }
+      throw Object.assign(new Error('无法读取目标控件。', { cause }), { code: 'desktop_target_resolve_failed' });
     }
   }
 
   if (hasCoords) {
-    const point = {
-      x: Math.round(Number(options.x)),
-      y: Math.round(Number(options.y)),
-    };
-    if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) {
-      const error = new Error('点击坐标无效。');
-      error.code = 'desktop_invalid_point';
-      throw error;
-    }
-    if (!pointInBounds(point, frame.bounds, 2)) {
+    const resolved = resolveCoordinateFromOptions(options, frame.bounds);
+    const point = resolved.point;
+    if (!pointInBounds(point, frame.bounds, 4)) {
       const error = new Error('点击坐标不在指定窗口范围内，已拒绝。');
       error.code = 'desktop_point_outside_window';
       throw error;
@@ -363,27 +410,38 @@ function run(argv) {
     return {
       windowId,
       point,
+      bounds: frame.bounds || null,
       ref: '',
       path: '',
       role: '',
       name: '',
       title: frame.title || '',
-      mode: 'point',
+      mode: resolved.mode,
     };
   }
 
-  const error = new Error('请提供 snapshot 的 ref/path，或窗口内的屏幕坐标 x/y。');
+  const error = new Error('请提供 snapshot 的 ref/path，窗口内相对坐标 rx/ry（或 0–1000 归一化 normX/normY），或屏幕坐标 x/y。');
   error.code = 'desktop_click_target_required';
   throw error;
 }
 
-async function clickDesktop(appTarget, options = {}, deps = {}) {
+
+
+async function clickDesktop(appTarget, options = {}, deps = {}, { focusOnly = false, resolvedTarget } = {}) {
   if ((deps.platform || process.platform) !== 'darwin') {
     const error = new Error('电脑操控目前仅支持 macOS。');
     error.code = 'desktop_unsupported_platform';
     throw error;
   }
-  const target = await resolveClickTarget(appTarget, options, deps);
+  const singleLeft = (!options.button || options.button === 'left') && !options.double && Number(options.clickCount || 1) === 1;
+  const action = !focusOnly && singleLeft && !deps.click ? { kind: 'press' } : null;
+  const target = resolvedTarget || await resolveClickTarget(appTarget, options, deps, action);
+  if (target.method === 'AXPress') {
+    return {
+      ok: true, appName: appTarget.name || '', bundleId: appTarget.bundleId || '',
+      ...target, x: target.point?.x ?? null, y: target.point?.y ?? null, button: 'left', clickCount: 1,
+    };
+  }
   if (typeof deps.click === 'function') {
     return deps.click(appTarget, {
       ...options,
@@ -397,41 +455,57 @@ async function clickDesktop(appTarget, options = {}, deps = {}) {
   }
 
   const runner = deps.runner || defaultRunner;
-  const processName = String(appTarget?.name || '').trim();
+  const processName = String(appTarget?.bundleId || appTarget?.name || '').trim();
   const button = String(options.button || 'left').toLowerCase() === 'right' ? 'right' : 'left';
+  const clickCount = options.double === true ? 2 : Math.min(Math.max(Number(options.clickCount) || 1, 1), 3);
 
   const script = `
-ObjC.import('Cocoa');
+ObjC.import('AppKit');
+ObjC.import('CoreGraphics');
+${JXA_DESKTOP_HELPERS}
+${JXA_TARGET_WINDOW_GUARD}
 function run(argv) {
-  var appName = String(argv[0] || '');
+  var target = findRunningApp(argv[0], argv[6], argv[7]);
+  var windowId = Number(argv[5]);
   var x = Number(argv[1] || 0);
   var y = Number(argv[2] || 0);
   var button = String(argv[3] || 'left');
-  try {
-    if (appName) {
-      var app = Application(appName);
-      app.includeStandardAdditions = true;
-      app.activate();
-      delay(0.05);
-    }
-  } catch (e) {}
+  var clicks = Math.max(1, Math.min(3, Number(argv[4] || 1)));
+  ObjC.bindFunction('CGPreflightPostEventAccess', ['bool', []]);
+  if (!$.CGPreflightPostEventAccess()) throw new Error('desktop_mouse_permission');
+  // A headless osascript needs an AppKit application connection for cross-process hit tests.
+  $.NSApplication.sharedApplication;
+
   var point = $.CGPointMake(x, y);
   var mouseButton = button === 'right' ? $.kCGMouseButtonRight : $.kCGMouseButtonLeft;
   var downType = button === 'right' ? $.kCGEventRightMouseDown : $.kCGEventLeftMouseDown;
   var upType = button === 'right' ? $.kCGEventRightMouseUp : $.kCGEventLeftMouseUp;
-  var down = $.CGEventCreateMouseEvent(null, downType, point, mouseButton);
-  var up = $.CGEventCreateMouseEvent(null, upType, point, mouseButton);
-  $.CGEventPost($.kCGHIDEventTap, down);
-  delay(0.02);
-  $.CGEventPost($.kCGHIDEventTap, up);
-  return JSON.stringify({ ok: true, x: x, y: y, button: button });
+  for (var i = 1; i <= clicks; i++) {
+    try {
+      requireForeground(target);
+      if (!hitTarget(windowId, x, y, target.pid)) throw new Error('desktop_foreground_required');
+    } catch (e) {
+      if (i > 1) throw new Error('desktop_partial_click：已发出部分点击，请先检查窗口。');
+      throw e;
+    }
+    var down = $.CGEventCreateMouseEvent(null, downType, point, mouseButton);
+    var up = $.CGEventCreateMouseEvent(null, upType, point, mouseButton);
+    $.CGEventSetIntegerValueField(down, $.kCGMouseEventClickState, i);
+    $.CGEventSetIntegerValueField(up, $.kCGMouseEventClickState, i);
+    $.CGEventPost($.kCGHIDEventTap, down);
+    delay(0.02);
+    $.CGEventPost($.kCGHIDEventTap, up);
+    if (i < clicks) delay(0.04);
+  }
+  return JSON.stringify({ ok: true, x: x, y: y, button: button, clickCount: clicks });
 }
 `.trim();
 
   try {
     await runner(
       '/usr/bin/osascript',
-      ['-l', 'JavaScript', '-e', script, processName, String(target.point.x), String(target.point.y), button],
+      ['-l', 'JavaScript', '-e', script, processName, String(target.point.x), String(target.point.y), button, String(clickCount),
+        String(target.windowId), String(appTarget?.bundleId || ''), String(appTarget?.path || '')],
       { timeout: 10000 },
     );
     return {
@@ -440,9 +514,11 @@ function run(argv) {
       bundleId: String(appTarget?.bundleId || ''),
       windowId: target.windowId,
       title: target.title || '',
+      bounds: target.bounds || null,
       x: target.point.x,
       y: target.point.y,
       button,
+      clickCount,
       ref: target.ref || '',
       path: target.path || '',
       role: target.role || '',
@@ -450,8 +526,16 @@ function run(argv) {
       mode: target.mode,
     };
   } catch (cause) {
+    if (cause?.code === 'desktop_action_outcome_unknown') throw cause;
+    if (String(cause?.message || cause).includes('desktop_mouse_permission')) {
+      const error = new Error('macOS 未允许发送鼠标事件。请在系统设置的辅助功能中授权 Pi Studio Computer Use，然后刷新权限。', { cause });
+      error.code = 'desktop_accessibility_permission';
+      throw error;
+    }
+    const focusError = foregroundError(cause);
+    if (focusError) throw focusError;
     const error = new Error(`点击失败：${cause && cause.message ? cause.message : cause}`);
-    error.code = 'desktop_click_failed';
+    error.code = String(cause?.message || cause).includes('desktop_partial_click') ? 'desktop_action_outcome_unknown' : 'desktop_click_failed';
     error.cause = cause;
     throw error;
   }
@@ -478,7 +562,24 @@ function normalizeTypeText(value, maxChars = DEFAULT_MAX_TYPE_CHARS) {
   return text;
 }
 
+// The pasteboard is shared across Studio conversations. Reject an overlapping input
+// before it can click a field or snapshot another in-flight operation's text.
+let textEntryInProgress = false;
 async function typeDesktop(appTarget, options = {}, deps = {}) {
+  if (textEntryInProgress) {
+    const error = new Error('另一个桌面输入正在执行，请等待其完成后再检查目标窗口。');
+    error.code = 'desktop_input_busy';
+    throw error;
+  }
+  textEntryInProgress = true;
+  try {
+    return await performTextEntry(appTarget, options, deps);
+  } finally {
+    textEntryInProgress = false;
+  }
+}
+
+async function performTextEntry(appTarget, options, deps) {
   if ((deps.platform || process.platform) !== 'darwin') {
     const error = new Error('电脑操控目前仅支持 macOS。');
     error.code = 'desktop_unsupported_platform';
@@ -493,8 +594,20 @@ async function typeDesktop(appTarget, options = {}, deps = {}) {
     throw error;
   }
 
-  // Ensure window is owned + visible first.
-  const frame = await getWindowFrame(appTarget, windowId, deps);
+  let resolvedTarget;
+  if ((options.ref || options.elementPath || options.path) && !options.submit && !deps.type && !deps.resolveNode) {
+    resolvedTarget = await resolveClickTarget(appTarget, options, deps, { kind: 'setValue', text, clear: options.clear === true });
+    if (resolvedTarget.method === 'AXValue') {
+      return {
+        ok: true, appName: appTarget.name || '', bundleId: appTarget.bundleId || '', ...resolvedTarget,
+        chars: text.length, valueVerified: true, submitted: false,
+      };
+    }
+  }
+
+  // Pointer and paste operations require a visible window.
+  deps.assertKeyboardAllowed?.();
+  const frame = resolvedTarget || await getWindowFrame(appTarget, windowId, deps);
 
   let focused = {
     ref: '',
@@ -504,13 +617,20 @@ async function typeDesktop(appTarget, options = {}, deps = {}) {
     secure: false,
   };
 
-  const hasTarget = Boolean(String(options.ref || '').trim() || String(options.path || options.elementPath || '').trim());
+  const hasTarget = Boolean(
+    String(options.ref || '').trim()
+    || String(options.path || options.elementPath || '').trim()
+    || (options.x != null && options.y != null)
+    || (options.rx != null && options.ry != null)
+    || (options.normX != null && options.normY != null),
+  );
   if (hasTarget) {
-    const target = await resolveClickTarget(appTarget, {
+    const target = await clickDesktop(appTarget, {
+      ...options,
       windowId,
-      ref: options.ref,
       path: options.path || options.elementPath,
-    }, deps);
+      button: 'left',
+    }, deps, { focusOnly: true, resolvedTarget });
     focused = {
       ref: target.ref || '',
       path: target.path || '',
@@ -518,13 +638,6 @@ async function typeDesktop(appTarget, options = {}, deps = {}) {
       name: target.name || '',
       secure: false,
     };
-    // Click-to-focus first when a concrete control is provided.
-    await clickDesktop(appTarget, {
-      windowId,
-      ref: options.ref,
-      path: options.path || options.elementPath,
-      button: 'left',
-    }, deps);
   } else if (typeof deps.getFocusedNode === 'function') {
     const node = await deps.getFocusedNode(appTarget, { windowId });
     if (node) {
@@ -535,67 +648,6 @@ async function typeDesktop(appTarget, options = {}, deps = {}) {
         name: node.name || '',
         secure: Boolean(node.secure),
       };
-    }
-  } else {
-    // Best-effort focused element inspection.
-    const runner = deps.runner || defaultRunner;
-    const processName = String(appTarget?.name || '').trim();
-    const script = `
-function run(argv) {
-  var target = String(argv[0] || '');
-  var wantWindowId = Number(argv[1] || 0);
-  var se = Application('System Events');
-  var processes = se.processes.whose({ name: target })();
-  if (!processes || !processes.length) throw new Error('process_not_found');
-  var proc = processes[0];
-  var windows = [];
-  try { windows = proc.windows(); } catch (e) { windows = []; }
-  var win = null;
-  for (var i = 0; i < windows.length; i++) {
-    var candidate = windows[i];
-    var id = null;
-    try { id = Number(candidate.attributes.byName('AXWindowNumber').value()); } catch (e) { id = null; }
-    if (id === wantWindowId) { win = candidate; break; }
-  }
-  if (!win) throw new Error('window_not_found');
-  var focused = null;
-  try { focused = se.uiElements().whose({ focused: true })(); } catch (e) { focused = null; }
-  if (!focused || !focused.length) {
-    try { focused = proc.uiElements().whose({ focused: true })(); } catch (e2) { focused = null; }
-  }
-  if (!focused || !focused.length) {
-    return JSON.stringify({ role: '', name: '', secure: false });
-  }
-  var el = focused[0];
-  var role = '';
-  var name = '';
-  var subrole = '';
-  var description = '';
-  try { role = String(el.role()); } catch (e) {}
-  try { name = String(el.title()); } catch (e) { try { name = String(el.name()); } catch (e2) {} }
-  try { subrole = String(el.subrole()); } catch (e) {}
-  try { description = String(el.description()); } catch (e) {}
-  var text = (role + ' ' + subrole + ' ' + description).toLowerCase();
-  var secure = text.indexOf('secure') >= 0 || text.indexOf('password') >= 0;
-  return JSON.stringify({ role: role, name: name, secure: secure });
-}
-`.trim();
-    try {
-      const { stdout } = await runner(
-        '/usr/bin/osascript',
-        ['-l', 'JavaScript', '-e', script, processName, String(windowId)],
-        { timeout: 10000 },
-      );
-      const node = JSON.parse(String(stdout || '').trim() || '{}');
-      focused = {
-        ref: '',
-        path: '',
-        role: String(node.role || ''),
-        name: String(node.name || ''),
-        secure: Boolean(node.secure),
-      };
-    } catch {
-      /* ignore focus probe failures; typing may still work on current focus */
     }
   }
 
@@ -616,61 +668,148 @@ function run(argv) {
   }
 
   const runner = deps.runner || defaultRunner;
-  const processName = String(appTarget?.name || '').trim();
-  // Use System Events keystroke in chunks to avoid oversized argv.
-  const chunkSize = 120;
-  const chunks = [];
-  for (let i = 0; i < text.length; i += chunkSize) chunks.push(text.slice(i, i + chunkSize));
+  const processName = String(appTarget?.bundleId || appTarget?.name || '').trim();
+  const clearBefore = options.clear === true;
+  const submitAfter = options.submit === true;
+  // Paste literal text for all input sources, including Latin searches in a CJK IME.
+  const pasteScript = `
+ObjC.import('AppKit');
+ObjC.import('CoreGraphics');
+${JXA_DESKTOP_HELPERS}
+${JXA_TARGET_WINDOW_GUARD}
 
-  try {
-    if (processName) {
-      const activate = `
-function run(argv) {
-  var appName = String(argv[0] || '');
-  if (!appName) return;
-  try {
-    var app = Application(appName);
-    app.includeStandardAdditions = true;
-    app.activate();
-  } catch (e) {}
-}
-`.trim();
-      await runner('/usr/bin/osascript', ['-l', 'JavaScript', '-e', activate, processName], { timeout: 5000 });
+function withPasteboardText(board, text, paste) {
+  var originalChange = Number(board.changeCount);
+  var saved = $.NSMutableArray.alloc.init;
+  var items = board.pasteboardItems;
+  for (var i = 0; i < Number(items.count); i++) {
+    var item = items.objectAtIndex(i);
+    var copy = $.NSPasteboardItem.alloc.init;
+    var types = item.types;
+    for (var j = 0; j < Number(types.count); j++) {
+      var type = types.objectAtIndex(j);
+      var data = item.dataForType(type);
+      if (!data || data.isNil() || !copy.setDataForType(data, type)) {
+        throw new Error('无法保存当前剪贴板格式，已停止输入。');
+      }
     }
-
-    for (const chunk of chunks) {
-      const script = `
-function run(argv) {
-  var text = String(argv[0] || '');
-  var se = Application('System Events');
-  se.includeStandardAdditions = true;
-  // keystroke supports plain text; newlines are sent as return.
-  var parts = text.split('\\n');
-  for (var i = 0; i < parts.length; i++) {
-    if (parts[i]) se.keystroke(parts[i]);
-    if (i < parts.length - 1) se.keyCode(36); // return
+    saved.addObject(copy);
   }
-  return 'ok';
+  if (Number(board.changeCount) !== originalChange) throw new Error('剪贴板已变化，请重新确认输入。');
+  // The ObjC bridge invokes zero-argument selectors on property access.
+  var ownedChange = Number(board.clearContents);
+  try {
+    if (!board.setStringForType($(text), $.NSPasteboardTypeString)) throw new Error('无法写入剪贴板。');
+    paste(function () {
+      if (Number(board.changeCount) !== ownedChange) throw new Error('剪贴板已变化，请检查目标输入框。');
+    });
+  } finally {
+    if (Number(board.changeCount) === ownedChange) {
+      board.clearContents;
+      if (Number(saved.count) && !board.writeObjects(saved)) throw new Error('无法还原剪贴板，请先检查目标输入框。');
+    }
+  }
+}
+
+function run(argv) {
+  var target = findRunningApp(argv[0], argv[5], argv[6]);
+  var windowId = Number(argv[4]);
+
+  var pastePosted = false;
+  function checkWindow() {
+    try { assertTargetFrontWindow(target, windowId); }
+    catch (e) { if (pastePosted) throw new Error('desktop_partial_paste'); throw e; }
+  }
+  checkWindow();
+  var se = Application('System Events');
+  var proc = findSeProcess(se, target.name, target.bundleId, target.pid);
+  var element = null;
+  var role = '', subrole = '', name = '', description = '';
+  try { element = proc.attributes.byName('AXFocusedUIElement').value(); } catch (e) {}
+  if (element) {
+    try { role = String(element.role() || ''); } catch (e) {}
+    try { subrole = String(element.subrole() || ''); } catch (e) {}
+    try { description = String(element.description() || ''); } catch (e) {}
+    try { name = String(element.name() || ''); } catch (e) {}
+  }
+  if (/secure|password/i.test(role + ' ' + subrole + ' ' + description)) throw new Error('desktop_secure_target');
+  function fieldValue() {
+    try {
+      var value = element.value();
+      return typeof value === 'string' ? value : null;
+    } catch (e) { return null; }
+  }
+  var editable = /^(AXTextArea|AXTextField|AXComboBox)$/.test(role);
+  var previous = editable ? fieldValue() : null;
+  var canVerify = previous !== null && (argv[2] === '1' || previous === '');
+  var verified = false;
+  withPasteboardText($.NSPasteboard.generalPasteboard, argv[1], function (checkClipboard) {
+    if (argv[2] === '1') {
+      checkWindow();
+      se.keyCode(0, { using: ['command down'] }); // Select existing text; paste replaces it.
+    }
+    checkWindow();
+    checkClipboard();
+    se.keyCode(9, { using: ['command down'] });
+    pastePosted = true;
+    if (canVerify) {
+      if (previous === argv[1]) delay(0.15);
+      // Keep the clipboard intact until the target consumes it.
+      for (var attempt = 0; attempt < 10; attempt++) {
+        if (fieldValue() === argv[1]) { verified = true; break; }
+        delay(0.05);
+      }
+      if (!verified) throw new Error('粘贴后输入框内容与预期不符，请先检查界面。');
+    } else {
+      delay(0.15); // Custom controls may expose no AX value.
+    }
+    if (argv[3] === '1') {
+      checkWindow();
+      checkClipboard();
+      se.keyCode(36);
+    }
+  });
+  return JSON.stringify({ role: role, name: name, verified: verified });
 }
 `.trim();
-      await runner('/usr/bin/osascript', ['-l', 'JavaScript', '-e', script, chunk], { timeout: 15000 });
-    }
+  try {
+    const { stdout } = await runner(
+      '/usr/bin/osascript',
+      ['-l', 'JavaScript', '-e', pasteScript, processName, text, clearBefore ? '1' : '0', submitAfter ? '1' : '0',
+        String(windowId), String(appTarget?.bundleId || ''), String(appTarget?.path || '')],
+      { timeout: 15000 },
+    );
 
+    const observation = String(stdout || '').trim().startsWith('{') ? JSON.parse(stdout) : {};
     return {
       ok: true,
       appName: String(appTarget?.name || ''),
       bundleId: String(appTarget?.bundleId || ''),
       windowId,
       title: frame.title || '',
+      bounds: frame.bounds || null,
       chars: text.length,
+      method: 'paste',
+      submitted: submitAfter,
+      valueVerified: observation.verified === true,
       ref: focused.ref || '',
       path: focused.path || '',
-      role: focused.role || '',
-      name: focused.name || '',
+      role: observation.role || focused.role || '',
+      name: observation.name || focused.name || '',
       mode: hasTarget ? 'target' : 'focused',
     };
   } catch (cause) {
     if (cause && cause.code && String(cause.code).startsWith('desktop_')) throw cause;
+    const focusError = foregroundError(cause);
+    if (focusError) throw focusError;
+    if (String(cause?.stderr || cause?.message || '').includes('desktop_partial_paste')) {
+      throw Object.assign(new Error('目标窗口未在前台或已进入调度中心。粘贴已派发，未按回车，请核对输入框。', { cause }), { code: 'desktop_action_outcome_unknown' });
+    }
+    if (/Error: desktop_secure_target\b/.test(String(cause?.stderr || cause?.message || ''))) {
+      const error = new Error('不会向密码或安全输入框输入内容。');
+      error.code = 'desktop_secure_target';
+      throw error;
+    }
     const error = new Error(`输入失败：${cause && cause.message ? cause.message : cause}`);
     error.code = 'desktop_type_failed';
     error.cause = cause;
@@ -849,28 +988,20 @@ async function scrollDesktop(appTarget, options = {}, deps = {}) {
   }
 
   const runner = deps.runner || defaultRunner;
-  const processName = String(appTarget?.name || '').trim();
+  const processName = String(appTarget?.bundleId || appTarget?.name || '').trim();
   const script = `
-ObjC.import('Cocoa');
+ObjC.import('AppKit');
+ObjC.import('CoreGraphics');
+${JXA_DESKTOP_HELPERS}
+${JXA_TARGET_WINDOW_GUARD}
 function run(argv) {
-  var appName = String(argv[0] || '');
+  var target = findRunningApp(argv[0], argv[6], argv[7]);
+  var windowId = Number(argv[5]);
   var x = Number(argv[1] || 0);
   var y = Number(argv[2] || 0);
   var dx = Number(argv[3] || 0);
   var dy = Number(argv[4] || 0);
-  try {
-    if (appName) {
-      var app = Application(appName);
-      app.includeStandardAdditions = true;
-      app.activate();
-      delay(0.05);
-    }
-  } catch (e) {}
   var point = $.CGPointMake(x, y);
-  // Move cursor over the target so the scroll lands on the right surface.
-  var move = $.CGEventCreateMouseEvent(null, $.kCGEventMouseMoved, point, $.kCGMouseButtonLeft);
-  $.CGEventPost($.kCGHIDEventTap, move);
-  delay(0.02);
   var wheelCount = (dx !== 0 && dy !== 0) ? 2 : 1;
   var event = null;
   if (dx !== 0 && dy !== 0) {
@@ -881,6 +1012,8 @@ function run(argv) {
     event = $.CGEventCreateScrollWheelEvent(null, $.kCGScrollEventUnitLine, 1, dy);
   }
   $.CGEventSetLocation(event, point);
+  requireForeground(target);
+  if (!hitTarget(windowId, x, y, target.pid)) throw new Error('desktop_foreground_required');
   $.CGEventPost($.kCGHIDEventTap, event);
   return JSON.stringify({ ok: true, x: x, y: y, dx: dx, dy: dy, wheelCount: wheelCount });
 }
@@ -895,7 +1028,7 @@ function run(argv) {
         String(target.point.x),
         String(target.point.y),
         String(delta.dx),
-        String(delta.dy),
+        String(delta.dy), String(target.windowId), String(appTarget?.bundleId || ''), String(appTarget?.path || ''),
       ],
       { timeout: 10000 },
     );
@@ -919,6 +1052,8 @@ function run(argv) {
     };
   } catch (cause) {
     if (cause && cause.code && String(cause.code).startsWith('desktop_')) throw cause;
+    const focusError = foregroundError(cause);
+    if (focusError) throw focusError;
     const error = new Error(`滚动失败：${cause && cause.message ? cause.message : cause}`);
     error.code = 'desktop_scroll_failed';
     error.cause = cause;
@@ -1077,43 +1212,46 @@ async function dragDesktop(appTarget, options = {}, deps = {}) {
   }
 
   const runner = deps.runner || defaultRunner;
-  const processName = String(appTarget?.name || '').trim();
+  const processName = String(appTarget?.bundleId || appTarget?.name || '').trim();
   const script = `
-ObjC.import('Cocoa');
+ObjC.import('AppKit');
+ObjC.import('CoreGraphics');
+${JXA_DESKTOP_HELPERS}
+${JXA_TARGET_WINDOW_GUARD}
 function run(argv) {
-  var appName = String(argv[0] || '');
+  var target = findRunningApp(argv[0], argv[7], argv[8]);
+  var windowId = Number(argv[6]);
   var x1 = Number(argv[1] || 0);
   var y1 = Number(argv[2] || 0);
   var x2 = Number(argv[3] || 0);
   var y2 = Number(argv[4] || 0);
   var steps = Math.max(1, Number(argv[5] || 12));
-  try {
-    if (appName) {
-      var app = Application(appName);
-      app.includeStandardAdditions = true;
-      app.activate();
-      delay(0.05);
-    }
-  } catch (e) {}
+  requireForeground(target);
+  if (!hitTarget(windowId, x1, y1, target.pid) || !hitTarget(windowId, x2, y2, target.pid)) throw new Error('desktop_foreground_required');
   var start = $.CGPointMake(x1, y1);
   var end = $.CGPointMake(x2, y2);
-  var move = $.CGEventCreateMouseEvent(null, $.kCGEventMouseMoved, start, $.kCGMouseButtonLeft);
-  $.CGEventPost($.kCGHIDEventTap, move);
-  delay(0.02);
   var down = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseDown, start, $.kCGMouseButtonLeft);
   $.CGEventPost($.kCGHIDEventTap, down);
-  delay(0.03);
-  for (var i = 1; i <= steps; i++) {
-    var t = i / steps;
-    var x = x1 + (x2 - x1) * t;
-    var y = y1 + (y2 - y1) * t;
-    var point = $.CGPointMake(x, y);
-    var drag = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseDragged, point, $.kCGMouseButtonLeft);
-    $.CGEventPost($.kCGHIDEventTap, drag);
-    delay(0.008);
+  var lastPoint = start;
+  try {
+    delay(0.03);
+    for (var i = 1; i <= steps; i++) {
+      var t = i / steps;
+      var x = x1 + (x2 - x1) * t, y = y1 + (y2 - y1) * t;
+      requireForeground(target);
+      if (!hitTarget(windowId, x, y, target.pid)) throw new Error('focus_changed');
+      lastPoint = $.CGPointMake(x, y);
+      var drag = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseDragged, lastPoint, $.kCGMouseButtonLeft);
+      $.CGEventPost($.kCGHIDEventTap, drag);
+      delay(0.008);
+    }
+    requireForeground(target);
+    if (!hitTarget(windowId, x2, y2, target.pid)) throw new Error('focus_changed');
+    $.CGEventPost($.kCGHIDEventTap, $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseUp, end, $.kCGMouseButtonLeft));
+  } catch (e) {
+    $.CGEventPostToPid(target.pid, $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseUp, lastPoint, $.kCGMouseButtonLeft));
+    throw new Error('desktop_partial_drag');
   }
-  var up = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseUp, end, $.kCGMouseButtonLeft);
-  $.CGEventPost($.kCGHIDEventTap, up);
   return JSON.stringify({ ok: true, fromX: x1, fromY: y1, toX: x2, toY: y2, steps: steps });
 }
 `.trim();
@@ -1128,7 +1266,7 @@ function run(argv) {
         String(start.point.y),
         String(end.point.x),
         String(end.point.y),
-        String(steps),
+        String(steps), String(windowId), String(appTarget?.bundleId || ''), String(appTarget?.path || ''),
       ],
       { timeout: 15000 },
     );
@@ -1158,8 +1296,11 @@ function run(argv) {
     };
   } catch (cause) {
     if (cause && cause.code && String(cause.code).startsWith('desktop_')) throw cause;
+    const focusError = foregroundError(cause);
+    if (focusError) throw focusError;
     const error = new Error(`拖拽失败：${cause && cause.message ? cause.message : cause}`);
-    error.code = 'desktop_drag_failed';
+    error.code = String(cause?.stderr || cause?.message || cause).includes('desktop_partial_drag')
+      ? 'desktop_action_outcome_unknown' : 'desktop_drag_failed';
     error.cause = cause;
     throw error;
   }
@@ -1336,23 +1477,21 @@ async function hotkeyDesktop(appTarget, options = {}, deps = {}) {
   }
 
   const runner = deps.runner || defaultRunner;
-  const processName = String(appTarget?.name || '').trim();
+  const processName = String(appTarget?.bundleId || appTarget?.name || '').trim();
   const script = `
+ObjC.import('AppKit');
+ObjC.import('CoreGraphics');
+${JXA_DESKTOP_HELPERS}
+${JXA_TARGET_WINDOW_GUARD}
 function run(argv) {
-  var appName = String(argv[0] || '');
+  var target = findRunningApp(argv[0], argv[5], argv[6]);
+  var windowId = Number(argv[4]);
   var kind = String(argv[1] || 'char');
   var payload = String(argv[2] || '');
   var modsCsv = String(argv[3] || '');
   var se = Application('System Events');
   se.includeStandardAdditions = true;
-  try {
-    if (appName) {
-      var app = Application(appName);
-      app.includeStandardAdditions = true;
-      app.activate();
-      delay(0.05);
-    }
-  } catch (e) {}
+
   var mods = [];
   if (modsCsv) {
     var parts = modsCsv.split(',');
@@ -1361,6 +1500,7 @@ function run(argv) {
       if (m) mods.push(m + ' down');
     }
   }
+  assertTargetFrontWindow(target, windowId);
   if (kind === 'code') {
     var code = Number(payload || 0);
     if (mods.length) se.keyCode(code, { using: mods });
@@ -1382,6 +1522,7 @@ function run(argv) {
         hotkey.kind,
         hotkey.kind === 'code' ? String(hotkey.keyCode) : String(hotkey.keystroke),
         hotkey.modifiers.join(','),
+        String(windowId), String(appTarget?.bundleId || ''), String(appTarget?.path || ''),
       ],
       { timeout: 10000 },
     );
@@ -1397,6 +1538,8 @@ function run(argv) {
     };
   } catch (cause) {
     if (cause && cause.code && String(cause.code).startsWith('desktop_')) throw cause;
+    const focusError = foregroundError(cause);
+    if (focusError) throw focusError;
     const error = new Error(`快捷键失败：${cause && cause.message ? cause.message : cause}`);
     error.code = 'desktop_hotkey_failed';
     error.cause = cause;
@@ -1405,6 +1548,7 @@ function run(argv) {
 }
 
 module.exports = {
+  resolveCoordinateFromOptions,
   centerOfBounds,
   pointInBounds,
   getWindowFrame,

@@ -1,4 +1,5 @@
 import { Search, X } from 'lucide-react';
+import { HintButton } from '../shared/HintButton';
 import { Select } from '../shared/Select';
 import type { SidebarSessionFilter } from './sidebar-filter';
 import './styles/sidebar-search.css';
@@ -23,12 +24,12 @@ export function SidebarSearch({ query, filter, onQueryChange, onFilterChange, on
           else if (filter !== 'all') onFilterChange('all');
           else onClose();
         }} />
-      {query && <button type="button" className="icon-button" aria-label="清除搜索" onClick={event => {
+      {query && <HintButton type="button" className="icon-button" aria-label="清除搜索" onClick={event => {
         onQueryChange('');
         event.currentTarget.parentElement?.querySelector('input')?.focus();
-      }}><X /></button>}
+      }}><X /></HintButton>}
     </div>
-    <Select label="会话筛选" value={filter} onChange={value => onFilterChange(value as SidebarSessionFilter)} options={[
+    <Select label="会话筛选" menuClassName="sidebar-session-filter-menu" value={filter} onChange={value => onFilterChange(value as SidebarSessionFilter)} options={[
       { value: 'all', label: '全部会话' },
       { value: 'running', label: '运行中' },
       { value: 'pinned', label: '已置顶' },

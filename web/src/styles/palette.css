@@ -22,8 +22,8 @@
 测试对不透明颜色及同色混合后的配对计算对比度。
  */
 
-/* The board and its portaled menus can use a different mode from the window. */
-:where(.canvas-appearance-light, .canvas-appearance-dark, .excalidraw-modal-container),
+/* The board, its menus and the theme previews can each have their own mode. */
+:where(.canvas-appearance-light, .canvas-appearance-dark, .excalidraw-modal-container, .theme-sample-stage),
 :root {
   color-scheme: light;
   /* 每套主题只维护一个主色，背景与描边统一从它派生。
@@ -38,24 +38,19 @@
   /* 存储分类和 Harness 图标使用的独立色。 */
   --scheme-lime: #00818a;
 
-  /* 页面与表面层级：页面背景、卡片表面、侧栏背景保持中性；surface-soft/hover/
-  active 表示交互递进，selected-bg 用于选中行。层级从低到高靠明度差而不是阴影
-  来区分。
-   */
-
-  /* 四级表面：全 app（含设置面）共用同一套，换壁纸不会改变窗口内颜色。 */
+  /* 两种底色。文件与会话共用画布，卡片、输入框和浮层复用侧栏底色。 */
   --surface-canvas: #ffffff;
-  --surface-chrome: #eaeaea;
-  --surface-raised: #ffffff;
-  --surface-floating: #ffffff;
-  --composer-surface: #ffffff;
+  --surface-chrome: #f6f6f6;
+  --surface-raised: var(--surface-chrome);
+  --surface-floating: var(--surface-raised);
+  --composer-surface: var(--surface-raised);
   --composer-highlight: rgb(255 255 255 / 72%);
-  --launcher-card-bg: #ffffff;
-  --surface-hover: #ebebed;
+  --launcher-card-bg: var(--surface-raised);
+  --surface-hover: color-mix(in srgb, var(--text-1) 5%, var(--surface-chrome));
   --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
   /* 中性 tint：设置页这类单色界面用的选中底。 */
   --tint-neutral: color-mix(in srgb, var(--text-1) 8%, transparent);
-  --inline-code-bg: color-mix(in srgb, var(--text-1) 6%, transparent);
+  --inline-code-bg: var(--surface-raised);
   --add: #1f8a4c;
   --del: #c0392b;
 
@@ -69,9 +64,9 @@
   时间戳和占位符，disabled 只用于不可用控件；对比度由测试按配对校验。
    */
 
-  --text-1: #111318;
-  --text-2: #5f6670;
-  --text-3: #8b929c;
+  --text-1: #202022;
+  --text-2: #5f5f64;
+  --text-3: #838389;
 
   --text: var(--text-1);
   --muted: var(--text-2);
@@ -86,7 +81,7 @@
   --divider: rgb(0 0 0 / 6%);
   --border-hover: rgb(0 0 0 / 22%);
 
-  /* 强调色与按钮：accent 用于链接、选中图标和焦点，accent-soft 是低饱和背景，
+  /* 强调色与按钮：accent 用于主操作与内容区焦点，侧栏选中项使用中性灰阶。
   accent-border 用于选中描边；button-bg/hover 与 on-button 组成主按钮的前景背景
   配对；focus-color 与 focus-halo 组成焦点环，selection 定义文本选区。
    */
@@ -114,9 +109,7 @@
   --info: #46617c;
   --info-soft: #f0f4f8;
   --info-border: #cad7e3;
-  /* 浮层与阴影：scrim 是对话框背后的遮罩，overlay-surface 是覆盖在内容上的半透明
-  表面，scrollbar 两级用于滑块常态与悬停，shadow-color/deep 是两级阴影强度。
-  半透明值只在这里定义。
+  /* scrim 负责对话框背后的遮罩，shadow-color/deep 提供两档阴影强度。
    */
 
   --scrim: rgb(0 0 0 / 24%);
@@ -124,7 +117,6 @@
   --image-preview-thumbnails-bg: color-mix(in srgb, var(--image-preview-scrim) 76%, transparent);
   --image-preview-title-fg: rgb(255 255 255 / 92%);
   --image-preview-muted-fg: rgb(255 255 255 / 64%);
-  --overlay-surface: rgb(255 255 255 / 97%);
   --scrollbar: #c9c9c9;
   --scrollbar-hover: #969696;
   --shadow-color: rgb(0 0 0 / 5%);
@@ -139,8 +131,18 @@
   --syntax-string: #3e662c;
   --syntax-number: #82551e;
   --syntax-function: #365a7d;
+  --editor-keyword: #0000ad;
+  --editor-flow: #af00db;
+  --editor-string: #a31515;
+  --editor-function: #795e26;
+  --editor-type: #26736e;
+  --editor-variable: #001080;
+  --editor-comment: #087408;
+  --editor-number: #075c45;
   /* Terminal ANSI colors stay inside the theme source so xterm follows the
   active light/dark palette instead of shipping its own hard-coded scheme. */
+  /* xterm uses half this ratio for text marked dim by the shell. */
+  --terminal-minimum-contrast: 9;
   --terminal-ansi-black: #202020;
   --terminal-ansi-red: #b12f36;
   --terminal-ansi-green: #267044;
@@ -158,7 +160,7 @@
   --terminal-ansi-bright-cyan: #3d8487;
   --terminal-ansi-bright-white: #f5f5f5;
   /* 设置画布与卡片分层，强调色用于操作、焦点和选中态。 */
-  --settings-page-bg: #f8f8f9;
+  --settings-page-bg: var(--surface-canvas);
   --settings-nav-bg: var(--surface-chrome);
   --settings-card-bg: var(--surface-raised);
   --settings-border: var(--border);
@@ -166,12 +168,12 @@
   --settings-text: var(--text-1);
   --settings-title: var(--text-1);
   --settings-muted: var(--text-2);
-  --settings-control-bg: var(--surface-floating);
+  --settings-control-bg: var(--surface-raised);
   --settings-hover-bg: var(--surface-hover);
   --settings-selected-bg: var(--accent-tint);
   /* 浅色下选中底与卡片同色，靠 1px 描边加轻阴影浮起；深色改为纯色块。 */
   --settings-selected-shadow: inset 0 0 0 1px #ebebeb, 0 1px 2px rgb(0 0 0 / 6%);
-  /* 页面不再是纯白，卡片才需要 1px 极轻阴影；深色不用阴影。 */
+  /* 浅色卡片用轻阴影勾出边缘。 */
   --settings-card-shadow: 0 1px 2px rgb(0 0 0 / 4%);
   --settings-thumb-shadow: 0 1px 2px rgb(0 0 0 / 20%);
   --settings-switch-off: #d9d9d9;
@@ -187,24 +189,18 @@
 系列保持中性灰阶，不加入色相。
  */
 
-:where(.canvas-appearance-dark, .excalidraw-modal-container.theme--dark),
+:where(.canvas-appearance-dark, .excalidraw-modal-container.theme--dark, .theme-sample-stage[data-scheme='dark']),
 :root[data-theme="dark"] {
   color-scheme: dark;
 
 
-  /* 四级表面：画布、外壳、卡片、输入框；rgba 只用于边框、悬停、tint 与行内代码。 */
-  --surface-canvas: #181818;
-  --surface-chrome: #282829;
-  --surface-raised: #181818;
-  --surface-floating: #181818;
-  --composer-surface: #1e1f21;
+  --surface-canvas: #141414;
+  --surface-chrome: #222223;
   --composer-highlight: rgb(255 255 255 / 6%);
-  --launcher-card-bg: #1e1f21;
-  --surface-hover: #2f3030;
+  --surface-hover: #2d2d2f;
   --accent-tint: color-mix(in srgb, var(--accent) 8%, transparent);
   /* 中性 tint：设置页这类单色界面用的选中底。 */
   --tint-neutral: color-mix(in srgb, var(--text-1) 8%, transparent);
-  --inline-code-bg: color-mix(in srgb, var(--text-1) 6%, transparent);
   --add: #6fcf97;
   --del: #eb7070;
 
@@ -215,9 +211,9 @@
   --surface-active: var(--surface-hover);
   --selected-bg: var(--accent-tint);
 
-  --text-1: #eef0f3;
-  --text-2: #a6acb6;
-  --text-3: #767d87;
+  --text-1: #eeeeef;
+  --text-2: #adadb2;
+  --text-3: #85858b;
   --text: var(--text-1);
   --muted: var(--text-2);
   --faint: var(--text-2);
@@ -248,7 +244,6 @@
   --scrim: rgb(0 0 0 / 58%);
   --image-preview-scrim: rgb(0 0 0 / 88%);
   --image-preview-thumbnails-bg: color-mix(in srgb, var(--image-preview-scrim) 76%, transparent);
-  --overlay-surface: rgb(24 24 24 / 97%);
   --scrollbar: #484848;
   --scrollbar-hover: #747474;
   --shadow-color: rgb(0 0 0 / 22%);
@@ -257,6 +252,15 @@
   --syntax-string: #b4d48f;
   --syntax-number: #dfbd88;
   --syntax-function: #a3c3df;
+  --editor-keyword: #569cd6;
+  --editor-flow: #c586c0;
+  --editor-string: #ce9178;
+  --editor-function: #dcdcaa;
+  --editor-type: #4ec9b0;
+  --editor-variable: #9cdcfe;
+  --editor-comment: #79a967;
+  --editor-number: #b5cea8;
+  --terminal-minimum-contrast: 1;
   --terminal-ansi-black: #181818;
   --terminal-ansi-red: #ff989e;
   --terminal-ansi-green: #9dce8b;
@@ -278,13 +282,12 @@
   --selection: color-mix(in srgb, var(--theme-accent) 44%, var(--surface));
   --settings-page-bg: var(--surface-canvas);
   --settings-nav-bg: var(--surface-chrome);
-  --settings-card-bg: #202021;
+  --settings-card-bg: var(--surface-raised);
   --settings-border: var(--border);
   --settings-divider: var(--divider);
   --settings-text: var(--text-1);
   --settings-title: var(--text-1);
   --settings-muted: var(--text-2);
-  --settings-control-bg: #252526;
   --settings-hover-bg: var(--surface-hover);
   --settings-selected-bg: var(--accent-tint);
   --settings-selected-shadow: none;
@@ -313,11 +316,14 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
  */
 
 /* Shared roles derive from the active palette in both modes. */
-:where(.canvas-appearance-light, .canvas-appearance-dark, .excalidraw-modal-container),
+:where(.canvas-appearance-light, .canvas-appearance-dark, .excalidraw-modal-container, .theme-sample-stage),
 :root {
   --transparent: transparent;
-  --nav-selected-bg: var(--tint-neutral);
-  --nav-selected-hover-bg: color-mix(in srgb, var(--text-1) 11%, transparent);
+  --dialog-surface: var(--surface-floating);
+  --overlay-surface: var(--surface-floating);
+  --nav-hover-bg: color-mix(in srgb, var(--text-1) 5%, transparent);
+  --nav-selected-bg: color-mix(in srgb, var(--text-1) 10%, transparent);
+  --nav-selected-hover-bg: color-mix(in srgb, var(--text-1) 14%, transparent);
   --diff-change-bg: color-mix(in srgb, var(--text) 12%, transparent);
   --diff-empty-pattern: repeating-linear-gradient(135deg, var(--transparent) 0 5px, var(--border) 5px 6px);
   /* 同样的斜纹，但底层不透明：行号列是 sticky 的，代码会从它下面滑过。 */
@@ -326,7 +332,7 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --image-dismiss-fg: #202020;
   /* One hue; no independently tuned hover, border or focus colors. */
   --accent: var(--theme-accent);
-  --profile-icon-background: color-mix(in srgb, var(--text-1) 76%, var(--theme-accent));
+  --profile-icon-background: #c9daf0;
   /* Status icons keep the workspace palette in the monochrome settings preview. */
   --extension-icon-neutral: var(--text-2);
   --extension-icon-accent: var(--accent);
@@ -367,28 +373,12 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --syntax-comment: var(--faint);
   --message-bg: var(--surface-soft);
   --message-border: var(--border);
-  /* 自定义背景的透明表面按层级集中派生。画布媒体只透过外壳底漆，常规卡片再覆盖
-  一层，控件与状态最后落到可读表面；弹框继续使用 overlay-surface，错误、成功和
-  警告也不参与透明混合。组件只消费这些角色，避免每处单独调透明度产生叠加色斑。
-  数值是各层相对透明度，不是页面总透明度；页面总透明度由界面遮挡滑杆控制。
-  */
+  /* 壁纸可见度作用于窗框和画布，内容表面沿用当前主题。 */
   --background-shell-wash: var(--bg);
   /* 外壳遮挡层：直接画在滚动容器背景上，避免 ::before 只覆盖第一个视口。 */
   --background-shell-veil: color-mix(in srgb, var(--background-shell-wash) calc(var(--background-surface-opacity) * 100%), transparent);
   --background-settings-veil: color-mix(in srgb, var(--background-shell-wash) calc(var(--background-surface-opacity) * 60%), transparent);
   --background-sidebar-wash: var(--sidebar-bg);
-  --background-card-surface: color-mix(in srgb, var(--surface) 68%, transparent);
-  --background-card-strong-surface: color-mix(in srgb, var(--surface) 84%, transparent);
-  --background-control-surface: color-mix(in srgb, var(--surface) 64%, transparent);
-  --background-raised-surface: color-mix(in srgb, var(--surface-raised) 46%, transparent);
-  --background-soft-surface: color-mix(in srgb, var(--surface-soft) 38%, transparent);
-  --background-hover-surface: color-mix(in srgb, var(--text) 4%, transparent);
-  --background-active-surface: color-mix(in srgb, var(--text) 8%, transparent);
-  --background-selected-surface: color-mix(in srgb, var(--selected-bg) 42%, transparent);
-  --background-accent-surface: var(--background-selected-surface);
-  --background-border: color-mix(in srgb, var(--border) 78%, transparent);
-  --background-border-strong: color-mix(in srgb, var(--border-strong) 84%, transparent);
-  --background-divider: color-mix(in srgb, var(--divider) 70%, transparent);
   /* Data visualization roles: heat levels derive from the active accent, while
    * borders and secondary labels retain enough contrast in both themes. */
   --data-accent-muted: var(--text);
@@ -406,7 +396,6 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --mask-opaque: #000;
   --focus-ring: 0 0 0 2px var(--focus-color);
   --composer-focus-shadow: 0 0 0 3px color-mix(in srgb, var(--focus-color) 16%, transparent);
-  --live-ring: 0 0 0 2px var(--focus-color);
   /* 贴在一起的内容表面只靠 1px 边框分界，不再叠投影：输入框、选择器、按钮、
      气泡、卡片都是如此。投影只留给真正浮起来的层——菜单、tooltip、对话框、
      抽屉与窗口外壳，那是「离开平面」的语义，而不是装饰。 */
@@ -442,20 +431,12 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
   --trace-tool-soft: #d9902d22;
 }
 
-/* Keep both window samples readable regardless of the theme of their parent page. */
-.theme-sample-stage {
-  --sample-paper: light-dark(#ffffff, #23272c);
-  --sample-rail: light-dark(#edeff0, #353a41);
-  --sample-edge: light-dark(#b7c1c1, #596168);
-  --sample-line: light-dark(#a9b1b4, #788189);
-  --sample-ground: light-dark(#e9eeed, #323a40);
-  --sample-shade: light-dark(rgb(40 64 58 / 13%), rgb(0 0 0 / 24%));
-}
-
 /* ---- 终端配色主题 ---------------------------------------------------------
  * 终端主题要在运行时交给 xterm（它只认具体色值），所以配色在这里集中声明，
  * 由 terminal-themes.ts 用 getComputedStyle 读取。新增主题只需加一段选择器。
  */
+
+[data-terminal-theme] { --terminal-minimum-contrast: 1; }
 
 [data-terminal-theme='catppuccin-mocha'] {
   --terminal-bg: #1e1e2e;
@@ -602,6 +583,7 @@ success/warning/error 等语义状态保持不变，避免配色切换改变状�
 }
 
 [data-terminal-theme='solarized-light'] {
+  --terminal-minimum-contrast: 9;
   --terminal-bg: #fdf6e3;
   --terminal-fg: #586e75;
   --terminal-cursor: #586e75;

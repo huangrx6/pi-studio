@@ -36,7 +36,7 @@ export function stepTerminalFontSize(current: unknown, direction: 1 | -1): numbe
 export function needsPasteConfirm(text: string): boolean {
   if (typeof text !== 'string' || !text) return false;
   if (text.length > PASTE_CHAR_THRESHOLD) return true;
-  const lines = text.split('\n').filter((line) => line.trim().length > 0);
+  const lines = text.split(/\r\n?|\n/u).filter((line) => line.trim().length > 0);
   return lines.length > PASTE_LINE_THRESHOLD;
 }
 

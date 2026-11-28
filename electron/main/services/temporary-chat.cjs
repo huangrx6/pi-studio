@@ -1,25 +1,17 @@
-/**
- * In-memory temporary conversations.
- *
- * Temporary chats use the same Pi Durable execution engine as regular Studio
- * conversations, with a private MemoryStorage. Transcripts, images, and run
- * state live only in memory and never write SQLite, JSONL, or attachments.
- * Tool availability, permissions, and prompt harness follow Studio's temporary
- * profile bindings when configured.
- */
+/** Temporary chat transcripts belong to a separate Pi Durable namespace in the Studio database. */
 
-const fs = require('node:fs');
 const os = require('node:os');
 const { serializeMessage } = require('../core/serialize.cjs');
-const { databasePath } = require('../core/studio-db.cjs');
+const { databasePath, getStudioDatabase } = require('../core/studio-db.cjs');
 const { getTemporaryHarnessProfile } = require('../core/app-settings.cjs');
-const { getStudioModelsRuntime } = require('../core/studio-models.cjs');
+const { getStudioModelsRuntime, getStudioModelsRuntimeSync } = require('../core/studio-models.cjs');
 const {
   modelInfoFor,
   runtimeModelFor,
   splitModelRef,
 } = require('./models.cjs');
-const { getDurableRuntime } = require('../runtime/durable-runtime.cjs');
+const { getDurableRuntime, sanitizedShellEnv } = require('../runtime/durable-runtime.cjs');
+const { openDurableStorage } = require('../runtime/durable-storage.cjs');
 const durableView = require('../runtime/view.cjs');
 const { releaseProviderSession } = require('../runtime/provider-session.cjs');
 const { temporarySafeExtensions } = require('./studio-extensions.cjs');
@@ -30,8 +22,8 @@ const { redactToolSecrets, resolveToolSecrets } = require('./secret-vault.cjs');
 const { CODING_RULES, toolGuidance } = require('../capabilities/harness/index.cjs');
 
 const chats = new Map();
-let memoryRuntime;
-let memoryOpening;
+let temporaryRuntime;
+let temporaryOpening;
 
 function buildDefaultInstructions(hasTools) {
   return [
@@ -39,7 +31,7 @@ function buildDefaultInstructions(hasTools) {
     hasTools
       ? 'Answer directly in the user language. No workspace files are attached, but read-only user plugin tools are available when helpful.'
       : 'Answer directly in the user language. No workspace is attached and no tools are available.',
-    'Messages, images, and transcript state exist only in process memory and disappear when the chat or app closes.',
+    'This conversation and its images are saved in local temporary chat history, separately from workspace conversations.',
   ].join('\n');
 }
 
@@ -69,7 +61,7 @@ function buildHarnessInstructions(tools, harnessProfile) {
     const addendum = overrides.addendum?.trim() || String(harnessProfile.customInstructions || '').trim();
     if (addendum) parts.push(addendum);
   }
-  parts.push('Messages, images, and transcript state exist only in process memory and disappear when the chat or app closes.');
+  parts.push('This conversation and its images are saved in local temporary chat history, separately from workspace conversations.');
   return parts.filter(Boolean).join('\n\n');
 }
 
@@ -177,8 +169,7 @@ function syncTemporarySafeExtensions(runtime) {
 }
 
 async function resolveTemporaryCapabilities(runtime, durableRuntime) {
-  const hasPersistedDb = fs.existsSync(databasePath()) && Boolean(durableRuntime?.registry);
-  if (!hasPersistedDb) {
+  if (!durableRuntime?.registry) {
     return syncTemporarySafeExtensions(runtime);
   }
   const selection = await temporaryRuntimeSelection();
@@ -186,12 +177,19 @@ async function resolveTemporaryCapabilities(runtime, durableRuntime) {
   const permissionExt = selection.tools.length > 0
     ? (runtime.permissionExtension ??= createTemporaryPermissionsExtension(runtime.durable))
     : undefined;
+  const extensions = selection.extensions.map(extension => {
+    if (extension.name !== 'studio-browser-tools') return extension;
+    // Temporary Durable IDs belong to a separate store and may collide with project conversation IDs.
+    return runtime.browserTools ??= require('../capabilities/browser/index.cjs').createBrowserTools(runtime.durable, { temporary: true });
+  });
   const installedExtensions = syncExtensionEntries(
     runtime,
-    selection.extensions,
+    extensions,
     permissionExt,
   );
-  const instructions = buildHarnessInstructions(selection.tools, harnessProfile);
+  const browserTools = new Map(runtime.browserTools?.tools?.map(tool => [tool.name, tool]));
+  const tools = selection.tools.map(tool => browserTools.get(tool.name) || tool);
+  const instructions = buildHarnessInstructions(tools, harnessProfile);
   const signature = JSON.stringify({
     profileId: selection.profile.id,
     tools: selection.tools.map((tool) => tool.name),
@@ -200,19 +198,23 @@ async function resolveTemporaryCapabilities(runtime, durableRuntime) {
   });
   return {
     extensions: installedExtensions,
-    tools: selection.tools,
+    tools,
     instructions,
     signature,
   };
 }
 
-async function openMemoryRuntime() {
-  if (memoryRuntime) return memoryRuntime;
-  if (memoryOpening) return memoryOpening;
-  memoryOpening = (async () => {
+async function openTemporaryRuntime() {
+  if (temporaryRuntime) return temporaryRuntime;
+  if (temporaryOpening) return temporaryOpening;
+  temporaryOpening = (async () => {
     const durableRuntime = await getDurableRuntime();
     const studioModels = await getStudioModelsRuntime();
-    const storage = new durableRuntime.durable.MemoryStorage();
+    getStudioDatabase();
+    const storage = await openDurableStorage(databasePath(), {
+      prefix: 'pi_temporary_',
+      busyTimeoutMs: 15_000,
+    });
     const registry = durableRuntime.durable.createRegistry();
     let envFactory;
     if (durableRuntime.registry) {
@@ -220,14 +222,14 @@ async function openMemoryRuntime() {
         const durableEnv = await import('@earendil-works/pi-durable/env/node');
         envFactory = ({ cwd }) => new durableEnv.NodeExecutionEnv({
           cwd: cwd || os.tmpdir(),
-          shellEnv: process.env,
+          shellEnv: sanitizedShellEnv(),
         });
       } catch {
         envFactory = undefined;
       }
     }
     const harness = await durableRuntime.durable.Harness.open(storage, {
-      models: studioModels.models,
+      models: () => (getStudioModelsRuntimeSync() || studioModels).models,
       registry,
       identity: {
         userAgent: 'detailed',
@@ -247,28 +249,33 @@ async function openMemoryRuntime() {
         afterFailedRun: 'withdraw',
       },
       ...(envFactory ? { env: envFactory } : {}),
-    }, durableRuntime.context);
-    memoryRuntime = {
+    }, durableRuntime.context).catch(async error => {
+      await storage.close().catch(() => {});
+      throw error;
+    });
+    temporaryRuntime = {
       durable: durableRuntime.durable,
       context: durableRuntime.context,
       cleanupSessionResources: durableRuntime.cleanupSessionResources,
       durableRuntime,
+      stopKeepAwake: durableRuntime.keepAwake?.addHarness(harness, durableRuntime.context),
       harness,
       registry,
       storage,
     };
-    return memoryRuntime;
+    return temporaryRuntime;
   })().finally(() => {
-    memoryOpening = undefined;
+    temporaryOpening = undefined;
   });
-  return memoryOpening;
+  return temporaryOpening;
 }
 
-async function closeMemoryRuntime() {
-  if (memoryOpening) await memoryOpening.catch(() => {});
-  const current = memoryRuntime;
-  memoryRuntime = undefined;
+async function closeTemporaryRuntime() {
+  if (temporaryOpening) await temporaryOpening.catch(() => {});
+  const current = temporaryRuntime;
+  temporaryRuntime = undefined;
   if (!current) return;
+  current.stopKeepAwake?.();
   await current.harness.close(current.context).catch(() => {});
   await current.storage.close?.(current.context).catch(() => {});
 }
@@ -342,157 +349,187 @@ function content(input) {
   ];
 }
 
-function chatMessage(message) {
-  return message?.role === 'assistant' || message?.role === 'toolResult'
-    ? serializeMessage(message)
-    : undefined;
+function entryMessages(record) {
+  if (!['pi.user', 'pi.assistant', 'pi.tool-result'].includes(record.kind)) return [];
+  return (record.model || []).map(serializeMessage).filter(Boolean);
+}
+
+function temporaryHistory() {
+  return getStudioDatabase().listTemporaryChats();
+}
+
+async function temporaryRead(id) {
+  if (typeof id !== 'string') return null;
+  const saved = getStudioDatabase().getTemporaryChat(id);
+  if (!saved) return null;
+  const { durableId, hasImages, ...summary } = saved;
+  const runtime = await openTemporaryRuntime();
+  const conversation = await runtime.harness.conversation(durableId, runtime.context);
+  if (!conversation) throw new Error('未找到这段临时对话的本地记录');
+  const messages = [];
+  let cursor;
+  do {
+    const page = await conversation.entries({ order: 'ascending' }, 100, cursor, runtime.context);
+    for (const record of page.items) messages.push(...entryMessages(record));
+    cursor = page.next;
+  } while (cursor);
+  return { ...summary, messages };
+}
+
+async function watchConversation(entry) {
+  const watch = await entry.conversation.watch(entry.runtime.context);
+  entry.stream = watch;
+  let previous = durableView.liveFromView(watch.value);
+  const entryIds = durableView.seedEntryIds(watch.value.entries);
+  watch.start(async (call) => {
+    if (call.kind !== 'value') return;
+    const live = durableView.liveFromView(call.value);
+    for (const record of durableView.appendedEntries(entryIds, call.value.entries)) {
+      for (const message of entryMessages(record)) entry.send({ type: 'message', message });
+    }
+    const streamed = live.generation?.message;
+    if (streamed && streamed !== previous.generation?.message) {
+      const message = serializeMessage(streamed);
+      if (message) entry.send({ type: 'message', message: { ...message, streaming: true } });
+    }
+    if (live.runFailure && live.runFailure !== previous.runFailure) {
+      entry.send({
+        type: 'error',
+        message: live.runFailure.detail || live.runFailure.reason || '临时回复未完成',
+      });
+    }
+    previous = live;
+  });
+}
+
+async function submitTemporary(entry, payload, input) {
+  const { model, selection } = await resolveModel(payload.modelRef, payload.thinkingLevel);
+  const acceptsImages = Array.isArray(model.input) && model.input.includes('image');
+  if (input.images.length && !acceptsImages) {
+    throw new Error('当前模型不支持图片，请切换到支持图片的模型');
+  }
+  const db = getStudioDatabase();
+  const saved = db.getTemporaryChat(payload.id);
+  if (saved?.hasImages && !acceptsImages) {
+    throw new Error('当前模型不支持图片，请切换到支持图片的模型');
+  }
+  if (entry.cancelled) throw new Error('消息发送已取消');
+  const runtime = await openTemporaryRuntime();
+  const safeTools = await resolveTemporaryCapabilities(runtime, runtime.durableRuntime);
+  const agent = {
+    model: { provider: model.provider, modelId: model.id },
+    thinkingLevel: selection.effectiveThinkingLevel,
+    ...(safeTools.signature !== entry.extensionSignature ? {
+      extensions: safeTools.extensions,
+      tools: safeTools.tools,
+      instructions: safeTools.instructions,
+    } : {}),
+  };
+  if (entry.cancelled) throw new Error('消息发送已取消');
+  entry.runtime = runtime;
+  if (saved || entry.conversation) {
+    entry.conversation ??= await runtime.harness.conversation(saved.durableId, runtime.context);
+    if (!entry.conversation) throw new Error('未找到这段临时对话的本地记录');
+    await entry.conversation.configure(agent, runtime.context);
+  } else {
+    entry.conversation = await runtime.harness.createConversation({
+      ownership: { kind: 'ownerless' },
+      agent: { ...agent, cwd: os.tmpdir() },
+    }, runtime.context);
+  }
+  entry.extensionSignature = safeTools.signature;
+  if (!entry.stream) await watchConversation(entry);
+  if (entry.cancelled) throw new Error('消息发送已取消');
+
+  const hasImages = input.images.length > 0;
+  // Save the public-id mapping before admitting work. A crash while the model is
+  // running can then always be reopened through the temporary history index.
+  if (!saved) db.createTemporaryChat({
+    id: payload.id,
+    durableId: entry.conversation.id,
+    title: Array.from(input.text.replace(/\s+/g, ' ') || '图片对话').slice(0, 60).join(''),
+    modelRef: selection.modelRef,
+    thinkingLevel: selection.thinkingLevel,
+    hasImages,
+  });
+  const requestId = crypto.randomUUID();
+  let submission;
+  try {
+    submission = await entry.conversation.submit({
+      type: 'input',
+      content: content(input),
+      requestId,
+    }, runtime.context);
+  } catch (error) {
+    // On an ambiguous storage failure keep the mapping. Remove it only when
+    // Durable confirms the first input was never committed.
+    if (!saved) {
+      const admitted = await runtime.storage.submissionByRequest(entry.conversation.id, requestId, runtime.context)
+        .catch(() => true);
+      if (!admitted) {
+        db.removeTemporaryChatIndex(payload.id, entry.conversation.id);
+        require('./tool-window.cjs').forgetToolWindowOwners(['temporary:' + payload.id]);
+      }
+    }
+    throw error;
+  }
+  db.touchTemporaryChat(payload.id, selection.modelRef, selection.thinkingLevel, hasImages);
+  if (entry.cancelled) await entry.conversation.abort(runtime.context);
+  const settled = await submission.wait(runtime.context);
+  if (settled.status === 'unanswered' && !entry.cancelled) {
+    throw new Error(settled.reason || '临时回复未完成');
+  }
 }
 
 async function temporaryPrompt(owner, payload, send) {
   const input = validateInput(payload);
-  const key = `${owner}:${payload.id}`;
-  let entry = chats.get(key);
-  if (entry?.busy || entry?.closing) throw new Error('请等待当前回复完成，或先停止回复');
-
-  const runtime = await openMemoryRuntime();
-  const { model, selection } = await resolveModel(payload.modelRef, payload.thinkingLevel);
-  if (
-    (input.images.length || entry?.hadImages)
-    && !(Array.isArray(model.input) && model.input.includes('image'))
-  ) {
-    throw new Error('当前模型不支持图片，请切换到支持图片的模型');
+  const id = payload.id;
+  const entry = chats.get(id) || {};
+  if (entry.pending || entry.closing) {
+    throw new Error('请等待当前回复完成，或先停止回复');
   }
-
-  if (!entry) {
-    const safeTools = await resolveTemporaryCapabilities(runtime, runtime.durableRuntime);
-    const extensionSignature = safeTools.signature;
-    const conversation = await runtime.harness.createConversation({
-      ownership: { kind: 'ownerless' },
-      agent: {
-        model: { provider: model.provider, modelId: model.id },
-        thinkingLevel: selection.effectiveThinkingLevel,
-        cwd: os.tmpdir(),
-        extensions: safeTools.extensions,
-        tools: safeTools.tools,
-        instructions: safeTools.instructions,
-      },
-    }, runtime.context);
-    // 1.5.0：watchEvents() 已移除，临时聊天同样走会话视图 watch。
-    const watch = await conversation.watch(runtime.context);
-    const initial = durableView.liveFromView(watch.value);
-    entry = {
-      runtime,
-      busy: false,
-      cancelled: false,
-      conversation,
-      extensionSignature,
-      hadImages: false,
-      partial: initial.generation?.message,
-      live: initial,
-      entryIds: durableView.seedEntryIds(watch.value.entries),
-      stream: watch,
-    };
-    chats.set(key, entry);
-    watch.start(async (call) => {
-      // Durable 的失败会直接结束 watch，因此只有 value 调用会到达这里。
-      if (call.kind !== 'value') return;
-      const live = durableView.liveFromView(call.value);
-      for (const record of durableView.appendedEntries(entry.entryIds, call.value.entries)) {
-        const message = chatMessage(record.model?.[0]);
-        if (!message) continue;
-        entry.partial = undefined;
-        send({ type: 'message', message });
-      }
-      const streamed = live.generation?.message;
-      if (streamed && streamed !== entry.live?.generation?.message) {
-        entry.partial = streamed;
-        const message = chatMessage(streamed);
-        if (message) send({ type: 'message', message: { ...message, streaming: true } });
-      }
-      if (live.runFailure && live.runFailure !== entry.live?.runFailure) {
-        send({
-          type: 'error',
-          message: live.runFailure.detail || live.runFailure.reason || '临时回复未完成',
-        });
-      }
-      entry.live = live;
-    });
-  } else {
-    const safeTools = await resolveTemporaryCapabilities(runtime, runtime.durableRuntime);
-    const nextSignature = safeTools.signature;
-    const toolsChanged = nextSignature !== entry.extensionSignature;
-    if (toolsChanged) entry.extensionSignature = nextSignature;
-    await entry.conversation.configure({
-      model: { provider: model.provider, modelId: model.id },
-      thinkingLevel: selection.effectiveThinkingLevel,
-      ...(toolsChanged ? {
-        extensions: safeTools.extensions,
-        tools: safeTools.tools,
-        instructions: safeTools.instructions,
-      } : {}),
-    }, runtime.context);
-  }
-
-  entry.busy = true;
+  entry.owner = owner;
+  entry.send = send;
   entry.cancelled = false;
-  entry.hadImages ||= input.images.length > 0;
+  chats.set(id, entry);
+  entry.pending = submitTemporary(entry, payload, input);
   try {
-    const submission = await entry.conversation.submit({
-      type: 'input',
-      content: content(input),
-      requestId: `${owner}-${payload.id}-${Date.now()}-${crypto.randomUUID()}`,
-    }, runtime.context);
-    const settled = await submission.wait(runtime.context);
-    if (settled.status === 'unanswered' && !entry.cancelled) {
-      throw new Error(settled.reason || '临时回复未完成');
-    }
+    await entry.pending;
   } finally {
-    entry.busy = false;
+    entry.pending = undefined;
+    if (!entry.conversation && !entry.closing) chats.delete(id);
     send({ type: 'done' });
   }
 }
 
 async function stopTemporary(owner, id) {
-  const entry = chats.get(`${owner}:${id}`);
-  if (!entry) return;
+  const entry = chats.get(id);
+  if (entry?.owner !== owner) return;
   entry.cancelled = true;
-  await entry.conversation.abort((await openMemoryRuntime()).context).catch(() => {});
-}
-
-async function disposeTemporaryEntry(entry) {
-  await entry.conversation.abort(entry.runtime.context).catch(() => {});
-  await entry.stream.stop().catch(() => {});
-  await releaseProviderSession(entry.runtime, entry.conversation.id);
+  await entry.conversation?.abort(entry.runtime.context).catch(() => {});
 }
 
 async function closeTemporary(owner, id) {
-  const key = `${owner}:${id}`;
-  const entry = chats.get(key);
-  if (!entry) return;
-  if (entry.closing) return entry.closing;
-  entry.cancelled = true;
-  entry.closing = disposeTemporaryEntry(entry);
+  const entry = chats.get(id);
+  if (entry?.owner !== owner) return;
+  entry.closing ??= (async () => {
+    await stopTemporary(owner, id);
+    await entry.pending?.catch(() => {});
+    await entry.stream?.stop().catch(() => {});
+    if (entry.conversation) await releaseProviderSession(entry.runtime, entry.conversation.id);
+    chats.delete(id);
+  })();
   await entry.closing;
-  chats.delete(key);
-  if (chats.size === 0) await closeMemoryRuntime();
 }
 
 async function closeOwner(owner) {
-  const prefix = `${owner}:`;
-  const ids = [...chats.keys()]
-    .filter((key) => key.startsWith(prefix))
-    .map((key) => key.slice(prefix.length));
-  await Promise.all(ids.map((id) => closeTemporary(owner, id)));
+  await Promise.all([...chats].filter(([, entry]) => entry.owner === owner)
+    .map(([id]) => closeTemporary(owner, id)));
 }
 
 async function shutdownTemporaryChats() {
-  await Promise.all([...chats.values()].map((entry) => {
-    entry.cancelled = true;
-    entry.closing ??= disposeTemporaryEntry(entry);
-    return entry.closing;
-  }));
-  chats.clear();
-  await closeMemoryRuntime();
+  await Promise.all([...chats].map(([id, entry]) => closeTemporary(entry.owner, id)));
+  await closeTemporaryRuntime();
 }
 
 module.exports = {
@@ -500,6 +537,8 @@ module.exports = {
   closeTemporary,
   shutdownTemporaryChats,
   stopTemporary,
+  temporaryHistory,
+  temporaryRead,
   temporaryModel,
   temporaryPrompt,
   validateInput,

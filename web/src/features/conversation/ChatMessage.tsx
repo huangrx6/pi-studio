@@ -1,5 +1,5 @@
 import { Accordion } from '../../shared/Accordion';
-import { memo, useId, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { memo, useId, useLayoutEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from 'react';
 import { ChevronDown } from 'lucide-react';
 import type { ChatAttachment, ChatMessage } from '../../types/chat-types';
 import { AttachmentFileDetails } from './AttachmentFileDetails';
@@ -17,18 +17,48 @@ import './styles/user-message.css';
 
 const editCommands = new Set<string>();
 
+function copyPlainUserSelection(event: ClipboardEvent<HTMLDivElement>) {
+  const message = event.currentTarget;
+  const selection = message.ownerDocument.getSelection();
+  if (!selection || selection.isCollapsed || selection.rangeCount !== 1) return;
+  const range = selection.getRangeAt(0);
+  const text = message.querySelector('.user-text > span')?.firstChild;
+  if (!(text instanceof Text) || !range.intersectsNode(text)) return;
+
+  const bounds = message.ownerDocument.createRange();
+  bounds.selectNode(message);
+  if (range.compareBoundaryPoints(Range.START_TO_START, bounds) < 0) return;
+  if (range.compareBoundaryPoints(Range.END_TO_END, bounds) > 0) {
+    // A triple-click can end at offset zero of the following assistant turn.
+    const remainder = range.cloneRange();
+    remainder.setStartAfter(message);
+    if (remainder.toString() || remainder.cloneContents().querySelector('img,video,canvas,svg')) return;
+  }
+  const attachments = message.querySelector('.user-attachments');
+  if (attachments && range.intersectsNode(attachments)) return;
+
+  // Chromium inserts layout line breaks at the bubble edge and can drop a real
+  // trailing newline. Use offsets in the original text node for this selection.
+  const start = range.startContainer === text ? range.startOffset : 0;
+  const end = range.endContainer === text ? range.endOffset : text.length;
+  const value = text.data.slice(start, end);
+  if (selection.toString() === value) return;
+  event.clipboardData.setData('text/plain', value);
+  event.preventDefault();
+}
+
 function SentFileCard({ attachment, onOpenFile }: {
   attachment: ChatAttachment;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, title?: string) => void;
 }) {
   const details = <AttachmentFileDetails attachment={attachment} />;
   if (attachment.path && onOpenFile) {
     const warmPreview = () => { void preloadFilePreview().catch(() => {}); };
     return <button type="button" className="attachment-card is-openable" title={attachment.name}
-      aria-label={`在右侧面板查看 ${attachment.name}`}
+      aria-label={`打开附件 ${attachment.name}`}
       onPointerEnter={warmPreview}
       onFocus={warmPreview}
-      onClick={() => onOpenFile(attachment.path)}>
+      onClick={() => onOpenFile(attachment.path, attachment.name)}>
       {details}
     </button>;
   }
@@ -114,7 +144,7 @@ function UserText({ text }: { text: string }) {
 type ChatMessageViewProps = {
   message: ChatMessage;
   id?: string;
-  onOpenFile?: (path: string) => void;
+  onOpenFile?: (path: string, title?: string) => void;
   onEdit?: (entryId: number, text: string) => Promise<void>;
   editDisabled?: boolean;
 };
@@ -139,8 +169,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
       : segment.reference.kind === 'skill' && !segment.reference.capabilityId
         ? `/skill:${segment.reference.label}`
         : segment.reference.token)
-    .join('')
-    .trim();
+    .join('');
   const attachmentCount = images.length + (message.attachments?.length ?? 0);
   const canEdit = Boolean(onEdit && Number.isSafeInteger(message.sourceIndex));
 
@@ -153,7 +182,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
 
   function beginEdit() {
     if (!canEdit || editDisabled) return;
-    setDraft(copyText);
+    setDraft(copyText.trim());
     setEditError('');
     setEditing(true);
     requestAnimationFrame(() => {
@@ -209,7 +238,8 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
     }
   }
 
-  return <div id={id} className={`message user ${editing ? 'is-editing' : ''}`}>
+  return <div id={id} className={`message user ${editing ? 'is-editing' : ''}`}
+    onCopy={!editing && segments.length === 1 && segments[0].kind === 'text' ? copyPlainUserSelection : undefined}>
     <div className="user-message">
       {attachmentCount > 0 && <div className="user-attachments attachment-strip" role="group" aria-label="消息附件"
         tabIndex={attachmentCount > 1 ? 0 : undefined}>
@@ -238,7 +268,7 @@ function ChatMessageViewComponent({ message, id, onOpenFile, onEdit, editDisable
             <button type="button" className="message-edit-cancel" disabled={savingEdit} onClick={cancelEdit}>取消</button>
             <button type="button" className="message-edit-send" disabled={savingEdit || !draft.trim()} onClick={() => void saveEdit()}>
               {savingEdit ? <LoadingIndicator /> : null}
-              {savingEdit ? '发送中' : (draft.trim() === copyText ? '重新发送' : '发送')}
+              {savingEdit ? '发送中' : (draft.trim() === copyText.trim() ? '重新发送' : '发送')}
             </button>
           </div>
         </div>

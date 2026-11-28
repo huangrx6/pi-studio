@@ -118,13 +118,13 @@ export function NotesTree(props: Props) {
         <button type="button" className="tree-item" title={entry.name} aria-current={selected === entry.path ? 'page' : undefined}
           aria-keyshortcuts="Shift+F10" aria-expanded={isFolder ? open : undefined}
           onKeyDown={event => onManageKey(event, entry)} onClick={() => isFolder ? toggle(entry.path) : props.onOpen(entry)}>
-          {isFolder && <span className="tree-caret"><ChevronRight size={12} /></span>}
-          <Icon size={14} className="tree-icon" />
+          {isFolder && <span className="tree-caret"><ChevronRight size="var(--icon-xs)" /></span>}
+          <Icon size="var(--icon-sm)" className="tree-icon" />
           <span className="entry-name">{prefix && <span className="section-prefix">{prefix}</span>}{sectionName || label(entry.name)}</span>
           {entry.path === inbox && pending > 0 && <span className="inbox-count" data-warm={pending >= 10}>{pending}</span>}
         </button>
         {isFolder && <IconButton className="tree-action" label={'在 ' + entry.name + ' 新建'}
-          onClick={() => props.onNew(entry.path)}><Plus size={14} /></IconButton>}
+          onClick={() => props.onNew(entry.path)}><Plus size="var(--icon-sm)" /></IconButton>}
       </div>
       {open && children.get(entry.path)?.length ? <ul>{children.get(entry.path)!.map(child => row(child, depth + 1))}</ul> : null}
     </li>;
@@ -132,16 +132,18 @@ export function NotesTree(props: Props) {
 
   return <ResizableSidebar width={props.width} onResize={props.onResize}>
     <header className="notes-pane-title sidebar-title">
-      <img className="sidebar-mark" src={libraryIcon} width={20} height={20} alt="" />
+      <span className="sidebar-mark-frame" aria-hidden="true">
+        <img className="sidebar-mark" src={libraryIcon} width={18} height={18} alt="" />
+      </span>
       <strong>知识库</strong>
-      <IconButton label="知识库设置" onClick={props.onSettings}><Settings2 size={15} /></IconButton>
-      <IconButton className="sidebar-new" label="新建笔记" onClick={() => props.onNew()}><Plus size={16} /></IconButton>
+      <IconButton label="知识库设置" onClick={props.onSettings}><Settings2 size="calc(var(--icon-sm) + 1px)" /></IconButton>
+      <IconButton className="sidebar-new" label="新建笔记" onClick={() => props.onNew()}><Plus size="var(--icon-md)" /></IconButton>
     </header>
     <label className="notes-search">
-      <SearchIcon size={14} />
+      <SearchIcon size="var(--icon-sm)" />
       <input ref={searchRef} placeholder="搜索标题和正文" aria-label="搜索标题和正文" value={query}
         onChange={event => props.onQuery(event.target.value)} maxLength={160} />
-      {query ? <button className="icon-button" type="button" title="清除搜索" aria-label="清除搜索" onClick={() => props.onQuery('')}><X size={13} /></button>
+      {query ? <button className="icon-button" type="button" title="清除搜索" aria-label="清除搜索" onClick={() => props.onQuery('')}><X size="calc(var(--icon-xs) + 1px)" /></button>
         : <kbd>{navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'} K</kbd>}
     </label>
     <nav className="tree-content" aria-label={query.trim() ? '搜索结果' : 'PARA 目录'}>
@@ -158,7 +160,7 @@ export function NotesTree(props: Props) {
       </> : <>
         <ul>{(children.get('') ?? []).map(entry => row(entry, 0))}</ul>
         {tree.partial && <p className="quiet-tree-note">已显示部分目录</p>}
-        {props.welcome && <button className="tree-setup" type="button" onClick={props.onSettings}><CircleHelp size={14} />补齐 PARA 目录</button>}
+        {props.welcome && <button className="tree-setup" type="button" onClick={props.onSettings}><CircleHelp size="var(--icon-sm)" />补齐 PARA 目录</button>}
       </>}
     </nav>
   </ResizableSidebar>;

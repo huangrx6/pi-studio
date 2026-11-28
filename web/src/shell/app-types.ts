@@ -4,10 +4,8 @@ import type {
   ToolProfilesSnapshot,
 } from '../types/agent-tool-types';
 import type { PermissionProfilesSnapshot } from '../types/permission-types';
-import type { TurnDiff, TurnDiffFile } from '../types/chat-types';
 import type { ConversationSummary } from '../types/durable-types';
 import type { ExtensionHostSnapshot } from '../types/extension-types';
-import type { FilePreviewResult } from '../types/file-preview-types';
 import type { HarnessSettingsSnapshot } from '../types/harness-types';
 import type { RuntimeRefreshSnapshot, StudioRuntimeVersions } from '../types/runtime-types';
 import type { CustomModelConfig, ModelProvider } from '../features/models/model-settings-types';
@@ -19,13 +17,7 @@ export type DispatchOutcome =
   | { state: 'admitted'; current: boolean }
   | { state: 'admitted-but-postcommit-read-failed'; current: boolean; error: string };
 
-export type PiWorkspace = {
-  cwd: string;
-  name: string;
-  sessions: PiSessionSummary[];
-  sessionCount?: number;
-  archivedCount?: number;
-};
+export type { PiWorkspace } from '../types/workspace';
 
 export type MenuBarPreference = { available: boolean; enabled: boolean; platform: string };
 
@@ -132,45 +124,5 @@ export type SkillInfo = SettingsSnapshot['skills'][number];
 export type McpInfo = SettingsSnapshot['mcp'][number];
 export type McpTestResult = Awaited<ReturnType<typeof window.piApi.testMcp>>;
 
-export type PanelFile = {
-  /** Actual successful preview source, retained across fallback and cache reuse. */
-  actionSource?: PanelFileSource;
-  changeKey?: string;
-  path: string;
-  size: number;
-  binary: boolean;
-  text: string;
-  /** 工作区文件带结构化预览（Markdown/JSON/CSV/PDF/HTML 等），由共享预览组件渲染。 */
-  preview?: FilePreviewResult;
-};
-
 export type PanelFileSource = 'workspace' | 'attachment' | 'diff' | 'external';
-
-export type PanelTab = {
-  id: string;
-  kind: 'files' | 'file' | 'diff' | 'changes' | 'temporary' | 'terminal' | 'services' | 'browser'
-    | 'progress' | 'trace' | 'subagents' | 'git' | 'extension';
-  title: string;
-  tooltip?: string;
-  path?: string;
-  source?: PanelFileSource;
-  cwd?: string;
-  sessionId?: string;
-  diff?: TurnDiffFile;
-  turnAt?: number;
-  url?: string;
-  /** 浏览器面板：递增后通知内部打开新的网页标签。 */
-  openNonce?: number;
-  /** Agent browser_open ack token while the guest is attaching. */
-  commandRequestId?: string;
-  browserLibrary?: { id: string; view: import('../features/browser/browser-history').BrowserLibraryView };
-  /** 终端重启计数：变化后以同一个 id 重新挂载并重建 PTY。 */
-  restart?: number;
-  /** 用户手动改过标题：shell 的 OSC 标题不再覆盖它。 */
-  customTitle?: boolean;
-  review?: { sessionId: string; initial: TurnDiff; turns: TurnDiff[]; focusPath?: string };
-  progressPage?: 'summary' | 'tasks' | 'history';
-  childKey?: string;
-  gitPage?: import('../types/git-types').GitTab;
-  extensionPanel?: { extensionId: string; panelId: string; global?: boolean };
-};
+export type InspectorTab = 'progress' | 'trace' | 'subagents';

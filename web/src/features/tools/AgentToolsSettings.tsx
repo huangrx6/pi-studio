@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Plus, RotateCw } from 'lucide-react';
+import { Plus, RotateCw } from 'lucide-react';
 import { Accordion } from '../../shared/Accordion';
 import { errorText } from '../../shared/error-text';
 import { LoadingIndicator, LoadingState } from '../../shared/LoadingState';
+import { useDeferredEnter } from '../../shared/useDeferredEnter';
 import { runtimeRefreshFailure } from '../../shared/runtime-refresh';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
-import { automaticProfileIcon, SettingsProfileMark } from '../../shared/SettingsProfileIcon';
-import { SettingsProfileCard, SettingsProfileLibrary } from '../../shared/SettingsProfileLibrary';
+import { automaticProfileIcon } from '../../shared/profile-icon';
+import { SettingsProfileLibrary } from '../../shared/SettingsProfileLibrary';
 import { useSettingsToast } from '../../shared/SettingsToast';
 import type { ModalDismiss } from '../../shared/useModalDialog';
 import type {
@@ -22,17 +23,35 @@ import type {
 import { ToolProfileEditor, type ToolProfileBindingScope } from './ToolProfileEditor';
 import './styles/agent-tools-settings.css';
 
-const EXTENSION_MODE_SUMMARY: Record<AgentToolExtensionMode, string> = {
-  'all-enabled': '全部已启用扩展',
+const EXTENSION_MODE_LABEL: Record<AgentToolExtensionMode, string> = {
+  'all-enabled': '全部已启用',
   'safe-only': '仅安全扩展',
-  none: '禁用扩展',
+  none: '已禁用',
 };
 
-const MCP_MODE_SUMMARY: Record<AgentToolMcpMode, string> = {
-  'follow-server': '跟随全局 MCP',
-  picked: '指定 MCP',
-  none: '禁用 MCP',
-};
+const CORE_CODE_TOOLS = new Set(['read', 'write', 'edit', 'bash', 'grep', 'find', 'ls']);
+
+function profileChannels(profile: AgentToolProfile) {
+  const codeCount = profile.enabled.filter(name => CORE_CODE_TOOLS.has(name)).length;
+  const browserCount = profile.enabled.filter(name => name.startsWith('browser_')).length;
+  const desktopCount = profile.enabled.filter(name => name.startsWith('desktop_')).length;
+  const hasSubagent = profile.enabled.includes('subagent');
+  const mcpLabel = profile.mcpMode === 'none'
+    ? '已禁用'
+    : profile.mcpMode === 'picked'
+      ? `指定 ${profile.mcpServers.length} 个`
+      : '跟随全局';
+  return {
+    channels: [
+      { key: 'code', label: '编码与文件', active: codeCount > 0, value: codeCount > 0 ? `${codeCount} 项` : '关闭' },
+      { key: 'browser', label: '浏览器', active: browserCount > 0, value: browserCount > 0 ? `${browserCount} 项` : '关闭' },
+      { key: 'desktop', label: '电脑操控', active: desktopCount > 0, value: desktopCount > 0 ? `${desktopCount} 项` : '关闭' },
+      { key: 'subagent', label: '子智能体', active: hasSubagent, value: hasSubagent ? '已开启' : '关闭' },
+    ],
+    extLabel: EXTENSION_MODE_LABEL[profile.extensionMode],
+    mcpLabel,
+  };
+}
 
 type EditorState = {
   kind: 'create' | 'edit';
@@ -45,11 +64,13 @@ export function AgentToolsSettings({
   mcpServers = [],
   onSaved,
   onOpenMcp,
+  onOpenExtensions,
 }: {
   cwd: string;
   initialProfiles?: ToolProfilesSnapshot;
   mcpServers?: Array<{ name: string; enabled: boolean }>;
   onOpenMcp: () => void;
+  onOpenExtensions?: () => void;
   onSaved?: (snapshot: {
     agentTools?: AgentToolSelection;
     toolProfiles: ToolProfilesSnapshot;
@@ -220,15 +241,16 @@ export function AgentToolsSettings({
     ? [...catalog.errors.filter(item => !item.path?.startsWith('mcp:')), ...catalog.warnings]
     : [];
   const ready = Boolean(snapshot) && !loadError;
+  const gridReveal = useDeferredEnter(ready);
 
   return <div className="settings-preference-page agent-tools-settings">
     <SettingsPageHeader
       title="智能体工具"
       iconPosition="end"
-      meta="管理可复用的工具方案，控制主对话、临时对话与子智能体可调用的工具、用户扩展和 MCP 服务。"
+      meta="管理可复用的扩展工具与 MCP 能力方案。"
       icon={<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M2 11h28v16H2zM11 11V7.5A2.5 2.5 0 0 1 13.5 5h5A2.5 2.5 0 0 1 21 7.5V11M2 17h11m6 0h11" />
-        <rect x="13" y="15" width="6" height="5" rx="1" stroke="var(--accent)" />
+        <rect x="13" y="15" width="6" height="5" rx="1" />
       </svg>}
     />
 
@@ -255,46 +277,80 @@ export function AgentToolsSettings({
         </button>
       </>}
     >
-      {loadingProfiles && !snapshot && <LoadingState variant="section">正在读取工具方案…</LoadingState>}
-      {loadError && <div className="settings-preference-card harness-load-error">
+      {loadingProfiles && !snapshot && <div className="settings-loading-card"><LoadingState variant="section">正在读取工具方案…</LoadingState></div>}
+      {loadError && <div className="settings-load-error">
         <p role="alert">{loadError}</p>
         <button type="button" className="settings-outline" onClick={() => void loadProfiles()}>重新加载工具方案</button>
       </div>}
-      {ready && snapshot && <div className="settings-profile-grid">
-        {snapshot.profiles.map(profile => {
-          const isMain = profile.id === snapshot.mainProfileId;
-          const isWorkspace = Boolean(cwd) && profile.id === snapshot.workspaceProfileId;
-          const isWorkspaceInherited = Boolean(cwd) && isMain && !snapshot.workspaceProfileId;
-          const isTemporary = profile.id === snapshot.temporaryProfileId;
-          const binding = [
-            isMain && '主对话默认',
-            isWorkspace && '当前工作区使用',
-            isWorkspaceInherited && '当前工作区继承',
-            isTemporary && '临时对话使用',
-          ].filter(Boolean).join(' · ');
+      {ready && snapshot && (() => {
+        const ordered = [...snapshot.profiles].sort((a, b) => {
+          const rank = (p: AgentToolProfile) => (
+            p.id === snapshot.activeMainProfileId ? 0
+              : p.id === snapshot.mainProfileId ? 1
+                : p.id === snapshot.temporaryProfileId ? 2
+                  : 3
+          );
+          return rank(a) - rank(b);
+        });
 
-          const mcpSummary = profile.mcpMode === 'picked'
-            ? `指定 ${profile.mcpServers.length} 个 MCP`
-            : MCP_MODE_SUMMARY[profile.mcpMode];
+        return <div className={`tools-spec-grid${gridReveal ? ' settings-async-ready' : ''}`}>
+          {ordered.map(profile => {
+            const isMain = profile.id === snapshot.mainProfileId;
+            const isWorkspace = Boolean(cwd) && profile.id === snapshot.workspaceProfileId;
+            const isWorkspaceInherited = Boolean(cwd) && isMain && !snapshot.workspaceProfileId;
+            const isTemporary = profile.id === snapshot.temporaryProfileId;
+            const binding = [
+              isMain && '主对话默认',
+              isWorkspace && '当前工作区',
+              isWorkspaceInherited && '工作区继承',
+              isTemporary && '临时对话',
+            ].filter(Boolean).join(' · ');
+            const { channels, extLabel, mcpLabel } = profileChannels(profile);
 
-          return <SettingsProfileCard
-            key={profile.id}
-            name={profile.name}
-            icon={<SettingsProfileMark group="tools" icon={profile.icon ?? automaticProfileIcon('tools', profile.id)} />}
-            subtitle={(profile.builtin ? '内置 · ' : '') + profile.id}
-            description={(binding || profile.description) && <span className="tool-card-meta">
-              {binding && <span className="harness-binding"><Check aria-hidden="true" />{binding}</span>}
-              {profile.description && <span className="tool-card-desc">{profile.description}</span>}
-            </span>}
-            summary={[
-              `${profile.enabled.length} 项工具`,
-              EXTENSION_MODE_SUMMARY[profile.extensionMode],
-              mcpSummary,
-            ].join(' · ')}
-            onEdit={() => setEditor({ kind: 'edit', source: profile })}
-          />;
-        })}
-      </div>}
+            return <button
+              key={profile.id}
+              type="button"
+              className={`settings-preference-card tools-spec-card${binding ? ' is-active' : ''}`}
+              aria-label={'编辑' + profile.name}
+              aria-haspopup="dialog"
+              onClick={() => setEditor({ kind: 'edit', source: profile })}
+            >
+              <div className="tools-spec-top">
+                {binding
+                  ? <span className="tools-live-kicker"><i aria-hidden="true" />{binding}</span>
+                  : <span className="tools-idle-kicker">备用方案</span>}
+                <div className="tools-hero-metric" aria-label={`已启用 ${profile.enabled.length} 项工具`}>
+                  <em>{profile.enabled.length}</em>
+                  <span>项工具</span>
+                </div>
+              </div>
+
+              <div className="tools-spec-identity">
+                <strong>{profile.name}</strong>
+                {profile.description && <p className="tools-spec-desc">{profile.description}</p>}
+              </div>
+
+              <div className="tools-channel-grid" aria-label="核心能力通道">
+                {channels.map(ch => (
+                  <div key={ch.key} className={`tools-channel-cell${ch.active ? ' is-on' : ''}`}>
+                    <span className="tools-channel-name">
+                      <i aria-hidden="true" />{ch.label}
+                    </span>
+                    <span className="tools-channel-val">{ch.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="tools-spec-foot">
+                <div className="tools-policy-pairs">
+                  <span><em>扩展</em> {extLabel}</span>
+                  <span><em>MCP</em> {mcpLabel}</span>
+                </div>
+              </div>
+            </button>;
+          })}
+        </div>;
+      })()}
     </SettingsProfileLibrary>
 
     {diagnostics.length > 0 && <div className="settings-preference-groups agent-tools-extras">
@@ -321,6 +377,7 @@ export function AgentToolsSettings({
       busy={busy}
       onReloadCatalog={() => void loadCatalog(true)}
       onOpenMcp={onOpenMcp}
+      onOpenExtensions={onOpenExtensions}
       onSave={handleSave}
       onApply={handleApply}
       onReset={handleReset}

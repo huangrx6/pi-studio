@@ -70,32 +70,6 @@ try {
   await page.locator('.assistant-response').filter({ hasText: '审查已完成' }).waitFor();
   assert.equal([...loadedResources].some((file) => file?.startsWith('markdown-highlighter-')), false, 'code-free history does not load the syntax highlighter');
 
-  const progress = page.getByRole('region', { name: '本轮执行进展' });
-  const toggle = progress.locator('.turn-progress-toggle');
-  await toggle.waitFor();
-  assert.equal(await progress.count(), 1, 'one record disclosure per assistant turn');
-  assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
-  assert.equal(await progress.getByRole('list').count(), 0, 'collapsed turns do not mount execution records');
-  assert.equal(await page.getByRole('button', { name: '执行流', exact: true }).count(), 0);
-  await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  const failures = progress.getByRole('button', { name: '1 次调用失败', exact: true });
-  await failures.click();
-  const failedList = progress.getByRole('list', { name: '失败的工具调用' });
-  assert.equal(await failedList.getByRole('listitem').count(), 1);
-  await failedList.getByText(/QA_EXPECTED_FAILURE/).waitFor();
-  await failedList.getByRole('button', { name: /pnpm check --fixture-only/ }).press('Enter');
-  await failedList.locator('.activity-tool-body').getByText(/QA_EXPECTED_FAILURE/).waitFor();
-  await capture('execution-progress-wide');
-  await page.setViewportSize({ width: 620, height: 570 });
-  await failedList.getByRole('button', { name: /pnpm check --fixture-only/ }).scrollIntoViewIfNeeded();
-  await capture('execution-progress-narrow');
-  await failures.click();
-  await toggle.click();
-  await page.setViewportSize({ width: 1440, height: 920 });
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  result.checks.push('Completed turn exposes one inline record disclosure and opens a failed command directly at desktop and narrow widths');
-
   const draft = '筛选和查看记录时，请保留这段草稿。';
   await composer.fill(draft);
   await search.fill('归档专属关键词');
@@ -142,8 +116,8 @@ try {
   await focused(searchTrigger);
   const expansionBefore = await page.locator('.workspace-row').evaluateAll((rows) => rows.map((row) => [row.textContent, row.getAttribute('aria-expanded')]));
   await searchTrigger.click();
-  await search.fill('Beta');
-  await sessionRow('文档核对').waitFor();
+  await search.fill('精准目标');
+  await sessionRow('精准目标：组件可读性审查').waitFor();
   await page.locator('.workspace-row').click();
   assert.equal(await rowTitles.count(), 0, 'matching groups can still be manually collapsed');
   await search.press('Escape');
@@ -175,8 +149,7 @@ try {
   await trigger.press('ArrowUp');
   await menu.waitFor();
   await focused(items.last());
-  await page.keyboard.press('Home');
-  await page.keyboard.press('Enter');
+  await menu.getByRole('menuitem', { name: '置顶会话', exact: true }).press('Enter');
   await page.waitForFunction(() => window.__conversationQa.calls.some((call) => call.id === 'history' && call.action === 'pin'));
   await menu.waitFor({ state: 'detached' });
   await focused(trigger);
@@ -220,32 +193,7 @@ try {
   await focused(shell.locator('.session-row'));
   result.checks.push('menu Arrow/Home/End loop, Escape, Space/Enter, pin callback and focus restoration, scroll dismissal, Tab exit');
 
-  await toggle.click();
-  const records = progress.getByRole('list', { name: '执行明细' });
-  assert.equal(await records.getByRole('listitem').count(), 11);
-  assert.equal(await records.locator('.activity-tool-body, .activity-thinking-body').count(), 0,
-    'standard history only mounts the detail that the reader opens');
-  const read = records.getByRole('button', { name: /读取 .*readable/ });
-  await read.click();
-  await records.locator('.activity-tool-body').getByText(/QA_TOOL_OUTPUT_0/).waitFor();
-  await records.locator('.conversation-image-tile').waitFor();
-  await read.click();
-  await records.locator('.activity-tool-body').waitFor({ state: 'detached' });
-  const thought = records.getByRole('button', { name: '思考', exact: true });
-  await thought.click();
-  await records.locator('.activity-thinking-body strong').getByText('完整决策正文').waitFor();
-  await thought.click();
-  await records.locator('.activity-thinking-body').waitFor({ state: 'detached' });
-  await page.setViewportSize({ width: 980, height: 640 });
-  await capture('04-progress-expanded-light');
-  await toggle.click();
-  assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  await capture('05-progress-collapsed-dark');
-  assert.equal(await composerValue(composer), draft);
-  result.checks.push('Inline records lazily reveal the original output, screenshot and thought, preserve the draft, and fold to one line');
-
-  const settingsTrigger = page.locator('.sidebar-bottom button[title="设置"]');
+  const settingsTrigger = page.locator('.sidebar-bottom button[aria-label="设置"]');
   await settingsTrigger.click();
   const settingsSearch = page.getByRole('searchbox', { name: '搜索设置', exact: true });
   await settingsSearch.fill('API');
@@ -257,20 +205,17 @@ try {
   await focused(settingsTrigger);
   assert.equal(await composerValue(composer), draft, 'settings Escape return preserves the current draft');
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await toggle.click();
   await search.fill('');
   await chooseFilter('运行中');
   await page.mouse.move(1000, 100);
   await page.locator('.session-running .spin').waitFor();
   const motion = await page.evaluate(() => ({
-    chevron: getComputedStyle(document.querySelector('.turn-progress-toggle > svg')).transitionDuration,
     spinners: [...document.querySelectorAll('.spin')].map((element) => getComputedStyle(element).animationName),
   }));
-  assert.equal(motion.chevron, '0s');
   assert.ok(motion.spinners.length > 0, 'reduced-motion check observes a real running-state spinner');
   assert.ok(motion.spinners.every((animation) => animation === 'none'));
   result.reducedMotion = motion;
-  result.checks.push('settings Escape clear/return with focus and draft preserved, reduced-motion keeps record controls still and disables spinners');
+  result.checks.push('settings Escape clear/return with focus and draft preserved, reduced motion disables running-state spinners');
   assert.deepEqual(result.pageErrors, []);
   console.log(`Conversation refinement QA passed: ${result.checks.length} groups; screenshots: ${output}`);
 } catch (error) {

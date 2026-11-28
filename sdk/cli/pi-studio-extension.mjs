@@ -626,7 +626,7 @@ function initCommand(positionals, flags) {
         description: agent
           ? 'A declarative panel for the generated Agent extension.'
           : 'A declarative extension panel.',
-        slot: 'panel.side',
+        slot: 'tool.view',
         content: [
           { kind: 'heading', text: name },
           {

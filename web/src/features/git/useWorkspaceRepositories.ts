@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { errorText } from '../../shared/error-text';
 import type { GitRepository } from '../../types/git-types';
 
-export function useWorkspaceRepositories(cwd = '', name?: string) {
+export function useWorkspaceRepositories(cwd = '') {
   const [revision, setRevision] = useState(0);
   const [read, setRead] = useState<{ cwd: string; revision: number; items: GitRepository[]; error?: string }>();
   const [choice, setChoice] = useState<{ cwd: string; id: string }>();
@@ -41,8 +41,8 @@ export function useWorkspaceRepositories(cwd = '', name?: string) {
   const repositories = current?.items || known.current.get(cwd) || [];
   const preferred = choice?.cwd === cwd ? choice.id : sessionStorage.getItem(storageKey);
   const selected = repositories.find(repo => repo.id === preferred) || repositories[0];
-  const workspaceName = name || cwd.split(/[\\/]/).filter(Boolean).at(-1) || cwd || '工作区';
-  return { cwd, workspaceName, repositories, selected, select, refresh, loading: !!cwd && current?.revision !== revision, error: current?.error };
+  const ready = !cwd || current !== undefined;
+  return { cwd, repositories, selected, select, refresh, ready, loading: !!cwd && current?.revision !== revision, error: current?.error };
 }
 
 export const GitRepositoryContext = createContext<ReturnType<typeof useWorkspaceRepositories> | null>(null);

@@ -8,9 +8,9 @@
   position: relative;
   flex: none;
   height: var(--attachment-card-height);
-  border: 1px solid var(--divider);
+  border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--conversation-reading-surface);
+  background: var(--surface-raised);
 }
 
 .composer-attachment.is-image { width: var(--attachment-image-width); }
@@ -47,7 +47,7 @@
   text-align: start;
 }
 
-button.composer-file-content:hover { background: var(--conversation-hover-surface); }
+button.composer-file-content:hover { background: var(--surface-hover); }
 
 .composer-attachment-remove {
   position: absolute;

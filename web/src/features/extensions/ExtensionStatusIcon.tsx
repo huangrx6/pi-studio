@@ -1,11 +1,11 @@
 import { createContext, useContext } from 'react';
-import { Activity, BarChart3, Cloud, Cpu, Database, Gauge, Layers3, Plug, Terminal, Timer, Wallet, Zap, type LucideIcon } from 'lucide-react';
+import { Activity, BarChart3, Cloud, Coffee, Cpu, Database, Gauge, Layers3, Plug, Terminal, Timer, Wallet, Zap, type LucideIcon } from 'lucide-react';
 import { statusAppearance, statusIconDataUrl, type AppearanceOverrides, type StatusAppearance, type StatusPanel } from '../../shared/extension-appearance';
 import { PackageIcon } from '../../shared/PackageIcon';
 
 const icons = {
   activity: Activity, gauge: Gauge, timer: Timer, terminal: Terminal, chart: BarChart3,
-  wallet: Wallet, database: Database, cloud: Cloud, cpu: Cpu, layers: Layers3, plug: Plug, zap: Zap,
+  wallet: Wallet, database: Database, cloud: Cloud, coffee: Coffee, cpu: Cpu, layers: Layers3, plug: Plug, zap: Zap,
 } satisfies Record<StatusAppearance['icon'], LucideIcon>;
 
 export const ExtensionAppearanceContext = createContext<AppearanceOverrides>({});

@@ -1,5 +1,9 @@
+import { useTemporaryHistory } from '../features/conversation/useTemporaryHistory';
+import type { OpenTemporaryChatOptions } from '../features/extensions/ExtensionViewPanel';
+import type { SidebarSection } from './AppSidebar';
+import type { TeamRoute } from './TeamCanvas';
+import { errorText } from '../shared/error-text';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
 import { useActionConfirmation, type ConfirmRequest } from '../shared/ConfirmDialog';
 import { isConversationTurnActive } from '../features/conversation/conversation-activity';
 import type {
@@ -132,6 +136,7 @@ export function useAppFoundation() {
     activeWorkspace,
     sidebarFiltering,
     visibleWorkspaces,
+    visibleProjects,
     allExpanded,
     changeWorkspaceQuery,
     changeSidebarFilter,
@@ -254,28 +259,27 @@ export function useAppFoundation() {
   // 由 controller 每次渲染写入当前会话 id，showComposerFeedback 用它打归属。
   const composerFeedbackScopeRef = useRef<string | undefined>(undefined);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const workbench = useAppWorkbenchController({
-    workspace,
-    workspaceRef,
-    sessionId: session?.id,
-    sessionCwd: session?.cwd,
-    sessionRef,
-    showTrace: preferences.showCodeView,
-    sidebarCollapsed,
-    setError,
-  });
-  const {
-    filesOpen,
-    panelFullscreen,
-    openPanel,
-    closePanel,
-    openTemporaryChat,
-    openTerminalTab,
-    openBrowserTab,
-    openFilesTab,
-    openFile,
-    openChangesTab,
-  } = workbench;
+  const [section, setSection] = useState<SidebarSection>('conversations');
+  const [teamRoute, setTeamRoute] = useState<TeamRoute>({ view: 'workspace' });
+  const temporary = useTemporaryHistory(section === 'temporary');
+  const room = section === 'team' && teamRoute.view === 'workspace' ? teamRoute : null;
+  const owner = section === 'temporary' ? 'temporary:' + temporary.activeId
+    : room?.roomId ? 'room:' + room.roomId
+    : section === 'conversations' ? session ? 'conversation:' + session.id : 'draft:' + workspace : '';
+  const cwd = section === 'conversations' ? session?.cwd || workspace : room?.cwd ?? '';
+  const workbench = useAppWorkbenchController({ owner, cwd, workspaces,
+    sessionId: room?.roomId ? owner : section === 'conversations' ? session?.id : undefined, sidebarCollapsed, setError });
+  const { filesOpen, openPanel, closePanel, openFilesTab, openFile, openChangesTab } = workbench;
+  const openTemporaryChat = useCallback((options?: OpenTemporaryChatOptions) => {
+    temporary.startNew(options, workbench.focusTemporaryDraft);
+    setSection('temporary');
+  }, [temporary.startNew, workbench.focusTemporaryDraft]);
+  const openTerminalTab = useCallback(() => {
+    void window.piApi.openToolWindow({kind: 'terminal'}).catch(cause => setError(errorText(cause)));
+  }, []);
+  const openBrowserTab = useCallback((url?: string) => {
+    void window.piApi.openToolWindow({kind: 'browser', url}).catch(cause => setError(errorText(cause)));
+  }, []);
   const [models, setModels] = useState<ModelOption[]>([]);
   const showComposerFeedback = useCallback((message: string, tone: 'info' | 'warning' = 'warning') => {
     setComposerFeedback({ message, tone, sessionId: composerFeedbackScopeRef.current });
@@ -382,6 +386,7 @@ export function useAppFoundation() {
     activeWorkspace,
     sidebarFiltering,
     visibleWorkspaces,
+    visibleProjects,
     allExpanded,
     changeWorkspaceQuery,
     changeSidebarFilter,
@@ -463,7 +468,7 @@ export function useAppFoundation() {
     setSidebarCollapsed,
     workbench,
     filesOpen,
-    panelFullscreen,
+    section, setSection, teamRoute, setTeamRoute, temporary,
     openPanel,
     closePanel,
     openTemporaryChat,

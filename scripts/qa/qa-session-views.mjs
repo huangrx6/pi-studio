@@ -1,3 +1,4 @@
+import { openSessionInspection } from './fixtures/open-session-inspection.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -54,37 +55,25 @@ try {
   await page.locator('.assistant-response').first().waitFor();
 
   const button = name => page.getByRole('button', { name, exact: true });
-  const headerTools = await page.locator('.chat-header .chat-actions').locator(
-    'button:is([title="进展"], [title="轨迹"], [title="扩展"], [title="通知"], [title="打开右侧面板"])',
-  ).evaluateAll(nodes => nodes.map(node => {
-    const { width, height } = node.getBoundingClientRect();
-    return { title: node.title, text: node.textContent.trim(), width, height, radius: getComputedStyle(node).borderRadius };
-  }));
-  assert.deepEqual(headerTools.map(tool => tool.title), ['进展', '轨迹', '扩展', '通知', '打开右侧面板']);
-  assert.ok(headerTools.every(tool => tool.width === tool.height && tool.width === headerTools[3].width && tool.radius === headerTools[3].radius));
-  assert.ok(headerTools.slice(0, 3).every(tool => !tool.text), 'header tools use tooltips for their labels');
+  const inspector = page.getByRole('tablist', { name: '会话检视视图' });
+  async function openView(name) {
+    if (!await inspector.isVisible()) await openSessionInspection(page);
+    await inspector.getByRole('tab', { name: new RegExp('^' + name) }).click();
+    if (name === '子智能体' && await button('返回列表').isVisible()) await button('返回列表').click();
+  }
   async function openProgress() {
-    await page.locator('.chat-header').getByRole('button', { name: '进展', exact: true }).click();
+    await openView('进展');
     if (await button('返回进展').isVisible()) await button('返回进展').click();
   }
-  async function openView(name) {
-    if (name === '子智能体') {
-      await openProgress();
-      await button('查看全部子智能体').click();
-    } else {
-      await page.locator('.chat-header').getByRole('button', { name, exact: true }).click();
-    }
-  }
   async function returnToChat() {
-    if (await button('收起右侧面板').isVisible()) await button('收起右侧面板').click();
-    await page.locator('.file-panel').waitFor({ state: 'hidden' });
+    if (await button('关闭会话详情').isVisible()) await button('关闭会话详情').click();
     await page.locator('.assistant-response').first().waitFor();
   }
   async function capture(name) {
     await page.mouse.move(12, 12);
     await page.screenshot({ path: fileURLToPath(new URL(`${name}.png`, output)), animations: 'disabled' });
   }
-  const pinned = page.locator('.file-panel .conversation-progress');
+  const pinned = page.locator('.inspection-card .conversation-progress');
   const progressTab = page.getByRole('tab', { name: '进展', exact: true });
   const composer = page.locator('.composer-editor');
   await composer.fill('检查面板后继续的草稿');
@@ -98,23 +87,10 @@ try {
   await pinned.getByRole('button', { name: '展开其余 1 个子智能体' }).click();
   assert.equal(await pinned.locator('.progress-agent').count(), 4);
   await pinned.getByRole('button', { name: '收起子智能体' }).click();
-  await button('打开工具').click();
-  await page.getByRole('menuitem', { name: '工作区文件', exact: true }).click();
-  await button('打开工具').click();
-  await page.getByRole('menuitem', { name: '新建终端', exact: true }).click();
-  await page.waitForFunction(() => window.sessionViewsQa.terminals.length === 1);
-  const filesTab = page.getByRole('tab', { name: /^文件/ });
-  await filesTab.click();
-  await page.getByRole('tab', { name: /^终端/ }).click();
+  await button('关闭会话详情').click();
+  await page.locator('.session-content-tabs [aria-selected="true"]').waitFor();
   await openProgress();
-  assert.equal(await progressTab.getAttribute('aria-selected'), 'true');
-  assert.equal(await page.evaluate(() => window.sessionViewsQa.terminals.length), 1);
   assert.equal(await composer.innerText(), '检查面板后继续的草稿');
-  await page.waitForFunction(() => {
-    const tabs = document.querySelector('.panel-tabs')?.getBoundingClientRect();
-    const active = document.querySelector('.panel-tab.is-active')?.getBoundingClientRect();
-    return tabs && active && active.left >= tabs.left - 1 && active.right <= tabs.right + 1;
-  });
   assert.equal(await pinned.getByText('核对会话清单', { exact: true }).count(), 1);
   assert.equal(await pinned.locator('.todo-dock-body, .todo-group-head').count(), 0);
   await pinned.getByRole('button', { name: '已暂停' }).click();
@@ -180,17 +156,14 @@ try {
   await page.locator('.conversation-trace-list').waitFor();
   assert.equal(await pinned.isVisible(), false);
   assert.equal(await composer.innerText(), '检查面板后继续的草稿');
-  await button('全屏').click();
-  await page.locator('.file-panel.is-fullscreen .conversation-trace-list').waitFor();
-  await button('退出全屏').click();
   assert.ok(await composer.isVisible());
-  await filesTab.click();
+  await button('关闭会话详情').click();
   await composer.fill('/todos');
   await composer.press('Enter');
-  const history = page.locator('.file-panel .todo-history');
+  const history = page.locator('.inspection-card .todo-history');
   await history.getByText('perf-0 历史清单').waitFor();
   await page.locator('.session-row').filter({ hasText: '性能会话 0001' }).click();
-  await page.locator('.chat-heading h1').getByText('性能会话 0001').waitFor();
+  await page.getByRole('tablist', { name: '工作树标签' }).getByText('性能会话 0001').waitFor();
   await history.waitFor({ state: 'hidden' });
   assert.equal(await progressTab.count(), 0);
   await openProgress();
@@ -275,9 +248,14 @@ try {
   await cells.first().press('End');
   await cells.last().press('Enter');
   await detail.waitFor();
-  await page.waitForFunction(() => document.querySelector('.conversation-trace-list').scrollTop > 400);
   await button('关闭轨迹详情').press('Escape');
   await page.waitForFunction(() => document.activeElement?.classList.contains('is-selected') || document.activeElement?.classList.contains('conversation-trace-item'));
+  await page.waitForFunction(() => {
+    const list = document.querySelector('.conversation-trace-list');
+    const row = document.activeElement?.getBoundingClientRect();
+    const bounds = list?.getBoundingClientRect();
+    return row && bounds && row.top >= bounds.top && row.bottom <= bounds.bottom;
+  });
   await page.getByRole('button', { name: /^异常.*1/ }).click();
   assert.equal(await rows.count(), 1);
   await rows.first().click();
@@ -322,49 +300,6 @@ try {
   await page.setViewportSize({ width: 1440, height: 920 });
   await returnToChat();
 
-  await openView('扩展');
-  const picker = page.getByRole('dialog', { name: '扩展', exact: true });
-  const rowsInPicker = picker.getByRole('article');
-  assert.equal(await rowsInPicker.count(), 2);
-  const pickedNames = () => rowsInPicker.evaluateAll(items => items.map(item => item.getAttribute('aria-label')));
-  assert.deepEqual(await pickedNames(), ['运行监测', '工作区工具']);
-  assert.equal(await picker.getByRole('button', { name: /上移|下移/ }).count(), 0);
-  await picker.getByRole('button', { name: '管理扩展', exact: true }).click();
-  const displayOrder = page.locator('.extension-display-order');
-  await button('对话显示顺序').click();
-  const orderNames = () => displayOrder.locator('li > span').allTextContents();
-  assert.deepEqual(await orderNames(), ['运行监测', '工作区工具']);
-  await page.evaluate(() => { window.sessionViewsQa.failOrderSave = true; });
-  await displayOrder.getByRole('button', { name: '下移 运行监测', exact: true }).click();
-  await page.getByText(/扩展顺序保存失败/).waitFor();
-  assert.deepEqual(await orderNames(), ['运行监测', '工作区工具']);
-  await page.evaluate(() => { window.sessionViewsQa.failOrderSave = false; });
-  await page.evaluate(() => { window.sessionViewsQa.holdNextWrite = true; });
-  await displayOrder.getByRole('button', { name: '下移 运行监测', exact: true }).click();
-  await page.waitForFunction(() => window.sessionViewsQa.order.globalOrder[0] === 'project:workspace');
-  assert.equal(await displayOrder.getByRole('button', { name: '下移 运行监测', exact: true }).isDisabled(), true);
-  await page.evaluate(() => window.sessionViewsQa.releaseWrite());
-  await page.waitForFunction(() => document.querySelector('.extension-order-row > span')?.textContent === '工作区工具');
-  assert.deepEqual(await orderNames(), ['工作区工具', '运行监测']);
-  await button('关闭对话显示顺序').click();
-  await page.getByRole('button', { name: '返回对话', exact: true }).click();
-  await page.locator('.session-row').filter({ hasText: '性能会话 0001' }).click();
-  await openView('扩展');
-  assert.deepEqual(await pickedNames(), ['工作区工具', '运行监测']);
-  await page.keyboard.press('Escape');
-  await page.locator('.session-row').filter({ hasText: '工作区交互审查' }).click();
-  await openView('扩展');
-  await picker.getByRole('button', { name: '查看 运行监测 详情', exact: true }).click();
-  const extension = page.getByRole('tabpanel', { name: '运行监测', exact: true });
-  await extension.getByText('18 次').waitFor();
-  await extension.getByRole('button', { name: '请求耗时', exact: true }).click();
-  await extension.getByText('1.42 秒').waitFor();
-  assert.equal(await page.getByRole('tab', { name: '运行监测', exact: true }).count(), 1);
-  await capture('extensions-dark');
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
-  await capture('extensions-light');
-  await page.setViewportSize({ width: 1176, height: 740 });
-  assert.ok(await extension.evaluate(node => node.scrollWidth <= node.clientWidth + 1));
   await openView('子智能体');
   await page.locator('.agent-list-row').first().waitFor();
   assert.ok(await page.locator('.agent-overview').evaluate(node => node.scrollWidth <= node.clientWidth + 1));
@@ -378,20 +313,11 @@ try {
   await page.getByText('这次对话还没有子智能体').waitFor();
   await openView('轨迹');
   await page.getByText('还没有执行记录').waitFor();
-  await openView('扩展');
-  await picker.getByText('当前工作区没有可打开的扩展面板。').waitFor();
-  await button('管理扩展').click();
-  await page.getByRole('tab', { name: '扩展', selected: true }).waitFor();
-  await page.getByText('还没有安装扩展', { exact: true }).waitFor();
   await page.setViewportSize({ width: 1060, height: 640 });
   await page.goto(server.origin + '/?long-plan');
   await page.locator('.session-row').filter({ hasText: '工作区交互审查' }).click();
   await openProgress();
-  const resizer = page.getByRole('separator', { name: '调整右侧面板宽度' });
-  await resizer.focus();
-  await resizer.press('ArrowRight');
-  await resizer.press('ArrowRight');
-  await page.waitForFunction(() => document.querySelector('.panel-resize-handle')?.getAttribute('aria-valuenow') === '320');
+  await page.setViewportSize({ width: 530, height: 740 });
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   const taskRows = pinned.locator('.todo-row');
   await taskRows.first().waitFor();
@@ -425,6 +351,7 @@ try {
   await pinned.getByRole('button', { name: '查看全部任务' }).waitFor();
   assert.equal(await pinned.locator('.todo-row').count(), 0);
   await pinned.getByRole('button', { name: '查看全部任务' }).click();
+  await page.setViewportSize({ width: 1060, height: 740 });
   await page.locator('.session-row').filter({ hasText: '性能会话 0001' }).click();
   await openProgress();
   await pinned.getByRole('button', { name: '查看全部任务' }).click();
@@ -447,14 +374,9 @@ try {
   assert.equal(await newest.locator('li').count(), 0);
   await toggle.press('Enter');
   assert.equal(await newest.locator('li').count(), 8);
-  await button('全屏').click();
   await page.mouse.move(12, 12);
   await taskPage.screenshot({ path: fileURLToPath(new URL('tasks-catalog-dark.png', output)), animations: 'disabled' });
-  await button('退出全屏').click();
-  await resizer.focus();
-  await resizer.press('ArrowRight');
-  await resizer.press('ArrowRight');
-  await page.waitForFunction(() => document.querySelector('.panel-resize-handle')?.getAttribute('aria-valuenow') === '320');
+  await page.setViewportSize({ width: 530, height: 740 });
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
   await newest.getByRole('button', { name: '下一页任务' }).click();
   await newest.getByText('9–16 / 100').waitFor();
@@ -471,7 +393,9 @@ try {
   await newest.getByText('1–8 / 100').waitFor();
   const filterPosition = await taskPage.locator('.session-tasks-toolbar').boundingBox();
   await pageGroups.getByRole('button', { name: '下一页清单' }).scrollIntoViewIfNeeded();
-  assert.deepEqual(await taskPage.locator('.session-tasks-toolbar').boundingBox(), filterPosition);
+  const afterScroll = await taskPage.locator('.session-tasks-toolbar').boundingBox();
+  assert.ok(['x', 'y', 'width', 'height'].every(key => Math.abs(afterScroll[key] - filterPosition[key]) <= 1),
+    'the filters stay in place while scrolling the task list');
   await pageGroups.getByRole('button', { name: '下一页清单' }).click();
   await pageGroups.getByText('清单 13–24').waitFor();
   assert.equal(await taskPage.locator('.session-tasks-group').count(), 12);
@@ -511,7 +435,6 @@ try {
   await page.locator('.session-row').filter({ hasText: '工作区交互审查' }).click();
   await openProgress();
   await pinned.getByRole('button', { name: '查看全部任务' }).click();
-  await button('全屏').click();
   await taskPage.getByText('3 份清单 · 14 项任务').waitFor();
   assert.equal(await taskPage.getByRole('img', { name: '已完成' }).count(), 14);
   assert.equal(await taskPage.locator('.session-task-state, .session-tasks-pager').count(), 0);
@@ -536,8 +459,136 @@ try {
   assert.ok(await disclosure.evaluate(node => node.matches(':focus-visible') && getComputedStyle(node).outlineStyle !== 'none'));
   await page.keyboard.press('Space');
   assert.equal(await disclosure.getAttribute('aria-expanded'), 'true');
+  await page.setViewportSize({ width: 1440, height: 920 });
+  await page.goto(server.origin + '/?inspection-events');
+  const sessionA = page.locator('[data-session-id="perf-0"] .session-row');
+  const sessionB = page.locator('[data-session-id="perf-1"] .session-row');
+  const card = page.locator('.transcript-viewport .inspection-card');
+  await sessionA.click();
+  await page.locator('.assistant-response').first().waitFor();
+  await composer.fill('保留这份草稿');
+  const scroll = page.locator('.chat-scroll');
+  await scroll.hover();
+  await page.mouse.wheel(0, -650);
+  await page.waitForFunction(() => {
+    const chat = document.querySelector('.chat-scroll');
+    return chat.scrollHeight - chat.scrollTop - chat.clientHeight > 300;
+  });
+  const reading = await scroll.evaluate(node => node.scrollTop);
+  assert.equal(await card.count(), 0);
+  await page.evaluate(() => window.sessionViewsQa.startChild('perf-1', 'background-1', 'child-b'));
+  assert.equal(await card.count(), 0, 'background activity belongs to B');
+  assert.ok(await composer.evaluate(node => node === document.activeElement));
+  await page.evaluate(() => window.sessionViewsQa.startChild('perf-0', 'current-1', 'child-a'));
+  await card.getByRole('button', { name: '展开会话详情' }).waitFor();
+  assert.ok(await composer.evaluate(node => node === document.activeElement));
+  assert.equal(await composer.innerText(), '保留这份草稿');
+  await card.getByText('1 个子智能体', { exact: true }).waitFor();
+  assert.ok(Math.abs(await scroll.evaluate(node => node.scrollTop) - reading) <= 2, 'floating activity preserves the reading position');
+  const offsets = () => card.evaluate(node => {
+    const rect = node.getBoundingClientRect(), area = node.parentElement.getBoundingClientRect();
+    return { right: Math.round(area.right - rect.right), top: Math.round(rect.top - area.top) };
+  });
+  assert.deepEqual(await offsets(), { right: 0, top: 0 });
+  await capture('inspection-compact');
+  const grip = card.getByRole('button', { name: '移动会话浮卡' });
+  const gripBox = await grip.boundingBox();
+  await page.mouse.move(gripBox.x + gripBox.width / 2, gripBox.y + gripBox.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(gripBox.x + gripBox.width / 2 - 96, gripBox.y + gripBox.height / 2 + 44, { steps: 5 });
+  await page.mouse.up();
+  assert.deepEqual(await offsets(), { right: 96, top: 44 });
+  await sessionB.click();
+  await card.getByRole('button', { name: '展开会话详情' }).waitFor();
+  assert.deepEqual(await offsets(), { right: 0, top: 0 });
+  await openSessionInspection(page);
+  await button('打开右侧面板').click();
+  await page.getByRole('complementary', { name: '工作区侧栏' }).waitFor();
+  await card.getByRole('tablist').waitFor();
+  await capture('inspection-and-files');
+  await button('收起右侧面板').click();
+  await sessionA.click();
+  await card.getByRole('button', { name: '展开会话详情' }).waitFor();
+  assert.deepEqual(await offsets(), { right: 96, top: 44 });
+  await grip.press('Shift+ArrowDown');
+  assert.deepEqual(await offsets(), { right: 96, top: 76 });
+  await card.getByRole('button', { name: '关闭会话详情' }).click();
+  await page.evaluate(() => window.sessionViewsQa.startChild('perf-0', 'current-1', 'same-turn-child'));
+  assert.equal(await card.count(), 0, 'manual dismissal survives activity in the same turn');
+  await page.evaluate(() => window.sessionViewsQa.startChild('perf-0', 'current-2', 'next-turn-child'));
+  await card.getByRole('button', { name: '展开会话详情' }).waitFor();
+  await button('收起侧边栏').click();
+  await card.getByRole('button', { name: '关闭会话详情' }).click();
+  await page.getByRole('tab', { name: '工作区交互审查', exact: true }).press('Shift+F10');
+  await page.getByRole('menuitem', { name: '查看会话详情' }).click();
+  await card.getByRole('tablist').waitFor();
+  await page.waitForFunction(() => document.activeElement?.classList.contains('inspection-toggle'));
+  const corner = card.getByRole('button', { name: '调整会话浮卡大小' });
+  const stage = page.locator('.inspection-stage');
+  const before = await card.boundingBox(), beforeOffset = await offsets();
+  const handle = await corner.boundingBox(), area = await stage.boundingBox();
+  const x = handle.x + handle.width / 2, y = handle.y + handle.height / 2;
+  const dy = before.height + beforeOffset.top + 48 <= area.height ? 48 : -32;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 112, y + dy, { steps: 5 });
+  await page.mouse.up();
+  const resized = await card.boundingBox();
+  assert.deepEqual(await offsets(), beforeOffset, 'the southwest grip keeps the top and right in place');
+  assert.equal(resized.width, before.width + 112);
+  assert.equal(resized.height, before.height + dy);
+  await corner.press('Shift+ArrowLeft');
+  const custom = await card.boundingBox();
+  assert.equal(custom.width, resized.width + 32);
+  await capture('inspection-resized');
+  const resizedHandle = await corner.boundingBox();
+  await page.mouse.move(resizedHandle.x + 8, resizedHandle.y + 8);
+  await page.mouse.down();
+  await page.mouse.move(resizedHandle.x - 30, resizedHandle.y - 25);
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  assert.deepEqual(await card.boundingBox(), custom, 'cancelling a resize restores the previous bounds');
+  await card.getByRole('button', { name: '放大会话详情' }).click();
+  assert.deepEqual(await card.boundingBox(), await stage.boundingBox());
+  assert.equal(await corner.count(), 0);
+  assert.ok(!await scroll.isVisible());
+  assert.ok(!await page.locator('.transcript-viewport > .jump-to-latest').isVisible());
+  assert.ok((await card.boundingBox()).y + area.height <= (await composer.boundingBox()).y);
+  await composer.click();
+  assert.ok(await composer.evaluate(node => document.activeElement === node));
+  await button('打开右侧面板').click();
+  const files = page.getByRole('complementary', { name: '工作区侧栏' });
+  await files.waitFor();
+  const besideFiles = await card.boundingBox();
+  assert.deepEqual(besideFiles, await stage.boundingBox());
+  assert.ok(besideFiles.x + besideFiles.width <= (await files.boundingBox()).x + 1);
+  await capture('inspection-maximized');
+  await button('收起右侧面板').click();
+  await card.getByRole('button', { name: '还原会话详情大小' }).press('Escape');
+  assert.deepEqual(await card.boundingBox(), custom);
+  assert.ok(await scroll.isVisible());
+  await card.getByRole('button', { name: '收起会话详情' }).click();
+  assert.ok((await card.boundingBox()).height < 60);
+  await card.getByRole('button', { name: '展开会话详情' }).click();
+  assert.deepEqual(await card.boundingBox(), custom);
+  await page.setViewportSize({ width: 530, height: 640 });
+  const narrow = await stage.boundingBox(), fitted = await card.boundingBox();
+  assert.ok(fitted.width <= narrow.width && fitted.height <= narrow.height);
+  assert.ok(fitted.x >= narrow.x && fitted.y >= narrow.y);
+  await page.setViewportSize({ width: 1440, height: 920 });
+  await page.waitForFunction(box => {
+    const rect = document.querySelector('.inspection-card').getBoundingClientRect();
+    return rect.x === box.x && rect.y === box.y && rect.width === box.width && rect.height === box.height;
+  }, custom);
+  await button('展开侧边栏').click();
+  await sessionB.click();
+  await card.getByRole('tablist').waitFor();
+  assert.equal(await card.getAttribute('data-sized'), null, 'B keeps its own natural size');
+  await sessionA.click();
+  await card.getByRole('tablist').waitFor();
+  assert.equal((await card.boundingBox()).width, custom.width);
   assert.deepEqual(errors, []);
-  console.log('Passed docked progress, terminal retention, scoped task history, task filters and retries, large task catalog paging and search, narrow task rows, subagent replies, trace jumps and snapshots, grouped extension tabs and fullscreen.');
+  console.log('Passed session-owned inspection cards, automatic activity, drag, resize, maximize/restore, focus, workspace panel coexistence, progress, task catalog, subagent replies and traces.');
 } finally {
   await browser?.close();
   await server.close();

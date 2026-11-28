@@ -32,10 +32,6 @@ function attachmentsDirectory(root = studioDataDirectory()) {
   return path.join(root, STUDIO_MANAGED_DATA_DIR, 'attachments');
 }
 
-function backgroundMediaDirectory(root = studioDataDirectory()) {
-  return path.join(root, STUDIO_MANAGED_DATA_DIR, 'background-media');
-}
-
 function worktreesDirectory(root = studioDataDirectory()) {
   return path.join(root, STUDIO_MANAGED_DATA_DIR, 'worktrees');
 }
@@ -115,7 +111,6 @@ module.exports = {
   STUDIO_DATA_DIRECTORY,
   STUDIO_MANAGED_DATA_DIR,
   attachmentsDirectory,
-  backgroundMediaDirectory,
   downloadsDirectory,
   extensionDataDirectory,
   extensionStateDirectory,

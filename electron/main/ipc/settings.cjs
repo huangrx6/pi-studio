@@ -33,7 +33,7 @@ const {
   reconcileRuntimeForWorkspace,
 } = require('../runtime/durable-runtime.cjs');
 const {
-  closeAllExtensionDataViews,
+  closeReloadableExtensionDataViews,
   closeExtensionDataViews,
 } = require('./sessions.cjs');
 const { settingsSnapshot } = require('../services/settings.cjs');
@@ -694,7 +694,7 @@ function registerSettingsIpc() {
   ));
 
   ipcMain.handle('pi:pick-worktree-parent', async () => {
-    const result = await dialog.showOpenDialog({ title: '选择工作树位置', properties: ['openDirectory'] });
+    const result = await dialog.showOpenDialog({ title: '选择新工作树的父目录', properties: ['openDirectory'] });
     return result.canceled ? undefined : result.filePaths[0];
   });
 
@@ -766,7 +766,7 @@ function registerSettingsIpc() {
       scope === 'project' ? 'project' : 'user',
       typeof cwd === 'string' ? cwd : DEFAULT_CWD,
     );
-    await closeAllExtensionDataViews();
+    await closeReloadableExtensionDataViews();
     return settingsWithRuntime(
       typeof cwd === 'string' ? cwd : DEFAULT_CWD,
       '扩展',
@@ -932,7 +932,7 @@ function registerSettingsIpc() {
     const workspace = typeof cwd === 'string' ? cwd : DEFAULT_CWD;
     const update = await autoUpdateOfficialExtensions();
     if (update.updated.length > 0) {
-      await closeAllExtensionDataViews();
+      await closeReloadableExtensionDataViews();
       await refreshExtensionRuntime(workspace);
       notifyExtensionsChanged();
     }
@@ -1040,7 +1040,7 @@ function registerSettingsIpc() {
   });
 
   ipcMain.handle('pi:extensions-reload', async (_event, cwd) => {
-    await closeAllExtensionDataViews();
+    await closeReloadableExtensionDataViews();
     return refreshExtensionRuntime(typeof cwd === 'string' ? cwd : DEFAULT_CWD);
   });
 

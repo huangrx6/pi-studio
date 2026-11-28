@@ -1,4 +1,4 @@
-import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, memo, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { JumpToLatestButton } from '../shared/JumpToLatestButton';
 import { ChatMessageView } from '../features/conversation/ChatMessage';
 import { AssistantTurnView } from '../features/conversation/AssistantTurn';
@@ -21,7 +21,7 @@ type TranscriptState = ReturnType<typeof useTranscriptNavigation> & {
 };
 
 type Actions = {
-  openAttachment: (path: string) => void;
+  openAttachment: (path: string, title?: string) => void;
   openFile: (path: string) => void;
   undoTurnDiff: (at: number) => Promise<void>;
   openChanges: (file: TurnDiffFile | undefined, turn: TurnDiff) => void;
@@ -55,6 +55,7 @@ type MessageListProps = {
 };
 
 type TranscriptPaneProps = Omit<MessageListProps, 'onNearBottomChange'> & {
+  inspector?: ReactNode;
   settingsOpen: boolean;
   outline: {
     items: OutlineItem[];
@@ -238,6 +239,7 @@ const TranscriptMessageList = memo(TranscriptMessageListComponent);
  * Outline hover stays local to ConversationOutline so it never rebuilds turns.
  */
 function ConversationTranscriptPaneComponent({
+  inspector,
   sessionId,
   sessionCwd,
   messageCount,
@@ -290,6 +292,7 @@ function ConversationTranscriptPaneComponent({
 
   return (
     <div className="transcript-viewport">
+      {inspector}
       <TranscriptMessageList
         sessionId={sessionId}
         sessionCwd={sessionCwd}

@@ -1,6 +1,6 @@
 # 内嵌浏览器与 AI 浏览器操控
 
-本文是 Pi Studio 右侧内嵌浏览器，以及后续「Agent 可在可见浏览器中阅读与操作网页」能力的正式设计。它描述产品边界、分层能力、主进程控制面、工具契约、权限模型与分阶段交付；实现细节以代码为准，本文只固定约定。
+本文是 Pi Studio 悬浮工具面板中的浏览器，以及后续「Agent 可在可见浏览器中阅读与操作网页」能力的正式设计。它描述产品边界、分层能力、主进程控制面、工具契约、权限模型与分阶段交付；实现细节以代码为准，本文只固定约定。
 
 相关边界见 [能力模块与依赖边界](capabilities.md)、[会话内容展示规则](conversation-content.md) 与 [资源作用域](../guides/resources.md)。
 
@@ -33,14 +33,14 @@ Studio 优先服务开发与项目交付，不把「替用户逛全网」当作�
 
 | 能力 | 约定 |
 | --- | --- |
-| 链接打开目标 | `webLinkOpenTarget` / `localLinkOpenTarget`：全部网页 / 全部本地链接。`workbench`=在 Studio 内打开（可浏览页面→右侧浏览器，其他文件→预览，**不是** HTML 专用项）；`system`=系统浏览器或默认应用。 |
+| 链接打开目标 | `webLinkOpenTarget` / `localLinkOpenTarget`：全部网页 / 全部本地链接。`workbench`=在 Studio 内打开（可浏览页面→工具面板浏览器，其他文件→预览，**不是** HTML 专用项）；`system`=系统浏览器或默认应用。 |
 | 打开约束 | `linkOpenInstructAgent`（默认开）：会话 instructions + 浏览器 section 说明规则。`linkOpenBlockExternal`（默认开）：bash `beforeTool` 拦截 open/Playwright/系统浏览器。二者均可在设置中关闭。 |
 | 下载询问路径 | `askDownloadPath` 为真时，内嵌分区下载先弹出保存位置；默认仍写入 Studio 托管下载目录。 |
-| 偏好热更新 | `setBrowserPreferences` 通过 `subscribeBrowserPreferences` 广播 `{ type: 'preferences' }`，工作台壳即时刷新（如完整网址）。 |
+| 偏好热更新 | `setBrowserPreferences` 通过 `subscribeBrowserPreferences` 广播 `{ type: 'preferences' }`，工具面板即时刷新（如完整网址）。 |
 | 密码 | 主进程 `safeStorage` 信封；列表不含明文；仅显式「显示」IPC 可揭密；不向模型暴露。 |
 | 联系信息 | 本机设置投影，便于查阅；当前不做网页自动填入。 |
 | 扩展 | 仅加载已解压目录（`manifest.json`）；路径持久化并在启动时 best-effort 恢复；非扩展商店客户端。 |
-| 外接 Chrome | 设置页发现/连接；工作台显示已外接会话条并可一键断开；`{ type: 'external', sessions }` 事件。 |
+| 外接 Chrome | 设置页发现/连接；浏览器页显示已外接会话条并可一键断开；`{ type: 'external', sessions }` 事件。 |
 
 ### 1.3 非目标（当前阶段明确不做）
 
@@ -55,12 +55,16 @@ Studio 优先服务开发与项目交付，不把「替用户逛全网」当作�
 
 | 层级 | 现状 |
 | --- | --- |
-| UI | `BrowserPanel` + **设置 → 浏览器**：多 guest 标签、历史、下载、清除数据、Agent 接管、站点策略、链接打开目标、下载询问路径、密码/联系人/解压扩展、外接 Chrome 状态条；`openBrowserTab`；快捷键 `Mod+Shift+B`。 |
+| UI | `BrowserPanel` + **设置 → 浏览器**：多 guest 标签、历史、下载、清除数据、Agent 接管、站点策略、链接打开目标、下载询问路径、密码/联系人/解压扩展、外接 Chrome 状态条；工具面板入口；快捷键 `Mod+Shift+B`。 |
 | 目标规范化 | `browser-target.ts`：补全 `https://`、允许显式 `file://…/*.html`。 |
 | Guest | `<webview>` + `persist:pi-browser`；无 preload / nodeIntegration；`will-attach-webview` 限制 partition。 |
 | Main service | `electron/main/services/browser/`：会话、下载、标签注册表、snapshot/截图、动作队列、站点策略、高级设置。 |
 | Agent | `capabilities/browser`：tabs/open/navigate/snapshot/screenshot/click/type/scroll/wait/select/dialog/download/highlight；可选 `browser_evaluate` / `browser_cdp` / `browser_external`（默认关）。 |
 | 权限 | 工具层 permissions + 站点 × action_class 第二道闸门；localhost 默认放行 read/act/wait/navigate。 |
+
+地址栏右侧的「网页开发者工具」打开当前网页的 Chromium DevTools。用 Console 查看日志，用 Network 检查请求，再次点击按钮可关闭窗口。
+
+智能体可用 `browser_console` 按级别读取当前文档及同源子页面的日志，用 `browser_network` 查找失败请求。开发者工具窗口关闭时也会采集。刷新或打开新文档后，控制台日志从头记录。
 
 结论：L0–L4 主路径已落地（含设置页、可选 evaluate/CDP/外接 Chrome，均默认关）；WebContentsView 迁移仍为可选后续。
 
@@ -70,7 +74,7 @@ Studio 优先服务开发与项目交付，不把「替用户逛全网」当作�
 
 ```text
 ┌─────────────────────────────────────────────────────────────┐
-│  Renderer：工作台浏览器壳（多标签、地址栏、下载/历史入口）   │
+│  Renderer：工具面板浏览器（多标签、地址栏、下载/历史入口）   │
 │  JSON 安全状态 only；不持有 webContents / CDP / 凭据         │
 └───────────────────────────┬─────────────────────────────────┘
                             │ IPC（browser.*）
@@ -97,11 +101,11 @@ Studio 优先服务开发与项目交付，不把「替用户逛全网」当作�
 
 | 区域 | 职责 |
 | --- | --- |
-| `electron/main/services/browser/`（由现有 `browser-session.cjs` 等演进） | 应用服务：partition、标签/导航、下载、历史、截图与动作执行、与窗口绑定。**不**直接注册 Agent 工具。 |
+| `electron/main/services/browser/` | 应用服务：partition、标签/导航、下载、历史、截图与动作执行、与窗口绑定。**不**直接注册 Agent 工具。 |
 | `electron/main/capabilities/browser/`（后续） | Agent 能力：manifest、工具提供、与 permissions 协作、公共 `index.cjs`。 |
 | `electron/main/ipc/` 浏览器域 | 薄传输：renderer ↔ Browser Service；能力侧走既有工具通道，不把 Durable 句柄塞进 IPC。 |
-| `web/src/shell/right-panel/` | 浏览器壳 UI、标签与工作台集成；样式仍在 `styles/`。 |
-| `web/src/features/browser/`（若壳外逻辑变厚） | hooks、纯函数、下载/历史面板等可复用 UI；不放 Electron 专有状态。 |
+| `web/src/shell/right-panel/` | 提供工作区文件与 Git 视图。 |
+| `web/src/features/browser/` | hooks、纯函数、下载/历史面板等可复用 UI；不放 Electron 专有状态。 |
 | `tests/electron/*browser*`、`tests/web/*browser*` | 按边界命名；安全与工具契约必须有自动测试。 |
 
 能力注册继续走显式静态表，禁止运行时扫目录。
@@ -244,17 +248,12 @@ Studio 优先服务开发与项目交付，不把「替用户逛全网」当作�
 - **多标签**：新建、关闭、切换、标题/favicon（可后期）、固定（可选）。
 - **导航条**：后退、前进、刷新、地址栏（沿用 `normalizeBrowserTarget`）、加载指示、错误条。
 - **溢出菜单**：历史、下载、站点权限、清除本站数据、在系统浏览器打开、复制 URL。
-- **与对话协同**：Markdown 链接、来源按钮、工具结果中的 URL → `openBrowserTab`；Agent 打开的标签在工作台高亮「由 Pi 打开」。
+- **与对话协同**：Markdown 链接、来源按钮、工具结果中的 URL → `openToolWindow({ kind: 'browser', url })`；Agent 打开的标签在工作台高亮「由 Pi 打开」。
 - **接管控件**：Agent 操作中显示状态条（当前工具、目标 ref/url）；一键暂停。
 
-### 7.2 与现有面板模型的关系
+### 7.2 工具面板与会话
 
-当前 `panelTabs` 中 `kind: 'browser'` 偏「单例面板」。演进方向：
-
-- **短期**：一个 browser 面板内管理多个 guest 标签（面板 tab 仍可只有一个「浏览器」）。
-- **中期**：若需要并排两个浏览上下文，再允许多个 browser 面板实例，但共享同一 Browser Service 与权限存储。
-
-`RightPanelStart` / 命令面板 / `Mod+Shift+B` 仍是入口；不新增与工作台分裂的第二套浏览器窗口（除非用户明确「弹出」——非目标优先）。
+工具面板、快捷键和会话链接都可打开浏览器标签。浏览器与终端、插件共用工具面板标签栏。点击主窗口右下角的按钮可展开面板。收起后可以继续使用对话及文件标签，再打开会恢复当前会话的工具标签。切换会话时，各自的工具标签组独立，切回后可继续使用已运行的页面。Studio SQLite 保存打开的标签、活动标签和页面地址。应用重启后按需创建页面，优先加载活动标签。
 
 ### 7.3 渲染技术路径
 
@@ -269,7 +268,7 @@ Studio 优先服务开发与项目交付，不把「替用户逛全网」当作�
 ## 8. 安全基线（实现时不得削弱）
 
 1. Guest：无 nodeIntegration、无 preload、contextIsolation、sandbox；仅允许 Studio partition 附着（现有 `will-attach-webview` 逻辑保留并扩展到多标签 id）。
-2. 导航与请求：主框与子资源策略延续 `browser-session`；新能力不得用 `will-navigate` 单独当唯一闸门（`loadURL` 会绕过）。
+2. 导航与请求：主框与子资源策略由 `services/browser/` 统一处理；新能力不得用 `will-navigate` 单独当唯一闸门（`loadURL` 会绕过）。
 3. 弹窗：默认在应用内处理或拒绝；不得静默 `shell.openExternal` 一串未知 URL。
 4. 下载：默认路径在 Studio 用户数据或用户选定目录；可执行文件扩展名额外确认；路径不进入不可信日志。
 5. 截图与快照：可能含隐私；进入会话投影时遵循附件与保留策略；默认不上传第三方。
@@ -290,10 +289,10 @@ Durable 会话记录工具调用与结果投影；浏览器服务状态不是第
 
 ## 10. 分阶段交付
 
-### Phase 1 — 工作台浏览器壳（L0）
+### Phase 1 — 工具面板浏览器（L0）
 
 - 多标签、下载列表（至少捕获与打开目录）、简易历史、设置里的「清除浏览器数据」。
-- 面板与 `openBrowserTab` API 稳定；链接打开行为统一。
+- 工具面板与 `openToolWindow` API 稳定；链接打开行为统一。
 - 测试：地址规范化、session 拒绝非法 scheme、多标签切换不串 session 配置。
 
 ### Phase 2 — Agent 只读（L1）
@@ -332,7 +331,7 @@ Durable 会话记录工具调用与结果投影；浏览器服务状态不是第
 
 ## 11. 验收标准（跨阶段）
 
-1. 用户能在侧栏完成多标签浏览 localhost 与文档站，不被迫跳系统浏览器。
+1. 用户能在主窗口的悬浮工具面板中用多标签浏览 localhost 与文档站。
 2. Agent 在授权下能打开页面、基于 snapshot 指认控件并完成简单表单流程；用户能看见并一键接管。
 3. 未授权站点不能被工具静默连续操作；权限决定可复盘。
 4. Guest 无法获得 Node 或应用 preload；非法 webview 附着仍被拒绝。
@@ -353,15 +352,14 @@ Durable 会话记录工具调用与结果投影；浏览器服务状态不是第
 
 | 路径 | 说明 |
 | --- | --- |
-| `web/src/shell/right-panel/BrowserPanel.tsx` | 多标签浏览器壳（历史、下载、清除数据） |
+| `web/src/features/browser/BrowserPanel.tsx` | 单页浏览器（历史、下载、清除数据），由会话工具面板统一管理标签 |
 | `web/src/features/browser/BrowserSettings.tsx` | 设置 → 浏览器（偏好、权限、L4） |
-| `web/src/shell/right-panel/browser/` | 标签与历史纯函数 |
-| `web/src/shell/right-panel/browser-target.ts` | 地址规范化 |
-| `web/src/shell/right-panel/useAppWorkbench.ts` | `openBrowserTab`（面板内新开 guest 标签） |
+| `web/src/features/browser/browser-tab.ts` | 单个浏览器页的导航状态 |
+| `web/src/features/browser/browser-target.ts` | 地址规范化 |
+| `electron/main/services/tool-window.cjs` | 按会话创建和恢复浏览器标签 |
 | `web/src/shared/shortcuts.ts` | `openBrowser` / `Mod+Shift+B` |
 | `electron/main/services/browser/` | partition、下载、标签、snapshot、动作、策略、高级设置 |
 | `electron/main/capabilities/browser/` | Agent 浏览器工具 |
-| `electron/main/services/browser-session.cjs` | 兼容 re-export |
 | `electron/main/ipc/browser.cjs` | 浏览器 IPC |
 | `electron/main/services/local-html.cjs` | 本地 HTML 白名单 |
 | `electron/main/window.cjs` | `will-attach-webview` |
@@ -376,7 +374,7 @@ Durable 会话记录工具调用与结果投影；浏览器服务状态不是第
 | Phase 3 操作与站点策略 | 已实现 |
 | Phase 4 标注 / a11y·iframe / 设置页 / 可选 evaluate·CDP·外接 Chrome | 已实现（L4 默认关） |
 
-相关代码：`electron/main/services/browser/`、`electron/main/capabilities/browser/`、`web/src/shell/right-panel/BrowserPanel.tsx`、`tests/electron/browser-*.test.cjs`。
+相关代码：`electron/main/services/browser/`、`electron/main/capabilities/browser/`、`web/src/features/browser/BrowserPanel.tsx`、`tests/electron/browser-*.test.cjs`。
 
 本文生效后，浏览器相关的架构变更应先更新本文与索引，再改代码中的公共契约。
 

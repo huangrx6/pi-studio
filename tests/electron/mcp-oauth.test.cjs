@@ -106,6 +106,7 @@ test('persisted OAuth tokens survive synchronous and asynchronous cleanup failur
     loadOAuth: async () => oauth, loadMcp: async () => mcp,
     require(id) {
       if (id === '../../core/studio-db.cjs') return require('../../electron/main/core/studio-db.cjs');
+      if (id === '../../theme.cjs') return require('../../electron/main/theme.cjs');
       if (id === 'electron') return { app: { getVersion: () => '0.0.0-test' } };
       throw new Error(`Unexpected test dependency ${id}`);
     },

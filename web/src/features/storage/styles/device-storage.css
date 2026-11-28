@@ -1,4 +1,3 @@
-.device-storage-settings .settings-page-header-icon .lucide-hard-drive line:last-child { stroke: var(--accent); }
 .storage-breakdown { padding-bottom: var(--space-4); }
 .storage-reading {
   display: flex;
@@ -9,19 +8,15 @@
 }
 .storage-reading strong {
   color: var(--text);
-  font-size: var(--text-display);
+  font-size: var(--text-metric);
   line-height: var(--leading-tight);
   font-weight: var(--weight-semibold);
 }
 .storage-reading span {
-  padding: 2px var(--space-2);
-  border: 1px solid var(--divider);
-  border-radius: var(--radius-round);
-  background: var(--settings-page-bg);
-  color: var(--muted);
-  font: var(--settings-description-font);
+  color: var(--faint);
+  font: var(--font-description);
 }
-.storage-partial, .storage-legend { color: var(--muted); font: var(--settings-description-font); }
+.storage-partial, .storage-legend { color: var(--muted); font: var(--font-description); }
 
 .storage-meter {
   display: flex;
@@ -54,7 +49,7 @@
 .storage-legend dd {
   margin: 0 0 0 var(--space-4);
   color: var(--text);
-  font: var(--settings-label-font);
+  font: var(--font-label);
   font-variant-numeric: tabular-nums;
 }
 .storage-breakdown [data-category=database] { --storage-color: var(--scheme-ocean); }
@@ -72,12 +67,12 @@
   border: 1px solid var(--divider);
   border-radius: var(--radius-tag);
   background: var(--settings-page-bg);
-  font: var(--settings-description-font);
+  font: var(--font-description);
   font-variant-numeric: tabular-nums;
   color: var(--muted);
   white-space: nowrap;
 }
-.storage-locations .preference-row-copy p { font: var(--settings-mono-font); }
+.storage-locations .preference-row-copy p { font: var(--font-code); }
 .storage-locations .preference-row-control { flex-wrap: nowrap; }
 .storage-management-action { min-inline-size: 9em; }
 

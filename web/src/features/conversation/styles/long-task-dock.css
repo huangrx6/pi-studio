@@ -21,12 +21,12 @@
 .long-task-dock.is-failed .long-task-heading strong { color: var(--error); }
 .long-task-copy { flex: 1; min-width: 0; display: grid; gap: 4px; }
 .long-task-heading { min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 10px; }
-.long-task-heading strong { color: var(--text); font-size: var(--text-xs); font-weight: var(--weight-semibold); line-height: 20px; }
-.long-task-heading small { color: var(--faint); font-size: var(--text-xs); font-variant-numeric: tabular-nums; }
+.long-task-heading strong { color: var(--text); font-size: var(--text-label); font-weight: var(--weight-semibold); line-height: 20px; }
+.long-task-heading small { color: var(--faint); font-size: var(--text-caption); font-variant-numeric: tabular-nums; }
 .long-task-content { display: grid; min-width: 0; gap: 3px; }
 .long-task-content.is-expanded { max-height: 220px; overflow: auto; overscroll-behavior: auto; }
 .long-task-goal,
-.long-task-detail { margin: 0; font-size: var(--text-xs); line-height: var(--leading-body); overflow-wrap: anywhere; white-space: pre-wrap; }
+.long-task-detail { margin: 0; font-size: var(--text-description); line-height: var(--leading-body); overflow-wrap: anywhere; white-space: pre-wrap; }
 .long-task-goal { color: var(--text); }
 .long-task-detail { color: var(--muted); }
 .long-task-content:not(.is-expanded) .is-truncated {
@@ -35,12 +35,12 @@
   -webkit-line-clamp: 2;
   overflow: hidden;
 }
-.long-task-details-toggle { display: inline-flex; align-items: center; gap: 4px; justify-self: start; padding: 2px 0; color: var(--muted); font: var(--text-xs)/var(--leading-normal) var(--font); }
+.long-task-details-toggle { display: inline-flex; align-items: center; gap: 4px; justify-self: start; padding: 2px 0; color: var(--muted); font: var(--text-label)/var(--leading-normal) var(--font); }
 .long-task-details-toggle:hover { color: var(--text); }
 .long-task-details-toggle svg { width: var(--icon-xs); height: var(--icon-xs); transition: transform var(--transition); }
 .long-task-details-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 .long-task-actions { display: flex; flex: 0 1 auto; flex-wrap: wrap; align-items: center; gap: 6px; margin-left: auto; }
-.long-task-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 30px; padding: 5px 9px; border-radius: var(--radius-control); color: var(--on-button); background: var(--button-bg); font-size: var(--text-xs); font-weight: var(--weight-medium); white-space: nowrap; }
+.long-task-action { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 30px; padding: 5px 9px; border-radius: var(--radius-control); color: var(--on-button); background: var(--button-bg); font-size: var(--text-label); font-weight: var(--weight-medium); white-space: nowrap; }
 .long-task-action.is-quiet { color: var(--muted); background: transparent; }
 .long-task-action.is-quiet:hover { color: var(--text); background: var(--surface-hover); }
 .long-task-action svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; }

@@ -1,5 +1,5 @@
 import type { ComposerEditorHandle } from './ComposerEditor';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
 import type { ChatMessage, RequestTrace, TurnDiff } from '../../types/chat-types';
 import type { ConversationEvent, ConversationSnapshot } from '../../types/durable-types';

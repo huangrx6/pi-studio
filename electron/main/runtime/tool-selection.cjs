@@ -9,6 +9,7 @@
 const path = require('node:path');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 const { isBrowserAgentControlEnabled } = require('../services/browser/settings.cjs');
+const { getDesktopControlPreferences } = require('../services/desktop-control/policy.cjs');
 const { getDurableRuntime } = require('./durable-runtime.cjs');
 const {
   extensionHostSnapshot,
@@ -50,6 +51,7 @@ const TEMPORARY_EXCLUDED_BUILTIN_RUNTIMES = new Set([
   'studio-request-trace',
   'studio-metrics',
   'studio-image-fit',
+  'studio-desktop-control',
 ]);
 
 function enabledMcpMethodNames(methods, selection, db = getStudioDatabase()) {
@@ -233,8 +235,17 @@ function runtimeToolFilter(selection, mcp, profile, options = {}) {
       try { return isBrowserAgentControlEnabled(); } catch { return true; }
     })();
 
+  const desktopControlEnabled = options.desktopControlEnabled !== undefined
+    ? Boolean(options.desktopControlEnabled)
+    : (() => {
+      try { return Boolean(getDesktopControlPreferences().enabled); } catch { return false; }
+    })();
+
   return ({ extension, tool }) => {
     if (extension.name === 'studio-browser-tools' && !browserControlEnabled) {
+      return false;
+    }
+    if (extension.name === 'studio-desktop-control' && !desktopControlEnabled) {
       return false;
     }
     if (extension.name.startsWith('studio-mcp:')) {
@@ -260,15 +271,6 @@ function resolveProfileForOptions(options = {}, db = getStudioDatabase()) {
   }
   if (options.temporary) return resolveTemporaryToolProfile(db);
   return resolveMainToolProfile(options.cwd || '', db);
-}
-
-async function enabledRuntimeToolNames(options = {}) {
-  const runtime = await getDurableRuntime();
-  const db = getStudioDatabase();
-  const profile = resolveProfileForOptions(options, db);
-  const selected = readAgentToolSelection(db);
-  const allowed = runtimeToolFilter(selected, mcpSnapshot(), profile);
-  return runtime.registry.snapshot().tools().filter(allowed).map(({ tool }) => tool.name);
 }
 
 async function runtimeSelection(options = {}) {
@@ -374,7 +376,6 @@ module.exports = {
   agentToolCatalog,
   deleteToolProfile,
   enabledMcpMethodNames,
-  enabledRuntimeToolNames,
   getToolProfilesSnapshot,
   isValidToolName,
   matches,

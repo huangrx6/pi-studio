@@ -1,6 +1,6 @@
 /**
  * Desktop control policy: master switch, allow-any, always-allow list, and hard blocks.
- * Application allowlisting is separate from macOS system permissions.
+ * Application allowlisting is separate from OS system permissions (macOS & Windows).
  */
 const { app } = require('electron');
 const path = require('node:path');
@@ -14,9 +14,10 @@ const DEFAULT_PREFERENCES = Object.freeze({
   alwaysAllow: Object.freeze([]),
 });
 
-/** Names that always refuse observation (case-insensitive). */
+/** Names that always refuse observation (case-insensitive, macOS & Windows). */
 const BLOCKED_NAMES = new Set([
   'pi studio',
+  'pi studio computer use',
   'terminal',
   'iterm',
   'iterm2',
@@ -32,10 +33,45 @@ const BLOCKED_NAMES = new Set([
   'installer',
   'softwareupdate',
   'usernotificationcenter',
+  // Windows terminals, UAC, lock screen, and system elevation surfaces
+  'cmd',
+  'cmd.exe',
+  'command prompt',
+  '命令提示符',
+  'powershell',
+  'powershell.exe',
+  'windows powershell',
+  'pwsh',
+  'pwsh.exe',
+  'windows terminal',
+  'windowsterminal',
+  'windowsterminal.exe',
+  'wt',
+  'wt.exe',
+  'conhost',
+  'conhost.exe',
+  'consent',
+  'consent.exe',
+  'credentialuibroker',
+  'credentialuibroker.exe',
+  'lockapp',
+  'lockapp.exe',
+  'logonui',
+  'logonui.exe',
+  'taskmgr',
+  'taskmgr.exe',
+  'task manager',
+  '任务管理器',
+  'regedit',
+  'regedit.exe',
+  'mmc',
+  'mmc.exe',
 ]);
 
-/** Bundle IDs that always refuse observation. */
+/** Bundle IDs / Windows exe & AUMIDs that always refuse observation. */
 const BLOCKED_BUNDLE_IDS = new Set([
+  'dev.pi.studio',
+  'dev.pi.studio.computer-use',
   'com.apple.Terminal',
   'com.googlecode.iterm2',
   'dev.warp.Warp-Stable',
@@ -51,6 +87,21 @@ const BLOCKED_BUNDLE_IDS = new Set([
   'com.apple.installer',
   'com.apple.SoftwareUpdate',
   'com.apple.UserNotificationCenter',
+  // Windows exe names & UWP AUMIDs
+  'cmd.exe',
+  'powershell.exe',
+  'pwsh.exe',
+  'windowsterminal.exe',
+  'wt.exe',
+  'conhost.exe',
+  'consent.exe',
+  'credentialuibroker.exe',
+  'lockapp.exe',
+  'logonui.exe',
+  'taskmgr.exe',
+  'regedit.exe',
+  'mmc.exe',
+  'microsoft.windowsterminal_8wekyb3d8bbwe!app',
 ]);
 
 /** Extra hard-block names for password / system settings surfaces. */
@@ -59,8 +110,18 @@ const EXTRA_BLOCKED_NAMES = new Set([
   'keychain access',
   '1password',
   'bitwarden',
+  'keepass',
+  'keepassxc',
   'system settings',
   'system preferences',
+  'windows security',
+  'windows 安全中心',
+  'systemsettings',
+  'systemsettings.exe',
+  'control',
+  'control.exe',
+  'sechealthui',
+  'sechealthui.exe',
 ]);
 
 const EXTRA_BLOCKED_BUNDLE_IDS = new Set([
@@ -72,7 +133,21 @@ const EXTRA_BLOCKED_BUNDLE_IDS = new Set([
   'com.bitwarden.desktop',
   'com.apple.systempreferences',
   'com.apple.Preferences',
+  // Windows settings, security, and password managers
+  '1password.exe',
+  'bitwarden.exe',
+  'keepass.exe',
+  'keepassxc.exe',
+  'systemsettings.exe',
+  'control.exe',
+  'sechealthui.exe',
+  'windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel',
+  'microsoft.sechealthui_8wekyb3d8bbwe!sechealthui',
 ]);
+
+const BLOCKED_BUNDLE_IDS_LOWER = new Set(
+  [...BLOCKED_BUNDLE_IDS, ...EXTRA_BLOCKED_BUNDLE_IDS].map((id) => String(id).toLowerCase()),
+);
 
 function normalizeBoolean(value, fallback = false) {
   if (typeof value === 'boolean') return value;
@@ -99,6 +174,14 @@ function stableId(entry) {
   return '';
 }
 
+function fallbackNameFromPath(appPath) {
+  if (!appPath) return '';
+  const base = appPath.includes('\\')
+    ? path.win32.basename(appPath)
+    : path.basename(appPath);
+  return base.replace(/\.(app|exe)$/i, '');
+}
+
 function normalizeAllowEntry(input) {
   if (!input || typeof input !== 'object') return null;
   const name = normalizeText(input.name);
@@ -109,7 +192,7 @@ function normalizeAllowEntry(input) {
   if (!id) return null;
   return {
     id,
-    name: name || path.basename(appPath, '.app') || bundleId || id,
+    name: name || fallbackNameFromPath(appPath) || bundleId || id,
     bundleId,
     path: appPath,
   };
@@ -166,11 +249,18 @@ function selfIdentity() {
   } catch {
     appPath = '';
   }
-  // Dev Electron uses com.github.Electron; treat as self when this process is Electron.
+  // Dev Electron uses com.github.Electron on macOS or electron.exe on Windows; treat as self.
   if (!bundleId && process.platform === 'darwin') {
     try {
       const exe = normalizeText(process.execPath).toLowerCase();
       if (exe.includes('electron')) bundleId = 'com.github.Electron';
+    } catch {
+      /* ignore */
+    }
+  } else if (!bundleId && process.platform === 'win32') {
+    try {
+      const exeBase = path.win32.basename(normalizeText(process.execPath)).toLowerCase();
+      if (exeBase) bundleId = exeBase;
     } catch {
       /* ignore */
     }
@@ -236,10 +326,62 @@ function isBlockedApp(target, self = selfIdentity()) {
   }
 
   const bundleId = normalizeText(target.bundleId);
-  if (bundleId && BLOCKED_BUNDLE_IDS.has(bundleId)) return true;
-  if (bundleId && EXTRA_BLOCKED_BUNDLE_IDS.has(bundleId)) return true;
+  const bundleLower = bundleId.toLowerCase();
+  if (bundleId && (BLOCKED_BUNDLE_IDS.has(bundleId) || EXTRA_BLOCKED_BUNDLE_IDS.has(bundleId) || BLOCKED_BUNDLE_IDS_LOWER.has(bundleLower))) {
+    return true;
+  }
   if (bundleId === 'com.github.Electron' && normalizeKey(self.bundleId) === 'com.github.electron') return true;
+  const targetPath = normalizeText(target.path);
+  if (targetPath) {
+    const exeBase = (targetPath.includes('\\') ? path.win32.basename(targetPath) : path.basename(targetPath)).toLowerCase();
+    if (exeBase.endsWith('.exe') && BLOCKED_BUNDLE_IDS_LOWER.has(exeBase)) return true;
+  }
   return false;
+}
+
+/**
+ * Session-scoped temporary app allowlist (in-memory only, cleared on session/app exit).
+ * Powers Codex-style "允许此对话" in-chat approval without polluting permanent settings.
+ * @type {Map<string, Array<{ id: string, name: string, bundleId: string, path: string }>>}
+ */
+const sessionAllowMap = new Map();
+
+function isSessionAllowed(target, sessionId) {
+  const key = normalizeText(sessionId);
+  if (!key || !target) return false;
+  const list = sessionAllowMap.get(key);
+  if (!Array.isArray(list) || !list.length) return false;
+  return list.some((entry) => matchesEntry(target, entry));
+}
+
+function addSessionAllowApp(sessionId, input) {
+  const key = normalizeText(sessionId);
+  if (!key) return [];
+  const entry = normalizeAllowEntry(input);
+  if (!entry) {
+    const error = new Error('请选择一个有效的应用程序。');
+    error.code = 'desktop_invalid_app';
+    throw error;
+  }
+  if (isBlockedApp(entry)) {
+    const error = new Error('不能把自身、终端或系统授权界面加入允许列表。');
+    error.code = 'desktop_blocked';
+    throw error;
+  }
+  const current = sessionAllowMap.get(key) || [];
+  if (!current.some((item) => item.id === entry.id || matchesEntry(entry, item))) {
+    sessionAllowMap.set(key, [...current, entry]);
+  }
+  return sessionAllowMap.get(key) || [];
+}
+
+function clearSessionAllowApps(sessionId) {
+  if (sessionId == null) {
+    sessionAllowMap.clear();
+    return;
+  }
+  const key = normalizeText(sessionId);
+  if (key) sessionAllowMap.delete(key);
 }
 
 function isAlwaysAllowed(target, preferences = getDesktopControlPreferences()) {
@@ -271,17 +413,21 @@ function decideDesktopAccess(target, options = {}) {
     };
   }
 
-  if (preferences.allowAnyApp || isAlwaysAllowed(target, preferences)) {
+  if (preferences.allowAnyApp || isAlwaysAllowed(target, preferences) || isSessionAllowed(target, options.sessionId)) {
     return {
       decision: 'allow',
-      reason: preferences.allowAnyApp ? '已开启任意应用（仍排除阻断列表）。' : '已在始终允许列表中。',
+      reason: preferences.allowAnyApp
+        ? '已开启任意应用（仍排除阻断列表）。'
+        : isAlwaysAllowed(target, preferences)
+          ? '已在始终允许列表中。'
+          : '已在当前对话中临时允许。',
       code: 'desktop_allowed',
     };
   }
 
   return {
     decision: 'needs_approval',
-    reason: '该应用尚未授权。请在设置 → 电脑操控的始终允许列表中添加后重试。',
+    reason: '该应用尚未授权。请在弹窗中选择「允许此对话」或「始终允许」，或前往设置 → 电脑操控的始终允许列表添加。',
     code: 'desktop_needs_approval',
   };
 }
@@ -349,6 +495,9 @@ module.exports = {
   selfIdentity,
   isBlockedApp,
   isAlwaysAllowed,
+  isSessionAllowed,
+  addSessionAllowApp,
+  clearSessionAllowApps,
   decideDesktopAccess,
   assertDesktopEnabled,
   assertDesktopAppAllowed,

@@ -4,9 +4,9 @@ Pi Studio 是一款基于 Pi Durable 的 Windows 和 macOS 桌面应用，适合
 
 [下载 Windows 或 macOS 版](https://github.com/huangrx6/pi-studio/releases/latest) · [版本记录](./docs/releases/README.md) · [产品主页](https://huangrx6.github.io/pi-studio/) · [使用手册](https://huangrx6.github.io/pi-studio/guide.html) · [反馈问题](https://github.com/huangrx6/pi-studio/issues)
 
-![Pi Studio 左侧显示工作区，中间是标签搜索的实现结果，右侧预览对应的 README](./website/assets/screens/workbench-dark.png)
+![Atlas Notes in Pi Studio with conversations grouped by Git worktree on the left, README.md open in the tag-search conversation, and the file tree on the right](./website/assets/screens/workbench-dark.png)
 
-*在演示项目 Atlas Notes 中，智能体为笔记加上标签搜索。右侧的 README 列出了这次实现采用的索引规则。*
+*Atlas Notes 的两个工作树各自列出相关对话。在 feat/tag-search 下选中「为笔记添加标签搜索」，可以在同一工作树的标签间切换，核对 README 里的索引规则和 search.mjs 中的实现。*
 
 ## 开始第一次对话
 
@@ -19,9 +19,9 @@ Pi Studio 是一款基于 Pi Durable 的 Windows 和 macOS 桌面应用，适合
 | 想做的事 | 在 Pi Studio 中怎么做 |
 | --- | --- |
 | 跟进一轮修改 | 展开回复里的「执行轨迹」看工具调用，在本轮文件变更中核对差异。运行中可补充要求，或用 `⌘ Enter` 将下一条消息排队。 |
-| 亲自验证结果 | 展开右侧工作台，预览工作区文件、打开终端运行测试，或在浏览器标签里检查本地页面。「运行服务」可以查看工作区的服务进程。 |
+| 亲自验证结果 | 在右侧文件树选择文件，在中间标签页预览。在主窗口内打开悬浮工具面板，用终端运行测试或用浏览器检查页面，收起即可继续对话。点击状态栏的「运行服务」可查看工作区的服务进程。 |
 | 拆分较长的任务 | 用 `/goal <目标>` 设置目标，让同一会话分轮推进。将独立的工作交给子智能体后，可以在子智能体视图查看各自的任务与进度。 |
-| 临时问个问题 | 从侧栏打开「临时聊天」。这段对话保存在内存中，关闭后不会进入工作区会话历史。 |
+| 临时问个问题 | 从侧栏打开「临时对话」。发送后的聊天保存在本机，可从该分区的「对话记录」继续。项目会话显示在「对话」分区。 |
 
 [查看会话与计划截图](./website/assets/screens/conversation-dark.png) · [查看子智能体截图](./website/assets/screens/subagents-light.png)
 

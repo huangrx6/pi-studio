@@ -1,12 +1,12 @@
+@import '../../../web/src/styles/typography.css';
+@import '../../../web/src/styles/icon-sizes.css';
+
 :root {
-  --surface: #ffffff;
-  --surface-hover: rgba(127, 127, 127, 0.1);
-  --text-1: #1b1d21;
-  --text-2: #4b5563;
-  --muted: #6b7280;
-  --divider: rgba(127, 127, 127, 0.16);
-  --accent: #2563eb;
-  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", sans-serif;
+  color-scheme: light dark;
+  --bg: Canvas;
+  --surface: ButtonFace;
+  --text-1: CanvasText;
+  --muted: GrayText;
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -16,8 +16,8 @@ html, body, #root {
   width: 100%;
   height: 100%;
   overflow: hidden;
-  font-family: var(--font);
-  background: var(--surface);
+  font: var(--font-body);
+  background: var(--surface-canvas, var(--bg));
   color: var(--text-1);
 }
 
@@ -29,7 +29,7 @@ html, body, #root {
   width: 100%;
   height: 100%;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-description);
 }
 
 .ex-board {
@@ -60,7 +60,7 @@ html, body, #root {
   flex: 1 1 auto;
   align-items: center;
   gap: 6px;
-  font-size: 12.5px;
+  font-size: var(--text-subtitle);
 }
 
 .ex-board-picker {
@@ -84,8 +84,8 @@ html, body, #root {
   background: transparent;
   color: var(--text-1);
   font: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
+  font-size: var(--text-label);
+  font-weight: var(--weight-semibold);
   cursor: pointer;
 }
 
@@ -110,8 +110,8 @@ html, body, #root {
   border-radius: 999px;
   background: var(--surface-hover);
   color: var(--text-2);
-  font-size: 10.5px;
-  font-weight: 500;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
   line-height: 1.3;
 }
 
@@ -123,9 +123,9 @@ html, body, #root {
   width: min(280px, calc(100vw - 24px));
   padding: 6px;
   border: 1px solid var(--divider);
-  border-radius: 10px;
-  background: var(--surface);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.16);
+  border-radius: var(--radius-card, 10px);
+  background: var(--surface-floating, var(--surface));
+  box-shadow: var(--shadow-float);
 }
 
 .ex-board-list {
@@ -148,7 +148,7 @@ html, body, #root {
   min-height: 32px;
   padding: 4px 6px;
   border-radius: 7px;
-  font-size: 12.5px;
+  font-size: var(--text-label);
   color: var(--text-2);
 }
 
@@ -184,7 +184,7 @@ html, body, #root {
 .ex-board-item-meta {
   flex: none;
   color: var(--muted);
-  font-size: 11px;
+  font-size: var(--text-caption);
 }
 
 .ex-board-item-actions {
@@ -227,7 +227,7 @@ html, body, #root {
   background: var(--surface);
   color: var(--text-1);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--text-label);
   outline: none;
 }
 
@@ -245,8 +245,8 @@ html, body, #root {
   background: transparent;
   color: var(--text-1);
   font: inherit;
-  font-size: 12px;
-  font-weight: 500;
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
   cursor: pointer;
 }
 
@@ -267,7 +267,7 @@ html, body, #root {
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--muted);
-  font-size: 11.5px;
+  font-size: var(--text-caption);
   white-space: nowrap;
 }
 
@@ -310,7 +310,7 @@ html, body, #root {
 .ex-feedback {
   padding: 6px 12px;
   border-bottom: 1px solid var(--divider);
-  font-size: 12.5px;
+  font-size: var(--text-description);
   color: var(--text-2);
 }
 
@@ -323,6 +323,48 @@ html, body, #root {
 }
 
 .ex-editor .excalidraw { font-family: var(--font); }
+:root[data-canvas-theme="app"] :is(.excalidraw, .excalidraw-modal-container) {
+  --island-bg-color: var(--surface-raised, var(--surface));
+  --sidebar-bg-color: var(--surface-chrome, var(--surface));
+  --default-bg-color: var(--surface-canvas, var(--bg));
+  --popup-bg-color: var(--surface-floating, var(--surface));
+  --popup-secondary-bg-color: var(--surface-raised, var(--surface));
+  --input-bg-color: var(--composer-surface, var(--surface));
+  --input-hover-bg-color: var(--surface-hover);
+  --input-border-color: var(--border);
+  --input-label-color: var(--muted);
+  --dialog-border-color: var(--border);
+  --color-border-outline: var(--border-hover);
+  --color-border-outline-variant: var(--divider);
+  --sidebar-border-color: var(--divider);
+  --text-primary-color: var(--text-1);
+  --popup-text-color: var(--text-1);
+  --color-on-surface: var(--text-1);
+  --color-surface-lowest: var(--surface-canvas, var(--bg));
+  --color-surface-low: var(--surface);
+  --color-surface-mid: var(--surface-hover);
+  --color-surface-high: var(--tint-neutral);
+  --button-gray-1: var(--surface);
+  --button-gray-2: var(--surface-hover);
+  --button-gray-3: var(--nav-selected-bg, var(--tint-neutral));
+  --color-primary: var(--accent);
+  --color-primary-darker: var(--accent);
+  --color-primary-darkest: var(--accent);
+  --color-primary-light: var(--accent-tint);
+  --color-primary-light-darker: var(--nav-selected-bg, var(--accent-tint));
+  --color-primary-hover: var(--accent);
+  --color-brand-hover: var(--accent);
+  --color-brand-active: var(--accent);
+  --color-surface-primary-container: var(--accent-tint);
+  --color-on-primary-container: var(--text-1);
+  --focus-highlight-color: var(--focus-color);
+  --link-color: var(--link, var(--accent));
+  --button-destructive-color: var(--error);
+  --button-destructive-bg-color: var(--error-soft);
+  --button-special-active-bg-color: var(--success-soft, var(--tint-neutral));
+  --shadow-island: var(--shadow-float);
+  --modal-shadow: var(--shadow-dialog, var(--shadow-float));
+}
 .ex-editor .excalidraw [data-testid="toolbar-embeddable"] { display: none; }
 
 /* Keep narrow-pane shape properties sheet compact so the canvas stays usable above it. */
@@ -379,10 +421,10 @@ html, body, #root {
   gap: 6px;
   padding: 20px;
   color: var(--muted);
-  font-size: 13px;
+  font-size: var(--text-description);
   text-align: center;
   pointer-events: none;
 }
 
-.ex-empty > svg { width: 26px; height: 26px; stroke-width: 1.4; }
+.ex-empty > svg { width: calc(var(--icon-lg) + 6px); height: calc(var(--icon-lg) + 6px); stroke-width: 1.4; }
 .ex-empty > strong { color: var(--text-2); }

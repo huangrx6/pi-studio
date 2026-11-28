@@ -9,7 +9,7 @@ body {
   overflow: hidden;
   background: var(--transparent);
   color: var(--text);
-  font: var(--text-base)/1.4 var(--font);
+  font: var(--font-body);
   -webkit-font-smoothing: antialiased;
 }
 
@@ -37,7 +37,7 @@ button:disabled { opacity: .45; cursor: default; }
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-panel);
-  background: var(--surface);
+  background: var(--surface-floating);
 }
 
 .popover-header {
@@ -59,17 +59,17 @@ button:disabled { opacity: .45; cursor: default; }
 
 .brand-mark {
   display: block;
-  width: 22px;
-  height: 22px;
+  width: calc(var(--icon-lg) + 2px);
+  height: calc(var(--icon-lg) + 2px);
   flex: none;
   border-radius: var(--radius-tag);
   object-fit: contain;
 }
 
 .brand-lockup strong {
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 20px;
+  font-size: var(--text-subtitle);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-tight);
 }
 
 .icon-button {
@@ -85,7 +85,7 @@ button:disabled { opacity: .45; cursor: default; }
 
 .icon-button:hover,
 .icon-button[aria-expanded="true"] { background: var(--surface-hover); color: var(--text); }
-.icon-button svg { width: 16px; height: 16px; fill: currentColor; }
+.icon-button svg { width: var(--icon-md); height: var(--icon-md); fill: currentColor; }
 
 .more-anchor { position: relative; }
 
@@ -98,7 +98,7 @@ button:disabled { opacity: .45; cursor: default; }
   padding: 4px;
   border: 1px solid var(--border);
   border-radius: var(--radius-control);
-  background: var(--surface);
+  background: var(--surface-floating);
   box-shadow: var(--shadow-popover);
 }
 
@@ -111,7 +111,7 @@ button:disabled { opacity: .45; cursor: default; }
   border-radius: var(--radius-tag);
   background: var(--transparent);
   color: var(--text);
-  font-size: 12px;
+  font-size: var(--text-label);
   text-align: left;
 }
 
@@ -138,9 +138,9 @@ h2 {
   margin: 0;
   padding: 4px 8px 3px;
   color: var(--faint);
-  font-size: 10.5px;
-  font-weight: 600;
-  line-height: 17px;
+  font-size: var(--text-caption);
+  font-weight: var(--weight-semibold);
+  line-height: var(--leading-normal);
 }
 
 .session-list { display: grid; }
@@ -180,8 +180,8 @@ h2 {
 }
 
 .status-icon svg {
-  width: 16px;
-  height: 16px;
+  width: var(--icon-md);
+  height: var(--icon-md);
   fill: none;
   stroke: currentColor;
   stroke-width: 1.7;
@@ -197,8 +197,8 @@ h2 {
 .session-copy { display: grid; min-width: 0; gap: 2px; }
 .session-copy strong,
 .session-copy small { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.session-copy strong { font-size: 12.5px; font-weight: 560; line-height: 18px; }
-.session-copy small { color: var(--faint); font-size: 11px; line-height: 16px; font-variant-numeric: tabular-nums; }
+.session-copy strong { font-size: var(--text-label); font-weight: var(--weight-semibold); line-height: var(--leading-tight); }
+.session-copy small { color: var(--faint); font-size: var(--text-caption); line-height: var(--leading-normal); font-variant-numeric: tabular-nums; }
 
 .session-stop {
   display: grid;
@@ -213,7 +213,7 @@ h2 {
 }
 
 .session-stop:hover { background: var(--surface-active); color: var(--text); }
-.session-stop svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8; }
+.session-stop svg { width: var(--icon-sm); height: var(--icon-sm); fill: none; stroke: currentColor; stroke-width: 1.8; }
 .session-stop.is-busy svg { animation: spin 1s linear infinite; }
 
 .unread-dot {
@@ -232,7 +232,7 @@ h2 {
   min-height: 34px;
   place-items: center;
   color: var(--faint);
-  font-size: 12px;
+  font-size: var(--text-description);
 }
 
 .popover-footer {
@@ -252,13 +252,13 @@ h2 {
   border-radius: var(--radius-control);
   background: var(--transparent);
   color: var(--text);
-  font-size: 12.5px;
-  font-weight: 550;
+  font-size: var(--text-label);
+  font-weight: var(--weight-semibold);
   text-align: left;
 }
 
 .open-main:hover { background: var(--surface-hover); }
-.open-main svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; }
+.open-main svg { width: var(--icon-sm); height: var(--icon-sm); fill: none; stroke: currentColor; stroke-width: 1.7; }
 
 .sr-only {
   position: absolute;

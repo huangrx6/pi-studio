@@ -47,11 +47,45 @@ test('version 3 selections migrate through browser act tools', () => {
     'browser_scroll', 'browser_wait', 'browser_select', 'browser_viewport',
     'browser_console', 'browser_network',
     'browser_dialog', 'browser_download', 'browser_highlight', 'workbench_refresh',
+    'desktop_status', 'desktop_apps', 'desktop_windows', 'desktop_launch', 'desktop_act', 'desktop_snapshot', 'desktop_screenshot',
+    'desktop_click', 'desktop_type', 'desktop_scroll', 'desktop_drag', 'desktop_hotkey',
   ]) {
     assert.ok(next.enabled.includes(name), `missing ${name}`);
   }
   assert.ok(!next.enabled.includes('browser_evaluate'), 'evaluate must not auto-enable');
-  assert.equal(db.getSetting('studio.agent.tools.version'), 8);
+  assert.equal(db.getSetting('studio.agent.tools.version'), 13);
+});
+
+test('version 12 removes the retired desktop tool from selections and every stored profile', () => {
+  const db = getStudioDatabase();
+  const key = 'studio.agent.tools';
+  const profiles = 'studio.agent.toolProfiles.v1';
+  const retired = 'desktop_search_chat';
+  const keep = { source: 'builtin', label: 'Desktop', scope: 'builtin' };
+  for (const withSelection of [true, false]) {
+    const enabled = ['read', retired, 'desktop_*'];
+    const sources = { read: keep, [retired]: keep };
+    const store = { profiles: {
+      'main-default': { enabled, sources },
+      'temporary-default': { enabled: [retired] },
+      custom: { enabled: ['read'], sources },
+    }, workspaceProfiles: { '/project': 'custom' } };
+    db.setSetting(profiles, store);
+    db.setSetting('studio.agent.tools.version', 12);
+    if (withSelection) db.setSetting(key, { enabled, sources });
+    else db.deleteSetting(key);
+    readAgentToolSelection(db);
+    const after = db.getSetting(profiles);
+    assert.deepEqual(after.profiles['main-default'], { enabled: ['read', 'desktop_*'], sources: { read: keep } });
+    assert.deepEqual(after.profiles['temporary-default'], { enabled: [] });
+    assert.deepEqual(after.profiles.custom, { enabled: ['read'], sources: { read: keep } });
+    assert.deepEqual(after.workspaceProfiles, store.workspaceProfiles);
+    if (withSelection) assert.deepEqual(db.getSetting(key).enabled, ['read', 'desktop_*']);
+    else assert.equal(Object.hasOwn(db.getSettings(), key), false);
+    readAgentToolSelection(db);
+    assert.deepEqual(db.getSetting(profiles), after);
+  }
+  db.deleteSetting(profiles);
 });
 
 test('local saves preserve legacy MCP choices, including overlapping wildcards and offline methods', () => {

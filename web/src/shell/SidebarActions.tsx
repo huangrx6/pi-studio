@@ -13,7 +13,7 @@
  */
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Archive, Copy, GitFork, MoreHorizontal, Pencil, Pin, PinOff, SquarePen, Trash2, Undo2 } from 'lucide-react';
+import { Archive, Copy, GitFork, ListChecks, MoreHorizontal, Pencil, Pin, PinOff, MessageCirclePlus, Trash2, Undo2 } from 'lucide-react';
 import { SettingsDialog } from '../shared/SettingsDialog';
 import { errorText } from '../shared/error-text';
 import { useSurfaceActive } from '../shared/surface-visibility';
@@ -33,8 +33,9 @@ export type SidebarAction = 'rename' | 'remove' | 'pin' | 'archive' | 'fork';
  * @param onAction 实际执行动作；返回 Promise，失败信息会展示给用户
  * @param onNew 工作区行「新建对话」回调；仅工作区使用
  */
-export function SidebarActions({ kind, id, name, pinned, archived, sessionCount, archivedCount, onAction, onNew, onInteractionChange, onRestoreFocusFallback, disabled = false }: {
+export function SidebarActions({ kind, id, name, pinned, archived, sessionCount, archivedCount, onAction, onNew, onInspect, onInteractionChange, onRestoreFocusFallback, disabled = false }: {
   disabled?: boolean;
+  onInspect?: () => void;
   kind: 'workspace' | 'session'; id: string; name: string; pinned?: boolean; archived?: boolean;
   sessionCount?: number; archivedCount?: number;
   onAction: (action: SidebarAction, name?: string) => Promise<void>; onNew?: () => void;
@@ -154,11 +155,16 @@ export function SidebarActions({ kind, id, name, pinned, archived, sessionCount,
    * 先关闭菜单并进入 busy；只有成功后才关闭重命名/确认弹窗，
    * 失败时保留弹窗，把错误交给 SettingsDialog 展示，方便用户修正重试。
    */
-  async function run(action: SidebarAction, nextName?: string) {
+  async function run(action: SidebarAction, nextName?: string, dismiss?: (finish: () => void) => Promise<void>) {
     if (busy || disabled) return;
     setRestoringFocus(true);
     setBusy(true); setError(null); setPosition(null);
-    try { await onAction(action, nextName); setRenaming(false); setConfirming(null); }
+    try {
+      await onAction(action, nextName);
+      const finish = () => { setRenaming(false); setConfirming(null); };
+      if (dismiss) await dismiss(finish);
+      else finish();
+    }
     catch (error) { setError(errorText(error)); }
     finally {
       setBusy(false);
@@ -183,8 +189,8 @@ export function SidebarActions({ kind, id, name, pinned, archived, sessionCount,
   const workspaceSessions = Math.max(0, Number(sessionCount) || 0);
   const workspaceArchived = Math.min(workspaceSessions, Math.max(0, Number(archivedCount) || 0));
   const workspaceDescription = workspaceSessions > 0
-    ? `将永久删除此工作区下的 ${workspaceSessions} 个会话${workspaceArchived > 0 ? `，其中 ${workspaceArchived} 个已归档` : ''}，并清理关联子智能体、附件、画布和 Studio 设置。磁盘中的项目文件夹会保留。`
-    : '这个工作区没有会话。将清理它的 Studio 设置、项目扩展状态和归档记录，磁盘中的项目文件夹不会被删除。';
+    ? `将永久删除此工作区下的 ${workspaceSessions} 个会话${workspaceArchived > 0 ? `，其中 ${workspaceArchived} 个已归档` : ''}，并清理关联子智能体、附件、画布、团队群聊、计划及其运行记录和 Studio 设置。磁盘中的项目文件夹会保留。`
+    : '这个工作区没有会话。将清理它的团队群聊、计划及其运行记录、Studio 设置、项目扩展状态和归档记录。磁盘中的项目文件夹会保留。';
   const confirmation = confirming === 'archive'
     ? { title: archived ? '恢复这个会话？' : '归档这个会话？', action: archived ? '恢复会话' : '归档会话', description: archived ? '会话将回到工作区的会话列表。' : '归档后会从当前列表隐藏，历史记录会保留，可在“设置 → 归档会话”中恢复。' }
     : confirming === 'fork'
@@ -201,7 +207,7 @@ export function SidebarActions({ kind, id, name, pinned, archived, sessionCount,
       openMenu(event.key === 'ArrowUp' ? 'last' : 'first');
     }}><MoreHorizontal /></button>
     {/* 工作区只提供「新建对话」；会话额外提供归档与置顶的快捷入口。 */}
-    {kind === 'workspace' ? <button type="button" title="在此工作区新建对话" aria-label={`在${name}中新建对话`} onClick={onNew}><SquarePen /></button> : <>
+    {kind === 'workspace' ? <button type="button" disabled={!onNew || disabled || busy} title="在此工作区新建对话" aria-label={`在${name}中新建对话`} onClick={onNew}><MessageCirclePlus /></button> : <>
       <button type="button" disabled={busy || disabled} title={archiveLabel} aria-label={`${archiveLabel}：${name}`} onClick={event => { rememberFocus(event.currentTarget); confirm('archive'); }}>{archived ? <Undo2 /> : <Archive />}</button>
       <button type="button" disabled={busy || disabled} className={pinned ? 'is-pinned' : ''} title={pinLabel} aria-label={`${pinLabel}：${name}`} onClick={event => { rememberFocus(event.currentTarget); void run('pin'); }}>{pinned ? <PinOff /> : <Pin />}</button>
     </>}
@@ -226,6 +232,7 @@ export function SidebarActions({ kind, id, name, pinned, archived, sessionCount,
         items[next]?.scrollIntoView({ block: 'nearest', behavior: 'instant' });
       }
     }}>
+      {onInspect && <button role="menuitem" tabIndex={-1} onClick={() => { dismissMenu(); onInspect(); }}><ListChecks />查看会话详情</button>}
       {kind === 'session' && <button role="menuitem" tabIndex={-1} onClick={() => void run('pin')}><Pin />{pinLabel}</button>}
       <button role="menuitem" tabIndex={-1} onClick={() => { returnFocus.current?.focus({ preventScroll: true }); setPosition(null); setValue(name); setError(null); setRenaming(true); }}><Pencil />{kind === 'workspace' ? '重命名工作区' : '重命名'}</button>
       {kind === 'workspace' ? <button role="menuitem" tabIndex={-1} onClick={() => confirm('remove')}><Trash2 />永久删除工作区</button> : <>
@@ -236,11 +243,11 @@ export function SidebarActions({ kind, id, name, pinned, archived, sessionCount,
       </>}
     </div>, document.body)}
     {/* 重命名复用设置弹框骨架：提交失败时错误显示在弹框内，不丢输入。 */}
-    {renaming && <SettingsDialog title={kind === 'workspace' ? '重命名工作区' : '重命名会话'} description={kind === 'workspace' ? '修改显示名称，磁盘文件夹名称保持不变。' : undefined} action="保存" busy={busy} loading={false} error={error} onClose={() => { setRestoringFocus(true); setRenaming(false); setError(null); }} onSubmit={() => void run('rename', value)}>
+    {renaming && <SettingsDialog title={kind === 'workspace' ? '重命名工作区' : '重命名会话'} description={kind === 'workspace' ? '修改显示名称，磁盘文件夹名称保持不变。' : undefined} action="保存" busy={busy} loading={false} error={error} onClose={() => { setRestoringFocus(true); setRenaming(false); setError(null); }} onSubmit={(dismiss) => void run('rename', value, dismiss)}>
       <label className="sidebar-rename-field">名称<input required maxLength={80} value={value} onChange={event => setValue(event.target.value)} /></label>
     </SettingsDialog>}
     {/* 二次确认：确认后才真正调用 onAction；关闭时把焦点还回触发按钮。 */}
-    {confirming && createPortal(<SettingsDialog title={confirmation.title} description={confirmation.description} action={confirmation.action} busy={busy} loading={false} error={error} onClose={() => { setRestoringFocus(true); setConfirming(null); setError(null); }} onSubmit={() => void run(confirming)}>
+    {confirming && createPortal(<SettingsDialog title={confirmation.title} description={confirmation.description} action={confirmation.action} busy={busy} loading={false} error={error} onClose={() => { setRestoringFocus(true); setConfirming(null); setError(null); }} onSubmit={(dismiss) => void run(confirming, undefined, dismiss)}>
       <p className="sidebar-confirm-name">{name}</p>
     </SettingsDialog>, document.body)}
     {/* 两个弹窗都关闭时，动作错误退化为浮动提示，避免失败信息被悄悄丢掉。 */}

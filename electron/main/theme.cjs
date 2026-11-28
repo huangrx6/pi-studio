@@ -11,6 +11,12 @@ const path = require('node:path');
 
 // The native window uses the same palette as the renderer, including at startup.
 const palette = fs.readFileSync(path.join(__dirname, '../../web/src/styles/palette.css'), 'utf8');
+const typography = fs.readFileSync(path.join(__dirname, '../../web/src/styles/typography.css'), 'utf8');
+
+/** Independent documents and in-page badges use the renderer's type scale on their own element. */
+function scopedTypography(selector) {
+  return typography.replaceAll(':root', selector);
+}
 function paletteBlock(selector) {
   return palette.slice(palette.indexOf(selector) + selector.length).split('}')[0];
 }
@@ -33,4 +39,4 @@ const backgrounds = Object.fromEntries(['light', 'dark'].map((theme) => {
 function themeBackground(preference, systemDark) {
   return backgrounds[preference === 'system' ? (systemDark ? 'dark' : 'light') : preference];
 }
-module.exports = { themeBackground };
+module.exports = { themeBackground, scopedTypography };

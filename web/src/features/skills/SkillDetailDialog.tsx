@@ -46,13 +46,14 @@ export function SkillDetailDialog({ skill, busy, error, refreshing = false, onRe
   }
   const status = installedSkillStatus(skill);
   return <DetailDialog className="skill-detail-dialog" onClose={onClose}>
+    {close => <>
     <header className="detail-header">
       <div className="detail-heading"><div>
         <h2>{skill.name}</h2>
         {skill.description && <p>{skill.description}</p>}
         <small className={`resource-status ${skill.available ? 'is-on' : ''}`}><StatusGlyph state={skill.available ? 'on' : 'attention'} />{status.label}</small>
       </div></div>
-      <button type="button" className="icon-button" aria-label="关闭技能详情" onClick={onClose}><X /></button>
+      <button type="button" className="icon-button" aria-label="关闭技能详情" onClick={close}><X /></button>
     </header>
     <div className="skill-detail-location" aria-label="文件位置">
       <FolderOpen aria-hidden="true" />
@@ -101,5 +102,6 @@ export function SkillDetailDialog({ skill, busy, error, refreshing = false, onRe
         {skill.trusted ? '撤销信任' : skill.trustChanged ? '重新信任' : '信任技能'}
       </button>
     </footer>}
+    </>}
   </DetailDialog>;
 }

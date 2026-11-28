@@ -13,7 +13,7 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
-import { PopoverSurface, popoverPortalTarget } from './PopoverSurface';
+import { PopoverSurface, popoverPortalTarget, scrollMovedAnchor } from './PopoverSurface';
 import { useSurfaceActive } from './surface-visibility';
 import { isComposingKey, menuFocusIndex } from './keyboard-navigation';
 
@@ -109,10 +109,7 @@ export function Select({ value, options, onChange, label, title, placeholder = '
       menu.style.bottom = showAbove ? `${window.innerHeight - rect.top + MENU_GAP}px` : 'auto';
     };
     const onScroll = (event: Event) => {
-      if (!(event.target instanceof Node && event.target.contains(trigger))) return;
-      // 点击聚焦可能先把按钮滚入视野，随后才派发这次滚动的事件。
-      const rect = trigger.getBoundingClientRect();
-      if (rect.top !== openingRect.top || rect.left !== openingRect.left) dismiss();
+      if (scrollMovedAnchor(event, trigger, openingRect)) dismiss();
     };
     update();
     const observer = new ResizeObserver(update);

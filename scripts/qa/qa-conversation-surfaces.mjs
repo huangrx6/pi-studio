@@ -1,3 +1,4 @@
+import { openSessionInspection } from './fixtures/open-session-inspection.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -18,12 +19,22 @@ try {
   browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });
   for (const theme of ['dark', 'light']) {
     for (const visibility of [0, 55, 100]) {
+      const placement = { 0: 'below', 55: 'above', 100: 'hidden' }[visibility];
       const page = await browser.newPage({ viewport: { width: 1440, height: 920 }, deviceScaleFactor: 1 });
       page.on('pageerror', error => errors.push(error.message));
       await page.route('pi-media://background/surface.svg', route => route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000"><defs><linearGradient id="g" x2="0.8" y2="1"><stop stop-color="#708fa2"/><stop offset=".55" stop-color="#364955"/><stop offset="1" stop-color="#627c58"/></linearGradient></defs><rect width="1600" height="1000" fill="url(#g)"/><path d="M0 620L350 210L650 590L980 310L1600 700V1000H0Z" fill="#9ba6ac" opacity=".35"/><path d="M0 790Q500 550 900 790T1600 700V1000H0Z" fill="#162e25" opacity=".65"/></svg>' }));
       await page.addInitScript(installConversationFixture);
-      await page.addInitScript(({ theme, visibility, markdown, transcript }) => {
-        localStorage.setItem('pi-studio:preferences', JSON.stringify({ theme, showCodeView: transcript, stepCollapse: 'keep-open', backgroundMedia: { kind: 'image', url: 'pi-media://background/surface.svg', name: 'surface.svg', mime: 'image/svg+xml', bytes: 600 }, backgroundInsideVisibility: visibility, backgroundOpacity: 80, backgroundSurfaceOpacity: 30 }));
+      await page.addInitScript(({ theme, visibility, placement, markdown, transcript }) => {
+        const chip = {
+          id: 'builtin:studio-metrics/metrics-chip', contributionId: 'metrics-chip', extensionId: 'builtin:studio-metrics',
+          extensionName: 'Studio 指标', scope: 'builtin', title: '实时指标', icon: 'activity', color: 'info',
+          slot: 'status.chip', slots: ['status.chip', 'composer.above', 'composer.below'], details: 'metrics-detail',
+          content: [{ kind: 'text', text: '最近请求 · 174.2 tok/s · TTFT 2.29 s' }],
+        };
+        window.piApi.extensionsUi = async () => ({ syncedAt: 1, apiVersion: 1, errors: [], items: [
+          chip, { ...chip, id: 'builtin:studio-metrics/metrics-detail', contributionId: 'metrics-detail', slot: 'status.detail', slots: ['status.detail'] },
+        ] });
+        localStorage.setItem('pi-studio:preferences', JSON.stringify({ theme, showCodeView: transcript, stepCollapse: 'keep-open', extensionPlacements: { [chip.id]: placement }, backgroundMedia: { kind: 'image', url: 'pi-media://background/surface.svg', name: 'surface.svg', mime: 'image/svg+xml', bytes: 600 }, backgroundInsideVisibility: visibility, backgroundOpacity: 80, backgroundSurfaceOpacity: 30 }));
         if (transcript) {
           const original = window.piApi.conversationPage;
           window.piApi.conversationPage = async input => {
@@ -50,7 +61,7 @@ try {
             return value;
           };
         }
-      }, { theme, visibility, markdown, transcript });
+      }, { theme, visibility, placement, markdown, transcript });
       await page.goto(server.origin);
       await page.locator('.workspace-row').first().waitFor();
       await page.getByRole('button', { name: '搜索工作区', exact: true }).click();
@@ -70,10 +81,29 @@ try {
         return Object.fromEntries(['.chat-header', '.composer-dock', '.composer', '.new-chat', '.session-row.is-active'].map(selector => [selector, color(selector)]));
       });
       assert.equal(surfaces['.composer-dock'], 'rgba(0, 0, 0, 0)', 'dock must not stack another canvas wash');
+      assert.match(surfaces['.composer'], /^rgb\(/, 'the editor has an opaque surface');
       if (visibility > 0) {
         assert.equal(surfaces['.chat-header'], 'rgba(0, 0, 0, 0)');
+        const baseline = results.find(result => result.theme === theme && result.visibility === 0);
+        assert.equal(surfaces['.composer'], baseline.surfaces['.composer'], 'the wallpaper slider only changes the background');
       }
       assert.ok(surfaces['.session-row.is-active'], 'the selected conversation remains visible');
+      const dock = page.locator('.composer-dock:visible');
+      const summary = dock.getByRole('button', { name: '打开 实时指标 详情' });
+      if (placement === 'hidden') {
+        assert.equal(await dock.locator('.extension-summaries').count(), 0, 'hidden summaries reserve no row');
+      } else {
+        await summary.waitFor();
+        const chip = await summary.boundingBox(), editor = await dock.locator('.composer').boundingBox();
+        const bounds = await dock.boundingBox();
+        const below = placement === 'below';
+        const gap = below ? chip.y - editor.y - editor.height : editor.y - chip.y - chip.height;
+        const outerGap = below ? bounds.y + bounds.height - chip.y - chip.height : chip.y - bounds.y;
+        assert.ok(gap >= 0 && gap <= 4, `editor/summary gap: ${gap}px`);
+        assert.ok(outerGap >= 0 && outerGap <= 4, `dock inset: ${outerGap}px`);
+        assert.equal(chip.height, 24, 'the summary preserves a compact pointer target');
+        await dock.screenshot({ path: `${output}/composer-${theme}-${placement}.png` });
+      }
       await page.screenshot({ path: `${output}/${theme}-${visibility}.png` });
       if (markdown) await page.locator('.assistant-response').screenshot({ path: `${output}/${theme}-${visibility}-content.png` });
       if (transcript) {
@@ -90,27 +120,23 @@ try {
         await page.locator('.message-edit-cancel').click();
         await page.locator('.attachment-card').hover();
         await page.screenshot({ path: `${output}/${theme}-${visibility}-hover.png` });
-        await page.getByRole('button', { name: '进展', exact: true }).click();
+        await openSessionInspection(page);
         await page.locator('.file-change-summary').scrollIntoViewIfNeeded();
         await page.screenshot({ path: `${output}/${theme}-${visibility}-changes.png` });
         await page.locator('.todo-row.is-active').waitFor();
         await page.mouse.move(1400, 20);
         await page.screenshot({ path: `${output}/${theme}-${visibility}-plan.png` });
-        await page.getByRole('button', { name: '收起右侧面板', exact: true }).click();
+        await page.getByRole('button', { name: '关闭会话详情', exact: true }).click();
       }
-      const toolbar = page.locator('.chat-actions');
-      const hoverSurfaces = [];
-      for (const name of ['进展', '扩展', '通知', '打开右侧面板']) {
-        const button = toolbar.getByTitle(name, { exact: true });
-        await button.hover();
-        hoverSurfaces.push(await button.evaluate(async node => {
-          await Promise.allSettled(node.getAnimations().map(animation => animation.finished));
-          return getComputedStyle(node).backgroundColor;
-        }));
-      }
-      assert.ok(new Set(hoverSurfaces).size === 1 && hoverSurfaces[0] !== 'rgba(0, 0, 0, 0)', 'header icons share a hover surface');
+      assert.equal(await page.locator('.chat-header').getByRole('button', { name: '会话检视' }).count(), 0);
+      const workspaceAction = page.getByRole('button', { name: '打开右侧面板', expanded: false, exact: true });
+      await workspaceAction.hover();
+      assert.notEqual(await workspaceAction.evaluate(async node => {
+        await Promise.allSettled(node.getAnimations().map(animation => animation.finished));
+        return getComputedStyle(node).backgroundColor;
+      }), 'rgba(0, 0, 0, 0)');
       await page.mouse.move(1400, 20);
-      await toolbar.screenshot({ path: `${output}/${theme}-${visibility}-tools.png` });
+      await workspaceAction.screenshot({ path: `${output}/${theme}-${visibility}-tools.png` });
       results.push({ theme, visibility, surfaces });
       await page.close();
     }

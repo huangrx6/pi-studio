@@ -1,17 +1,14 @@
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 import {
-  Activity, ArrowUp, Download, ListChecks, PanelRightOpen,
+  ArrowUp, Download,
 } from 'lucide-react';
-import { GitBranchPicker } from '../features/git/GitBranchPicker';
-import { GitRepositoryPicker } from '../features/git/GitRepositoryPicker';
 import { LoadingIndicator } from '../shared/LoadingState';
 import { ShellHeader } from './ShellLayout';
-import type { GitWorkspaceStatus } from '../types/git-types';
 
-/** 顶栏的更新入口：有可更新时替代侧栏品牌旁的旧徽标。 */
 export type UpdateEntryState = 'available' | 'downloading' | 'downloaded';
 
 type ConversationHeaderProps = {
+  tabs?: ReactNode;
   update?: {
     state: UpdateEntryState;
     latestVersion?: string;
@@ -23,54 +20,22 @@ type ConversationHeaderProps = {
   onExpandSidebar: () => void;
   isNewConversation: boolean;
   title: string;
-  gitStatus: GitWorkspaceStatus | null;
-  panelExpanded: boolean;
-  onOpenPanel: () => void;
-  onOpenGit: () => void;
-  onOpenProgress: () => void;
-  onOpenTrace: () => void;
-  activeTool?: 'progress' | 'trace';
-  sessionId?: string;
-  status?: React.ReactNode;
-  extensionMenu?: React.ReactNode;
-  /** 轨迹入口遵循「显示代码工作视图」偏好。 */
-  showTrace: boolean;
+
 };
 
 function ConversationHeaderComponent({
-  sidebarCollapsed,
+  tabs, sidebarCollapsed,
   onExpandSidebar,
   isNewConversation,
   title,
-  gitStatus,
-  panelExpanded,
-  onOpenPanel,
-  onOpenGit,
-  onOpenProgress,
-  onOpenTrace,
-  activeTool,
-  sessionId,
-  status,
-  extensionMenu,
-  showTrace,
   update,
 }: ConversationHeaderProps) {
   return (
       <ShellHeader className="chat-header" onExpandSidebar={sidebarCollapsed ? onExpandSidebar : undefined}>
-        {!isNewConversation && <div className="chat-heading">
-          <h1 title={title}>{title}</h1>
-          <GitRepositoryPicker label="顶栏项目仓库" />
-          <GitBranchPicker key={sessionId} status={gitStatus} sessionId={sessionId} onOpenGit={onOpenGit} />
+        {(tabs || !isNewConversation) && <div className="chat-heading">
+          {tabs ?? <h1 title={title}>{title}</h1>}
         </div>}
-        {status && <div className="chat-header-status">{status}</div>}
         <div className="chat-actions">
-          {!isNewConversation && <>
-            <button type="button" className={`icon-button${activeTool === 'progress' ? ' is-active' : ''}`} aria-pressed={activeTool === 'progress'}
-              aria-label="进展" title="进展" onClick={() => onOpenProgress()}><ListChecks aria-hidden="true" /></button>
-            {showTrace && <button type="button" className={`icon-button${activeTool === 'trace' ? ' is-active' : ''}`} aria-pressed={activeTool === 'trace'}
-              aria-label="轨迹" title="轨迹" onClick={onOpenTrace}><Activity aria-hidden="true" /></button>}
-          </>}
-          {extensionMenu}
           {update && <button
             type="button"
             className={`icon-button update-entry is-${update.state}`}
@@ -103,17 +68,6 @@ function ConversationHeaderComponent({
             )}
             {update.state === 'downloading' ? <LoadingIndicator /> : update.state === 'downloaded' ? <ArrowUp /> : <Download />}
           </button>}
-          <button
-            type="button"
-            className="icon-button panel-open-entry"
-            aria-label="打开右侧面板"
-            aria-hidden={panelExpanded || undefined}
-            disabled={panelExpanded}
-            title="打开右侧面板"
-            onClick={onOpenPanel}
-          >
-            <PanelRightOpen />
-          </button>
         </div>
       </ShellHeader>
   );

@@ -33,7 +33,7 @@ export const durableExtension = defineExtension({
 export const commands = {
   async welcome(context) {
     return {
-      message: '扩展示例已加载，可以从右侧面板查看。',
+      message: '扩展示例已加载，可以从工具面板查看。',
       panelId: `${context.scope}:${context.manifestId}/overview`,
     };
   },

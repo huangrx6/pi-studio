@@ -3,13 +3,13 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
+const { createRequire } = require('node:module');
 
 function loadResolver() {
   const calls = [];
-  const source = fs.readFileSync(
-    path.join(__dirname, '../../electron/main/ipc/files.cjs'),
-    'utf8',
-  );
+  const filename = path.join(__dirname, '../../electron/main/ipc/files.cjs');
+  const loadDependency = createRequire(filename);
+  const source = fs.readFileSync(filename, 'utf8');
   const module = { exports: {} };
   vm.runInNewContext(source, {
     module,
@@ -71,9 +71,9 @@ function loadResolver() {
       }
       if (name === '../core/external-url.cjs') return { normalizeExternalHttpUrl: (url) => url };
       if (name === '../services/mac-apps.cjs') return {};
-      return require(name);
+      return loadDependency(name);
     },
-  }, { filename: path.join(__dirname, '../../electron/main/ipc/files.cjs') });
+  }, { filename });
   return { resolveFileRequest: module.exports.resolveFileRequest, calls };
 }
 

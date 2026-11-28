@@ -2,19 +2,20 @@ import { useId, useState, type ReactNode } from 'react';
 import { ChevronRight } from 'lucide-react';
 import './styles/preference-group.css';
 
-export function PreferenceGroup({ title, summary, description, actions, grouped = false, defaultOpen = false, onCollapse, children }: {
+export function PreferenceGroup({ title, summary, description, actions, grouped = false, defaultOpen = false, lazy = false, onCollapse, children }: {
   title: string;
   summary?: string;
   description?: string;
   actions?: ReactNode;
   grouped?: boolean;
   defaultOpen?: boolean;
+  lazy?: boolean;
   onCollapse?: () => void;
   children?: ReactNode;
 }) {
   const id = useId();
   const [open, setOpen] = useState(defaultOpen);
-  const body = children && <div className="preference-group-body">{children}</div>;
+  const body = children && (!lazy || open || summary === undefined) && <div className="preference-group-body">{children}</div>;
   return <section className={grouped ? 'preference-group-row' : 'settings-preference-card'} aria-labelledby={id}>
     {summary !== undefined ? <details className="preference-disclosure" open={open} onToggle={event => {
       const expanded = event.currentTarget.open;

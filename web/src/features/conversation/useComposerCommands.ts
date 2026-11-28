@@ -51,6 +51,8 @@ type SessionState = {
 } | null;
 
 type ComposerCommandsDependencies = {
+  createFromDraft: typeof window.piApi.createConversation;
+  onCompose: () => void;
   session: SessionState;
   sessionRef: MutableRefObject<SessionState>;
   sessionLoadRef: MutableRefObject<number>;
@@ -109,6 +111,8 @@ type ComposerCommandsDependencies = {
 };
 
 export function useComposerCommands({
+  createFromDraft,
+  onCompose,
   session,
   sessionRef,
   sessionLoadRef,
@@ -160,6 +164,7 @@ export function useComposerCommands({
   }
 
   function sendPromptFromExtension(text: string, submit: boolean) {
+    onCompose();
     const ownerKey = composerDraftKeyRef.current;
     const generation = sessionLoadRef.current;
     saveComposerDraft(composerDraftsRef.current, ownerKey, {
@@ -363,7 +368,7 @@ export function useComposerCommands({
           && composerDraftMatches(readComposerDraft(composerDraftsRef.current, ownerKey), original);
         setLongTaskBusy(true);
         try {
-          const created = await window.piApi.createConversation({
+          const created = await createFromDraft({
             cwd: workspace,
             title: goalCommand.text.replace(/\s+/g, ' ').slice(0, 48),
           });

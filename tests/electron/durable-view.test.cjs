@@ -68,7 +68,7 @@ test('运行开始与结束各产生一次事件', () => {
 test('排队输入接管当前轮时刷新清单，同一轮更换生成任务时保留清单', () => {
   const run = (taskId, inputs) => view.liveFromView(makeView(liveDoc({ run: { taskId, inputs } })));
   assert.deepEqual(view.diffLive(run(1, [10]), run(2, [10, 11])), []);
-  assert.deepEqual(view.diffLive(run(2, [10, 11]), run(3, [20])), [{ type: 'todo.changed', payload: {} }]);
+  assert.deepEqual(view.diffLive(run(2, [10, 11]), run(3, [20])), [{ type: 'todo.changed', payload: { turnId: '20' } }]);
 });
 
 test('流式回答只在消息引用变化时发一次', () => {

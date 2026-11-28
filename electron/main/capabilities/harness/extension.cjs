@@ -60,10 +60,6 @@ function profileFor(cwd) {
   return getHarnessProfile(cwd || '');
 }
 
-function sectionEnabled(cwd, section) {
-  return profileFor(cwd).sections[section] !== false;
-}
-
 function sectionOverride(cwd, section) {
   const value = profileFor(cwd).sectionOverrides?.[section];
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
@@ -314,7 +310,6 @@ module.exports = {
   projectRoot,
   renderSection,
   repositoryDocs,
-  sectionEnabled,
   sectionOverride,
   toolGuidance,
 };

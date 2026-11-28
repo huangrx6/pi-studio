@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { Check, Plus, SlidersHorizontal, Undo2 } from 'lucide-react';
+import { Plus, SlidersHorizontal, Undo2 } from 'lucide-react';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
 import { errorText } from '../../shared/error-text';
 import { LoadingState } from '../../shared/LoadingState';
+import { useDeferredEnter } from '../../shared/useDeferredEnter';
 import { runtimeRefreshFailure } from '../../shared/runtime-refresh';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
-import { automaticProfileIcon, SettingsProfileMark } from '../../shared/SettingsProfileIcon';
-import { SettingsProfileCard, SettingsProfileLibrary } from '../../shared/SettingsProfileLibrary';
+import { automaticProfileIcon } from '../../shared/profile-icon';
+import { SettingsProfileLibrary } from '../../shared/SettingsProfileLibrary';
 import { useSettingsToast } from '../../shared/SettingsToast';
 import type { HarnessProfile, HarnessSettingsSnapshot } from '../../types/harness-types';
 import { HarnessProfileEditor, type HarnessScope } from './HarnessProfileEditor';
@@ -17,6 +18,7 @@ import { cloneRuntimePolicy, createHarnessRequestOwner, createHarnessWriteQueue,
 import './styles/harness-settings.css';
 
 const harnessWrites = createHarnessWriteQueue();
+const cachedHarnessByCwd = new Map<string, HarnessSettingsSnapshot>();
 class HarnessReloadError extends Error {}
 type Editor = { kind: 'create' | 'edit'; source: HarnessProfile } | { kind: 'policy' };
 
@@ -43,7 +45,7 @@ function HarnessPolicyDialog({ snapshot, busy, commit, onClose, onCompactionReve
     });
     return () => cancelAnimationFrame(frame);
   }, [onCompactionRevealed]);
-  return <><SettingsDialog wide title="全局运行策略" description="所有 Harness 方案共用。保存后，下一次请求会使用新策略。"
+  return <><SettingsDialog wide title="全局运行策略" description="所有 Harness 方案共用。"
     action="保存策略" loading={false} busy={busy} unavailable={!dirty} error={null} onClose={onClose}
     autoFocusFirstField={false} onRequestClose={async dismiss => {
       if (!dirty || await confirmation.confirm({ title: '放弃未保存的策略更改？', confirmLabel: '放弃更改', tone: 'danger' })) await dismiss(onClose);
@@ -61,8 +63,9 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated, onCompa
   onUpdated?: (snapshot: HarnessSettingsSnapshot) => void; onCompactionRevealed?: () => void;
 }) {
   const showToast = useSettingsToast();
-  const [snapshot, setSnapshot] = useState(initial);
-  const [loading, setLoading] = useState(true);
+  const seeded = initial ?? cachedHarnessByCwd.get(cwd);
+  const [snapshot, setSnapshot] = useState(seeded);
+  const [loading, setLoading] = useState(!seeded);
   const [loadError, setLoadError] = useState('');
   const [busy, setBusy] = useState(false);
   const [editor, setEditor] = useState<Editor | null>(null);
@@ -76,12 +79,16 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated, onCompa
   updated.current = onUpdated;
 
   function accept(next: HarnessSettingsSnapshot) {
+    cachedHarnessByCwd.set(cwd, next);
     setSnapshot(next);
     updated.current?.(next);
   }
-  async function reload() {
+  useEffect(() => {
+    cachedHarnessByCwd.set(cwd, snapshot);
+  }, [cwd, snapshot]);
+  async function reload(explicit = false) {
     const ticket = owner.begin();
-    setLoading(true);
+    if (explicit || !cachedHarnessByCwd.get(cwd)) setLoading(true);
     setLoadError('');
     try {
       await harnessWrites.wait();
@@ -89,7 +96,7 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated, onCompa
       const next = await window.piApi.harnessSettings(cwd);
       if (owner.current(ticket)) accept(next);
     } catch (cause) {
-      if (owner.current(ticket)) setLoadError(errorText(cause));
+      if (owner.current(ticket) && !cachedHarnessByCwd.get(cwd)) setLoadError(errorText(cause));
     } finally {
       if (owner.current(ticket)) setLoading(false);
     }
@@ -101,6 +108,7 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated, onCompa
   }, [cwd]);
 
   const ready = !loading && !loadError;
+  const workspaceReveal = useDeferredEnter(ready);
   function open(next: Editor) {
     if (!editor) opener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     setEditor(next);
@@ -167,7 +175,7 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated, onCompa
     open({ kind: 'create', source: { ...source, icon: null } });
   }
   return <div className="settings-preference-page harness-settings">
-    <SettingsPageHeader title="Harness 配置" iconPosition="end" meta="编排系统提示词，设置请求、工具和上下文的运行方式。"
+    <SettingsPageHeader title="Harness 配置" iconPosition="end" meta="编排系统提示词与全局运行策略。"
       icon={<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
         <rect x="2.5" y="5" width="27" height="22" rx="4" /><path d="M3 11.5h26M9 16l-3 3 3 3m14-6 3 3-3 3" />
         <path d="m17.5 15.5-3 7" stroke="var(--accent)" />
@@ -178,32 +186,99 @@ export function HarnessSettings({ cwd, initial, enabledTools, onUpdated, onCompa
       <button ref={createButton} type="button" className="settings-save" aria-haspopup="dialog" disabled={!ready}
         onClick={createProfile}><Plus aria-hidden="true" />新建配置</button>
     </>}>
-      {loading && <LoadingState variant="section">正在刷新 Harness 配置…</LoadingState>}
-      {loadError && <div className="settings-preference-card harness-load-error"><p role="alert">{loadError}</p>
-        <button type="button" className="settings-outline" onClick={() => void reload()}>重新加载 Harness 配置</button></div>}
-      {ready && <div className="settings-profile-grid">{snapshot.profiles.map(profile => {
-        const global = profile.id === snapshot.globalProfileId;
-        const binding = [
-          global && '全局默认',
-          cwd && (profile.id === snapshot.workspaceProfileId
-            ? '当前工作区使用'
-            : global && !snapshot.workspaceProfileId && '当前工作区继承'),
-          profile.id === snapshot.temporaryProfileId && '临时对话使用',
-        ].filter(Boolean).join(' · ');
-        const enabled = snapshot.sections.filter(section => profile.sections[section.id] !== false).length;
-        const guidanceCount = Object.keys(profile.toolGuidance).length;
-        return <SettingsProfileCard key={profile.id} name={profile.name}
-          icon={<SettingsProfileMark group="harness" icon={profile.icon ?? automaticProfileIcon('harness', profile.id)} />}
-          subtitle={(profile.builtin ? '内置 · ' : '') + profile.id}
-          description={<span className="harness-card-meta">
-            {binding && <span className="harness-binding"><Check aria-hidden="true" />{binding}</span>}
-            <span className="harness-coverage-bar" aria-hidden="true">
-              {snapshot.sections.map(section => <i key={section.id} className={profile.sections[section.id] !== false ? 'is-on' : ''} />)}
-            </span>
-          </span>}
-          summary={[`${enabled}/${snapshot.sections.length} 段提示词`, guidanceCount > 0 && guidanceCount + ' 条工具说明'].filter(Boolean).join(' · ')}
-          onEdit={() => open({ kind: 'edit', source: profile })} />;
-      })}</div>}
+      {loading && <div className="settings-loading-card"><LoadingState variant="section">正在刷新 Harness 配置…</LoadingState></div>}
+      {loadError && <div className="settings-load-error"><p role="alert">{loadError}</p>
+        <button type="button" className="settings-outline" onClick={() => void reload(true)}>重新加载 Harness 配置</button></div>}
+      {ready && (() => {
+        const bindingFor = (profile: HarnessProfile) => {
+          const global = profile.id === snapshot.globalProfileId;
+          return [
+            global && '全局默认',
+            cwd && (profile.id === snapshot.workspaceProfileId
+              ? '当前工作区'
+              : global && !snapshot.workspaceProfileId && '工作区继承'),
+            profile.id === snapshot.temporaryProfileId && '临时对话',
+          ].filter(Boolean).join(' · ');
+        };
+        const activeHero = snapshot.profiles.find(p => p.id === snapshot.activeProfileId)
+          ?? snapshot.profiles.find(p => p.id === snapshot.globalProfileId)
+          ?? snapshot.profiles[0];
+        const others = snapshot.profiles.filter(p => p.id !== activeHero?.id);
+
+        return <div className={`harness-workspace${workspaceReveal ? ' settings-async-ready' : ''}`}>
+          {activeHero && (() => {
+            const binding = bindingFor(activeHero);
+            const enabled = snapshot.sections.filter(s => activeHero.sections[s.id] !== false).length;
+            const guidanceCount = Object.keys(activeHero.toolGuidance).length;
+            return <button
+              type="button"
+              className="settings-preference-card harness-stage"
+              aria-label={'编辑' + activeHero.name}
+              aria-haspopup="dialog"
+              onClick={() => open({ kind: 'edit', source: activeHero })}
+            >
+              <div className="harness-stage-head">
+                <div className="harness-stage-identity">
+                  {binding && <span className="harness-live-kicker"><i aria-hidden="true" />{binding}</span>}
+                  <div className="harness-stage-title-row">
+                    <strong>{activeHero.name}</strong>
+                    <code>{activeHero.id}</code>
+                  </div>
+                </div>
+              </div>
+
+              <div className="harness-patchbay" aria-label="提示词模块装配槽">
+                {snapshot.sections.map((section, idx) => {
+                  const on = activeHero.sections[section.id] !== false;
+                  const num = String(idx + 1).padStart(2, '0');
+                  return <div key={section.id} className={`harness-slot${on ? ' is-on' : ''}`}>
+                    <span className="harness-slot-num">{num}</span>
+                    <span className="harness-slot-label">{section.label || section.id}</span>
+                    <i className="harness-slot-led" aria-hidden="true" />
+                  </div>;
+                })}
+              </div>
+
+              <div className="harness-stage-meta">
+                <span>{enabled} / {snapshot.sections.length} 段系统提示词</span>
+                {guidanceCount > 0 && <span>{guidanceCount} 条工具使用说明</span>}
+                {activeHero.customInstructions?.trim() && <span>已配置自定义指令</span>}
+              </div>
+            </button>;
+          })()}
+
+          {others.length > 0 && <div className="settings-preference-card harness-deck" role="list" aria-label="其他配置方案">
+            {others.map(profile => {
+              const binding = bindingFor(profile);
+              const enabled = snapshot.sections.filter(s => profile.sections[s.id] !== false).length;
+              const guidanceCount = Object.keys(profile.toolGuidance).length;
+              return <button
+                key={profile.id}
+                type="button"
+                role="listitem"
+                className="harness-deck-row"
+                aria-label={'编辑' + profile.name}
+                aria-haspopup="dialog"
+                onClick={() => open({ kind: 'edit', source: profile })}
+              >
+                <span className="harness-fingerprint" aria-hidden="true">
+                  {snapshot.sections.map(section => (
+                    <i key={section.id} className={profile.sections[section.id] !== false ? 'is-on' : ''} />
+                  ))}
+                </span>
+                <div className="harness-deck-copy">
+                  <div className="harness-deck-head">
+                    <strong>{profile.name}</strong>
+                    {binding && <span className="harness-live-kicker"><i aria-hidden="true" />{binding}</span>}
+                  </div>
+                  <small>{profile.id}{guidanceCount > 0 ? ` · ${guidanceCount} 条工具说明` : ''}</small>
+                </div>
+                <span className="harness-deck-ratio">{enabled} / {snapshot.sections.length}</span>
+              </button>;
+            })}
+          </div>}
+        </div>;
+      })()}
     </SettingsProfileLibrary>
     {editor?.kind === 'policy' && <HarnessPolicyDialog snapshot={snapshot} busy={busy} commit={commit} cwd={cwd}
       onClose={() => { close(); onCompactionRevealed?.(); }} onCompactionRevealed={onCompactionRevealed} />}

@@ -32,7 +32,7 @@ export async function startChecklistModel() {
       while (!pending.has(tag) && Date.now() < deadline) await delay(30);
       assert.ok(pending.has(tag), 'No model request for ' + tag);
     },
-    async reply(tag, action) {
+    async reply(tag, action, content = '已结束本次验收。') {
       await this.wait(tag);
       const { res, tools } = pending.get(tag);
       pending.delete(tag);
@@ -44,7 +44,7 @@ export async function startChecklistModel() {
       const id = 'qa-' + ++sequence;
       const toolCall = typeof action === 'object';
       if (toolCall) assert.ok(tools.some(tool => tool.function?.name === 'todo'), 'todo tool is available');
-      const delta = toolCall ? { tool_calls: [{ index: 0, id, type: 'function', function: { name: 'todo', arguments: JSON.stringify(action) } }] } : { content: '已结束本次验收。' };
+      const delta = toolCall ? { tool_calls: [{ index: 0, id, type: 'function', function: { name: 'todo', arguments: JSON.stringify(action) } }] } : { content };
       res.writeHead(200, { 'Content-Type': 'text/event-stream' });
       const event = (delta, finish_reason = null) => res.write('data: ' + JSON.stringify({
         id, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model: 'check',

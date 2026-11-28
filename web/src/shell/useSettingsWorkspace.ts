@@ -16,7 +16,6 @@ import type {
   OfficialExtensionCatalogSnapshot,
 } from '../types/extension-types';
 import type {
-  DiscoveredModel,
   ProviderCatalogState,
   ProviderDiscoveryState,
   ProviderModelInfo,
@@ -188,7 +187,6 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
   const mcpTestLockRef = useRef(false);
   const [resourceScope, setResourceScope] = useState<'user' | 'project'>('user');
   const [skillWorkspace, setSkillWorkspace] = useState('');
-  const [settingsBusy, setSettingsBusy] = useState(false);
   const [defaultModelBusy, setDefaultModelBusy] = useState(false);
   const [providerDraft, setProviderDraft] = useState({
     providerId: '',
@@ -300,7 +298,6 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     setDefaultModelSelection,
     models,
     setModels,
-    enabledModels,
     setEnabledModels,
     modelRevisionRef,
     modelWritesRef,
@@ -320,13 +317,11 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     settingsData,
     setSettingsData,
     setSettingsError,
-    settingsBusy,
     settingsDraftGuard,
     settingsLeaveConfirmation,
     settingsReturnFocusRef,
     actionConfirmation,
     setExtensionDetail,
-    officialExtensions,
     setOfficialExtensions,
     setOfficialExtensionsBusy,
     setOfficialExtensionsError,
@@ -535,7 +530,6 @@ export function useSettingsWorkspace(options: SettingsWorkspaceOptions) {
     setAgentSection,
     settingsData,
     setSettingsData,
-    settingsBusy,
     defaultModelBusy,
     modelQuery,
     setModelQuery,

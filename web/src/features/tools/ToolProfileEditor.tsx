@@ -22,7 +22,6 @@ import { InfoHint } from '../../shared/InfoHint';
 import { LoadingIndicator } from '../../shared/LoadingState';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
-import { automaticProfileIcon, SettingsProfileIdentity } from '../../shared/SettingsProfileIcon';
 import { useSettingsToast } from '../../shared/SettingsToast';
 import type { ModalDismiss } from '../../shared/useModalDialog';
 import { isComposingKey } from '../../shared/keyboard-navigation';
@@ -46,9 +45,9 @@ export const RECOMMENDED_TOOL_NAMES = ['read', 'write', 'edit', 'bash', 'grep', 
 export type ToolProfileBindingScope = 'workspace' | 'global' | 'inherit' | 'temporary';
 
 const EXTENSION_MODE_OPTIONS: Array<{ id: AgentToolExtensionMode; shortLabel: string; label: string; hint: string }> = [
-  { id: 'all-enabled', shortLabel: '全部已启用', label: '全部已启用扩展', hint: '放行已在下方勾选（或通配匹配）且受信任的用户扩展工具' },
-  { id: 'safe-only', shortLabel: '仅安全扩展', label: '仅安全扩展', hint: '在下方勾选的工具中，仅放行只读安全扩展工具，拦截写入类扩展操作' },
-  { id: 'none', shortLabel: '禁用扩展', label: '禁用用户扩展', hint: '完全屏蔽所有用户扩展与插件工具，即使下方存在匹配规则也不启用' },
+  { id: 'all-enabled', shortLabel: '全部已启用', label: '全部已启用扩展', hint: '放行已在下方勾选（或通配匹配）且受信任的已安装扩展工具（含插件安装的扩展）' },
+  { id: 'safe-only', shortLabel: '仅安全扩展', label: '仅安全扩展', hint: '在下方勾选的已安装扩展工具中，仅放行只读安全工具，拦截写入类操作' },
+  { id: 'none', shortLabel: '禁用已安装', label: '禁用已安装扩展', hint: '屏蔽所有插件与本地安装的扩展工具（不影响内置扩展工具）' },
 ];
 
 const MCP_MODE_OPTIONS: Array<{ id: AgentToolMcpMode; shortLabel: string; label: string; hint: string }> = [
@@ -58,13 +57,13 @@ const MCP_MODE_OPTIONS: Array<{ id: AgentToolMcpMode; shortLabel: string; label:
 ];
 
 const SOURCE_KIND_LABEL: Record<AgentToolSource['kind'], string> = {
-  core: 'Pi 核心',
+  core: '内置扩展',
   mcp: 'MCP 服务器',
-  package: '扩展包',
+  package: '插件扩展',
   git: 'Git 扩展',
   local: '本地扩展',
-  inline: 'Studio 内置',
-  extension: '扩展',
+  inline: '内置扩展',
+  extension: '已安装扩展',
 };
 
 type AgentToolDetail = {
@@ -128,6 +127,7 @@ export function ToolProfileEditor({
   busy,
   onReloadCatalog,
   onOpenMcp,
+  onOpenExtensions,
   onSave,
   onApply,
   onReset,
@@ -146,6 +146,7 @@ export function ToolProfileEditor({
   busy: boolean;
   onReloadCatalog: () => void;
   onOpenMcp: () => void;
+  onOpenExtensions?: () => void;
   onSave: (payload: { mode: 'create' | 'edit'; profile: AgentToolProfilePatch }, dismiss: ModalDismiss) => Promise<void>;
   onApply: (id: string, scope: ToolProfileBindingScope) => Promise<void>;
   onReset: (id: string, dismiss: ModalDismiss) => Promise<void>;
@@ -218,13 +219,6 @@ export function ToolProfileEditor({
   const applied = scopeId === initial.id;
   const boundId = scopeId || snapshot.mainProfileId;
   const boundName = snapshot.profiles.find(item => item.id === boundId)?.name || boundId;
-  const scopeHelp = scope === 'global'
-    ? `未单独指定方案的工作区默认使用「${boundName}」。`
-    : scope === 'temporary'
-      ? `新发起的临时对话将使用「${boundName}」的工具和 MCP 范围。`
-      : scopeId
-        ? `当前工作区使用「${boundName}」。`
-        : `当前工作区继承全局主对话方案「${boundName}」。`;
 
   const allServerNames = useMemo(() => {
     const names = new Set(mcpServers.map(item => item.name));
@@ -374,8 +368,7 @@ export function ToolProfileEditor({
       <div className="settings-form-sections tool-profile-editor">
         <section className="settings-form-section">
           <h3>基本信息与绑定</h3>
-          <SettingsProfileIdentity group="tools" value={draft.icon} automatic={automaticProfileIcon('tools', id || fallbackId)}
-            onChange={icon => setDraft(current => ({ ...current, icon }))}>
+          <div className="profile-identity-grid">
             <label className="profile-identity-field">
               <span>方案名称</span>
               <input
@@ -410,12 +403,12 @@ export function ToolProfileEditor({
                 onChange={event => setDraft(current => ({ ...current, description: event.target.value }))}
               />
             </label>
-          </SettingsProfileIdentity>
+          </div>
 
           {!creating && <div className="harness-setting-row harness-editor-context">
             <div>
               <span>应用范围</span>
-              <p>{scopeHelp}</p>
+              <p>当前：{boundName}{scope === 'workspace' && !scopeId ? '（继承全局）' : ''}</p>
             </div>
             <div className="harness-binding-controls">
               <div className="settings-segments" role="group" aria-label="工具方案应用范围">
@@ -456,17 +449,17 @@ export function ToolProfileEditor({
         </section>
 
         <section className="settings-form-section">
-          <h3>用户扩展与 MCP 服务范围</h3>
+          <h3>扩展与 MCP 策略</h3>
           <div className="tool-profile-scope-grid">
             <div className="tool-profile-scope-block">
               <div className="tool-profile-scope-head">
-                <div>
-                  <span className="tool-profile-block-title">用户扩展策略</span>
-                  <p className="tool-profile-scope-hint">
-                    {EXTENSION_MODE_OPTIONS.find(option => option.id === draft.extensionMode)?.hint}
-                  </p>
+                <div className="tool-profile-title-link">
+                  <span className="tool-profile-block-title">已安装扩展</span>
+                  {onOpenExtensions && <button type="button" className="settings-text-button" onClick={onOpenExtensions}>
+                    管理扩展<ChevronRight aria-hidden="true" />
+                  </button>}
                 </div>
-                <div className="settings-segments tool-profile-segments" role="radiogroup" aria-label="用户扩展策略">
+                <div className="settings-segments tool-profile-segments" role="radiogroup" aria-label="已安装扩展策略">
                   {EXTENSION_MODE_OPTIONS.map(option => {
                     const selected = draft.extensionMode === option.id;
                     return <button
@@ -475,6 +468,7 @@ export function ToolProfileEditor({
                       role="radio"
                       aria-checked={selected}
                       aria-pressed={selected}
+                      title={option.hint}
                       onClick={() => setDraft(current => ({ ...current, extensionMode: option.id }))}
                     >
                       {option.shortLabel}
@@ -486,16 +480,11 @@ export function ToolProfileEditor({
 
             <div className="tool-profile-scope-block">
               <div className="tool-profile-scope-head">
-                <div>
-                  <div className="tool-profile-title-link">
-                    <span className="tool-profile-block-title">MCP 服务策略</span>
-                    <button type="button" className="settings-text-button" onClick={onOpenMcp}>
-                      管理 MCP 服务器<ChevronRight aria-hidden="true" />
-                    </button>
-                  </div>
-                  <p className="tool-profile-scope-hint">
-                    {MCP_MODE_OPTIONS.find(option => option.id === draft.mcpMode)?.hint}
-                  </p>
+                <div className="tool-profile-title-link">
+                  <span className="tool-profile-block-title">MCP 服务</span>
+                  <button type="button" className="settings-text-button" onClick={onOpenMcp}>
+                    管理 MCP<ChevronRight aria-hidden="true" />
+                  </button>
                 </div>
                 <div className="settings-segments tool-profile-segments" role="radiogroup" aria-label="MCP 服务策略">
                   {MCP_MODE_OPTIONS.map(option => {
@@ -506,6 +495,7 @@ export function ToolProfileEditor({
                       role="radio"
                       aria-checked={selected}
                       aria-pressed={selected}
+                      title={option.hint}
                       onClick={() => setDraft(current => ({ ...current, mcpMode: option.id }))}
                     >
                       {option.shortLabel}
@@ -543,8 +533,8 @@ export function ToolProfileEditor({
         <section className="settings-form-section">
           <div className="tool-profile-catalog-head">
             <div>
-              <h3>内置与扩展工具白名单</h3>
-              <p>已启用 {draft.enabled.length} 条工具规则{catalog ? ` · 当前发现 ${localTools.length} 个本地工具` : ''}</p>
+              <h3>扩展工具白名单</h3>
+              <p>已启用 {draft.enabled.length}{catalog ? ` / ${localTools.length}` : ''} 项</p>
             </div>
             <div className="tool-profile-catalog-actions">
               <button
@@ -714,13 +704,14 @@ export function ToolProfileEditor({
     </SettingsDialog>
 
     {detail && <DetailDialog className="agent-tool-detail-dialog" onClose={() => setDetail(null)}>
+      {close => <>
       <header className="detail-header">
         <div className="detail-heading">
           <span className="detail-icon" aria-hidden="true">{detail.kind === 'tool' ? <Terminal /> : <Package />}</span>
           <h2><code>{detail.kind === 'command' ? `/${detail.item.name}` : detail.item.name}</code></h2>
           <p>{detail.item.description}</p>
         </div>
-        <button className="icon-button" aria-label="关闭详情" title="关闭" onClick={() => setDetail(null)}><X /></button>
+        <button className="icon-button" aria-label="关闭详情" title="关闭" onClick={close}><X /></button>
       </header>
       <div className="detail-body agent-tool-detail-body">
         <div className={`agent-tool-detail-state ${detailEnabled ? 'is-enabled' : ''}`}>
@@ -743,11 +734,12 @@ export function ToolProfileEditor({
       </div>
       <footer className="detail-footer">
         <span />
-        <button className="settings-outline" onClick={() => setDetail(null)}>关闭</button>
+        <button className="settings-outline" onClick={close}>关闭</button>
         {detail.kind === 'tool' && <button className="settings-save" onClick={() => toggleTool(detail.item.name, !detailEnabled)}>
           {detailEnabled ? <X /> : <Check />}{detailEnabled ? '从草稿移除' : '加入草稿'}
         </button>}
       </footer>
+      </>}
     </DetailDialog>}
     {confirmation.dialog}
   </>;

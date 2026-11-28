@@ -37,12 +37,25 @@ function registerGitWorkspaceIpc() {
     checkWorkspace(cwd);
     return listGitChanges(await resolveGitRepository(cwd, repository));
   });
+  ipcMain.handle('pi:git-branches', (event, cwd, repository) => {
+    assertMainWindow(event);
+    checkWorkspace(cwd);
+    return gitRead(cwd, { kind: 'branches', repository });
+  });
+  ipcMain.handle('pi:git-checkout', async (event, cwd, input) => {
+    assertMainWindow(event);
+    checkWorkspace(cwd);
+    if (!['create', 'switch'].includes(input?.kind)) throw new Error('请选择分支操作。');
+    await gitWrite(cwd, input);
+    event.sender.send('pi:conversation-list-changed');
+  });
   for (const [channel, handler] of [['pi:git-read', gitRead], ['pi:git-write', gitWrite]]) {
     ipcMain.handle(channel, async (event, sessionId, input) => {
       assertMainWindow(event);
       if (typeof sessionId !== 'string') throw new Error('请选择会话。');
-      const cwd = getStudioDatabase().getConversation(sessionId)?.workspace;
+      const cwd = getStudioDatabase().sessionWorkspace(sessionId);
       if (!cwd) throw new Error('找不到会话工作区。');
+      if (['branches', 'create', 'switch'].includes(input?.kind)) throw new Error('请通过工作树选择分支。');
       return handler(cwd, input);
     });
   }
@@ -74,7 +87,10 @@ function registerGitWorkspaceIpc() {
         }
       },
     });
-    if (input.kind === 'open') db.upsertWorkspace({ cwd: result, hidden: false });
+    if (input.kind === 'create' || input.kind === 'open') {
+      db.upsertWorkspace({ cwd: result, hidden: false });
+      event.sender.send('pi:conversation-list-changed');
+    }
     if (input.kind === 'remove' && db.getWorkspace(input.path)) {
       db.upsertWorkspace({ cwd: input.path, hidden: true });
       event.sender.send('pi:conversation-list-changed');

@@ -12,6 +12,7 @@
 .sidebar-search-panel input::-webkit-search-cancel-button { display: none; }
 .sidebar-search-panel .workspace-search .icon-button { width: 24px; height: 24px; flex: none; }
 .sidebar-search-panel .pi-select { width: 100%; }
+.sidebar-session-filter-menu { --accent: var(--text); --focus-color: var(--muted); }
 .is-sidebar-collapsed .sidebar-search-panel { display: none; }
-.sidebar-empty-reset { display: block; margin-top: var(--space-2); padding-block: var(--space-1); color: var(--accent-foreground); font-size: var(--text-sm); }
+.sidebar-empty-reset { display: block; margin-top: var(--space-2); padding-block: var(--space-1); color: var(--accent-foreground); font-size: var(--text-label); }
 .sidebar-empty-reset:hover { text-decoration: underline; }

@@ -15,7 +15,7 @@ function item(extensionId, id, sourceOrder) {
     contributionId: id,
     title: id,
     description: '',
-    slot: id === 'summary' ? 'composer.below' : 'panel.side',
+    slot: id === 'summary' ? 'composer.below' : 'tool.view',
     size: id === 'summary' ? 'compact' : 'regular',
     priority: 0,
     sourceOrder,

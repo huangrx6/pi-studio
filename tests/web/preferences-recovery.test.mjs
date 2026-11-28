@@ -8,8 +8,6 @@ const {
   savePreferences,
 } = await import('../../web/src/shared/preferences.ts');
 const {
-  loadStoredActiveSession,
-  loadStoredExpandedWorkspaces,
   loadStoredSessionOrder,
   loadStoredWorkspaceOrder,
   normalizeStoredSessionOrder,
@@ -121,6 +119,22 @@ test('saving preferences writes the same canonical object loaded next time', () 
   assert.equal(storage.writes.length, 1);
 });
 
+test('legacy default chat size follows the global body size and explicit sizes survive reload', () => {
+  const key = 'pi-studio:preferences';
+  for (const [legacy, expected] of [[15, null], [12, 12], [13, 13], [16, 16], [20, 20]]) {
+    const storage = memoryStorage({ [key]: JSON.stringify({ fontSize: legacy, terminalFontSize: 17 }) });
+    const preferences = loadPreferences(storage);
+    assert.equal(preferences.fontSize, expected);
+    assert.equal(preferences.terminalFontSize, 17);
+    assert.deepEqual(loadPreferences(storage), preferences);
+    assert.equal(storage.writes.length, 1);
+    savePreferences({ ...preferences, fontSize: 15 }, storage);
+    assert.equal(loadPreferences(storage).fontSize, 15);
+    savePreferences({ ...preferences, fontSize: 10 }, storage);
+    assert.equal(loadPreferences(storage).fontSize, 10);
+  }
+});
+
 test('stored UI collections reject wrong shapes, duplicates and unsafe keys', () => {
   assert.deepEqual(normalizeStoredSessionOrder({}), {});
   assert.deepEqual(normalizeStoredSessionOrder([]), {});
@@ -139,7 +153,6 @@ test('stored UI collections reject wrong shapes, duplicates and unsafe keys', ()
 
 test('stored UI loaders repair bad values and leave canonical values untouched', () => {
   const storage = memoryStorage({
-    'pi-studio:expanded-workspaces': JSON.stringify({}),
     'pi-studio:workspace-order': JSON.stringify([
       '/workspace/a',
       '/workspace/a',
@@ -149,38 +162,24 @@ test('stored UI loaders repair bad values and leave canonical values untouched',
     'pi-studio:session-order': JSON.stringify({
       '/workspace/a': ['session-a', 'session-a', 'constructor'],
     }),
-    'pi-studio:active-session': JSON.stringify({
-      id: 'session-a',
-      cwd: '/workspace/a',
-      extra: true,
-    }),
   });
 
-  assert.deepEqual(loadStoredExpandedWorkspaces(storage), []);
   assert.deepEqual(loadStoredWorkspaceOrder(storage), ['/workspace/a', '/workspace/b']);
   assert.deepEqual(loadStoredSessionOrder(storage), {
     '/workspace/a': ['session-a'],
   });
-  assert.deepEqual(loadStoredActiveSession(storage), {
-    id: 'session-a',
-    cwd: '/workspace/a',
-  });
-  assert.equal(storage.writes.length, 4);
+  assert.equal(storage.writes.length, 2);
 
   const writeCount = storage.writes.length;
-  loadStoredExpandedWorkspaces(storage);
   loadStoredWorkspaceOrder(storage);
   loadStoredSessionOrder(storage);
-  loadStoredActiveSession(storage);
   assert.equal(storage.writes.length, writeCount);
 });
 
 test('missing UI state returns defaults without creating storage entries', () => {
   const storage = memoryStorage();
-  assert.deepEqual(loadStoredExpandedWorkspaces(storage), []);
   assert.deepEqual(loadStoredWorkspaceOrder(storage), []);
   assert.deepEqual(loadStoredSessionOrder(storage), {});
-  assert.equal(loadStoredActiveSession(storage), null);
   assert.equal(storage.writes.length, 0);
   assert.equal(storage.values.size, 0);
 });

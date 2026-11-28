@@ -26,6 +26,7 @@ type SessionSummary = {
 
 type SidebarActionsDependencies = {
   workspaces: PiWorkspace[];
+  forgetConversations: (ids: string[]) => void;
   removeWorkspaceFromList: (cwd: string) => void;
   sessionRef: MutableRefObject<SessionSummary>;
   sessionLoadRef: MutableRefObject<number>;
@@ -56,7 +57,7 @@ type SidebarActionsDependencies = {
 
 export function useSidebarActions({
   workspaces,
-  removeWorkspaceFromList,
+  removeWorkspaceFromList, forgetConversations,
   sessionRef,
   sessionLoadRef,
   workspaceRef,
@@ -109,6 +110,7 @@ export function useSidebarActions({
             : action === 'remove-archived' ? options.sessionIds ?? [] : [id]
         )
         : [];
+      forgetConversations(!options.preserveCurrentView && kind === 'session' && action === 'archive' && !targetSummary?.archived ? [id] : deletedIds);
       if (removingWorkspace) removeWorkspaceFromList(id);
       if (kind === 'session' && action === 'archive') {
         clearSessionQueuedPrompts(id);

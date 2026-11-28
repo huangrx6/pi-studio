@@ -14,13 +14,13 @@ const SECTIONS: ReadonlyArray<{
   hint?: string;
   icon: LucideIcon;
 }> = [
-  { value: 'plugins', label: '插件', title: '插件', icon: Package, description: '安装和管理包含 MCP、技能、命令行或界面扩展的插件包。' },
-  { value: 'mcp', label: 'MCP', title: 'MCP 服务器', icon: Plug, description: '连接外部工具服务，启停从下一次请求生效。',
-    hint: '打开服务器详情可启停单个方法。默认通过 tool_search 按需发现。' },
-  { value: 'skills', label: '技能', title: '技能', icon: FileCode2, description: '管理已安装的技能和技能源。',
-    hint: '可用技能默认由模型按需发现。标为「仅显式调用」的技能需手动引用。项目技能须先信任，目录内容变化后需重新信任。配置在下一次请求前生效。' },
-  { value: 'extensions', label: '扩展', title: '扩展', icon: Layers3, description: '管理已安装的扩展和受信任的发布者。',
-    hint: '全局扩展安装后默认信任。项目扩展需要手动信任后才能加载可执行代码。' },
+  { value: 'plugins', label: '插件', title: '插件', icon: Package, description: '安装与管理插件包。' },
+  { value: 'mcp', label: 'MCP', title: 'MCP 服务器', icon: Plug, description: '连接外部工具服务。',
+    hint: '打开服务器详情可启停单个方法，默认按需发现。' },
+  { value: 'skills', label: '技能', title: '技能', icon: FileCode2, description: '管理已安装技能与技能源。',
+    hint: '项目技能需信任后生效，目录变化后需重新信任。' },
+  { value: 'extensions', label: '扩展', title: '扩展', icon: Layers3, description: '管理已安装与内置能力扩展。',
+    hint: '全局扩展默认信任，项目扩展需手动信任后加载。' },
 ];
 
 export function PluginWorkspaceHeader({

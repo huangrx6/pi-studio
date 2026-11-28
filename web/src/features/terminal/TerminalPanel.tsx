@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState, type Ref } from 'react';
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -25,6 +25,7 @@ import { errorText } from '../../shared/error-text';
 import { formatShortcut, resolvePlatform } from '../../shared/shortcuts';
 import { ActionMenu, type MenuAction } from '../../shared/ActionMenu';
 import { JumpToLatestButton } from '../../shared/JumpToLatestButton';
+import { TerminalPasteDialog } from './TerminalPasteDialog';
 import { restoreTerminalReplay } from './terminal-replay';
 import { terminalTheme as themedTerminal, isTerminalTheme } from './terminal-themes';
 import { CommandTracker, commandFailed, lastFailedCommand, parseOsc133, type CommandMark } from './terminal-commands';
@@ -45,6 +46,7 @@ import './styles/terminal-panel.css';
 const MAX_PENDING_EVENTS = 256;
 const MAX_PENDING_CHARS = 1_000_000;
 const MAX_FIT_RETRIES = 4;
+const MAX_PTY_WRITE_CHARS = 64 * 1024;
 
 function terminalFontFamily() {
   // Symbols precede the generic monospace fallback, which otherwise swallows
@@ -93,10 +95,18 @@ function terminalTheme(): ITheme {
   };
 }
 
+function terminalColorOptions(themeId: string, host: HTMLElement) {
+  return {
+    theme: themedTerminal(themeId) ?? terminalTheme(),
+    // Also applies to 256-color and truecolor output supplied by the shell.
+    minimumContrastRatio: Number(getComputedStyle(host).getPropertyValue('--terminal-minimum-contrast')) || 1,
+  };
+}
+
 /**
  * 把输出里的 `path:line` 变成可点链接。
  *
- * URL 由 WebLinksAddon 负责；这个 provider 只认文件路径，点在右侧面板打开。
+ * URL 由 WebLinksAddon 负责；这个 provider 只认文件路径，在所属会话的内容标签页打开。
  * 坐标是 1-based 的列号，和 `buffer.getLine` 的 0-based 行号差一。
  */
 function registerFileLinks(term: Terminal, open: (target: TerminalLinkTarget) => void) {
@@ -225,6 +235,14 @@ export function TerminalPanel({
   }, []);
 
   const writeToPty = useCallback((data: string) => {
+    // xterm emits a bracketed paste in one onData event. The PTY accepts 64 Ki
+    // UTF-16 code units per write; keep supplementary characters in one chunk.
+    while (data.length > MAX_PTY_WRITE_CHARS) {
+      let end = MAX_PTY_WRITE_CHARS;
+      if (data.codePointAt(end - 1)! > 0xffff) end--;
+      window.piApi.terminalWrite(id, data.slice(0, end));
+      data = data.slice(end);
+    }
     window.piApi.terminalWrite(id, data);
   }, [id]);
 
@@ -234,22 +252,26 @@ export function TerminalPanel({
     terminalRef.current?.focus();
   }, [error, status, writeToPty]);
 
-  /** 读剪贴板再交给 PTY；多行粘贴先停在确认条上。 */
+  const running = !connecting && status === 'running' && !error;
   const pasteText = useCallback((text: string) => {
-    if (!text) return;
+    const term = terminalRef.current;
+    if (!text || !term || !running || !activeRef.current) return;
     setPasteNotice(null);
+    // 也覆盖从菜单发起的粘贴，让原生弹框关闭时把焦点还给这个终端。
+    term.focus();
     if (needsPasteConfirm(text)) setPendingPaste(text);
-    else writeToPty(text);
-  }, [writeToPty]);
+    else term.paste(text);
+  }, [running]);
 
   const pasteFromClipboard = useCallback(async () => {
+    const target = terminalRef.current;
     try {
       const text = await navigator.clipboard.readText();
-      if (!text) return;
+      if (target !== terminalRef.current || document.querySelector('dialog[open]')) return;
       pasteText(text);
     } catch (cause) {
+      if (target !== terminalRef.current || !activeRef.current) return;
       // 剪贴板权限失败不代表 PTY 断了；保留终端可用，并给出局部提示。
-      setPendingPaste(null);
       setPasteNotice(`无法读取剪贴板：${errorText(cause)}`);
     }
   }, [pasteText]);
@@ -358,7 +380,7 @@ export function TerminalPanel({
   const commandNavigationDisabled = !shellIntegration || commandCount === 0;
   const menuActions: MenuAction[] = (() => [
     { label: '复制', disabled: !hasSelection, run: () => { void copySelection(); } },
-    { label: '粘贴', run: () => { void pasteFromClipboard(); } },
+    { label: '粘贴', disabled: !running, run: () => { void pasteFromClipboard(); } },
     { label: '全选', run: () => { terminalRef.current?.selectAll(); } },
     { label: '复制当前输出', run: () => { void copyAllOutput(); } },
     { label: '清屏', run: clearScreen },
@@ -393,6 +415,7 @@ export function TerminalPanel({
     commandCursorRef.current = null;
     commandNavigationTargetRef.current = null;
     setCommandCount(0);
+    setPendingPaste(null);
     setPasteNotice(null);
     setHasSelection(false);
     setIsAtBottom(true);
@@ -402,7 +425,6 @@ export function TerminalPanel({
     const pending: TerminalEvent[] = [];
     let pendingChars = 0;
     let droppedSequence = 0;
-    const custom = themedTerminal(appearance.themeId);
     const term = new Terminal({
       // Unicode11 的宽度表属于 xterm 的 proposed API，终端需要它来对齐
       // emoji 与中日韩宽字符；其余 proposed 能力这里没有使用。
@@ -414,9 +436,6 @@ export function TerminalPanel({
       cursorStyle: appearance.cursorStyle,
       // macOS 上默认按 ⌥ 会输入特殊字符，shell 的 ⌥←/⌥→ 就用不了。
       macOptionIsMeta: true,
-      // Contrast boosting recolors every cell and is a common source of scroll jank.
-      // Theme palettes already target readable pairs; keep this off for interactive use.
-      minimumContrastRatio: 1,
       fastScrollSensitivity: 3,
       scrollSensitivity: 1,
       // Animated scroll feels laggy on dense output; jump immediately.
@@ -425,7 +444,7 @@ export function TerminalPanel({
       fontSize,
       lineHeight: appearance.lineHeight,
       scrollback: 8_000,
-      theme: custom ?? terminalTheme(),
+      ...terminalColorOptions(appearance.themeId, host),
     });
     const fit = new FitAddon();
     term.loadAddon(fit);
@@ -561,7 +580,7 @@ export function TerminalPanel({
     const applyAppearance = () => {
       if (disposed || document.hidden || !activeRef.current) { appearanceDirty = true; return; }
       appearanceDirty = false;
-      term.options.theme = themedTerminal(appearanceRef.current.themeId) ?? terminalTheme();
+      Object.assign(term.options, terminalColorOptions(appearanceRef.current.themeId, host));
       term.options.fontFamily = fontFamilyOf(appearanceRef.current.fontFamily);
       term.options.lineHeight = appearanceRef.current.lineHeight;
       term.options.cursorStyle = appearanceRef.current.cursorStyle;
@@ -710,7 +729,7 @@ export function TerminalPanel({
     const unsubscribe = window.piApi.onTerminalEvent(applyEvent);
     const input = term.onData((data) => {
       if (disposed || !ready) return;
-      window.piApi.terminalWrite(id, data);
+      writeToPty(data);
     });
     const selection = term.onSelectionChange(() => {
       setHasSelection(term.hasSelection());
@@ -813,9 +832,9 @@ export function TerminalPanel({
       searchRef.current = null;
       fitRef.current = null;
     };
-  }, [cwd, id, retryRevision, openLink]);
+  }, [cwd, id, retryRevision, openLink, writeToPty]);
 
-  // 终端标签在工作台里保持挂载，切回时只恢复几何与焦点，不重新回放整段输出。
+  // 终端标签在工具窗口中保持挂载，切回时只恢复几何与焦点，不重新回放整段输出。
   const wasActiveRef = useRef(active);
   useEffect(() => {
     const entered = !wasActiveRef.current && active;
@@ -824,6 +843,7 @@ export function TerminalPanel({
     // optional WebGL context as soon as a tab leaves the foreground; otherwise
     // each tab switch keeps another context alive until the whole stack closes.
     if (!active) {
+      setPendingPaste(null);
       // A persistent hidden xterm can otherwise keep its textarea focused and
       // continue consuming keyboard input after the user switches tabs.
       terminalRef.current?.blur();
@@ -842,14 +862,15 @@ export function TerminalPanel({
   // 主题、字体、行高、光标：只改渲染参数，不重建会话。
   useEffect(() => {
     const term = terminalRef.current;
-    if (!term) return;
+    const host = hostRef.current;
+    if (!term || !host) return;
     const previous = appliedAppearanceRef.current;
     if (previous.themeId === appearance.themeId
       && previous.fontFamily === appearance.fontFamily
       && previous.lineHeight === appearance.lineHeight
       && previous.cursorStyle === appearance.cursorStyle) return;
     appliedAppearanceRef.current = appearance;
-    term.options.theme = themedTerminal(appearance.themeId) ?? terminalTheme();
+    Object.assign(term.options, terminalColorOptions(appearance.themeId, host));
     term.options.fontFamily = fontFamilyOf(appearance.fontFamily);
     term.options.lineHeight = appearance.lineHeight;
     term.options.cursorStyle = appearance.cursorStyle;
@@ -922,7 +943,6 @@ export function TerminalPanel({
     });
   }, [searchOpen, searchQuery]);
 
-  const running = !connecting && status === 'running' && !error;
   const customTheme = isTerminalTheme(appearance.themeId);
   return <section
     className={`terminal-panel ${customTheme ? 'has-custom-theme' : ''}`}
@@ -986,13 +1006,11 @@ export function TerminalPanel({
       <button type="button" aria-label="下一个结果" title="下一个 Enter" onClick={() => searchQuery && searchRef.current?.findNext(searchQuery)}><ChevronDown /></button>
       <button type="button" aria-label="关闭搜索" title="关闭" onClick={() => { setSearchOpen(false); setSearchQuery(''); terminalRef.current?.focus(); }}><X /></button>
     </div>}
-    {pendingPaste !== null && <div className="terminal-paste-confirm" role="status">
-      <span>粘贴 {pendingPaste.split('\n').filter((line) => line.trim().length > 0).length} 行命令？确认会直接写入终端。</span>
-      <div>
-        <button type="button" className="is-primary" onClick={() => { const text = pendingPaste; setPendingPaste(null); writeToPty(text); }}>粘贴</button>
-        <button type="button" onClick={() => setPendingPaste(null)}>取消</button>
-      </div>
-    </div>}
+    {active && running && pendingPaste !== null && <TerminalPasteDialog
+      text={pendingPaste}
+      onCancel={() => setPendingPaste(null)}
+      onConfirm={() => { terminalRef.current?.paste(pendingPaste); setPendingPaste(null); }}
+    />}
     {pasteNotice && <div className="terminal-paste-notice" role="status">{pasteNotice}</div>}
     {historyTruncated && <div className="terminal-history-note" role="status">较早输出已清理，历史画面可能不完整。</div>}
     <div className={`terminal-stage ${dragActive ? 'is-drag-active' : ''}`}>
@@ -1002,6 +1020,12 @@ export function TerminalPanel({
         aria-label="交互式终端"
         onPointerDown={focusTerminal}
         onFocus={focusTerminal}
+        onPasteCapture={(event) => {
+          // 在 xterm 的原生 paste 监听器之前处理系统「编辑 > 粘贴」。
+          event.preventDefault();
+          event.stopPropagation();
+          pasteText(event.clipboardData.getData('text/plain'));
+        }}
         onContextMenu={(event) => {
           event.preventDefault();
           setMenu({ x: event.clientX, y: event.clientY });
@@ -1026,7 +1050,6 @@ export function TerminalPanel({
             .join(' ');
           if (!text) return;
           pasteText(text);
-          terminalRef.current?.focus();
         }}
       />
       {error && <div className="terminal-error" role="alert">

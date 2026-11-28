@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { PiWorkspace } from './app-types';
+import { useSettingsToast } from '../shared/SettingsToast';
+import { groupSidebarProjects, sidebarProjectKey } from './sidebar-projects';
 import { filterSidebarWorkspaces, type SidebarSessionFilter } from './sidebar-filter';
 import {
   STORED_UI_KEYS,
-  loadStoredExpandedWorkspaces,
   loadStoredSessionOrder,
   loadStoredWorkspaceOrder,
 } from '../shared/stored-ui-state';
@@ -27,13 +28,26 @@ export function useSidebarWorkspace({
   setWorkspaces,
   workspace,
 }: SidebarWorkspaceDependencies) {
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set(loadStoredExpandedWorkspaces()));
+  const showToast = useSettingsToast();
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  const [expandedReady, setExpandedReady] = useState(false);
+  const expandedHydrated = useRef(false);
+
+  const restoreExpanded = useCallback((keys: string[]) => {
+    if (expandedHydrated.current) return;
+    expandedHydrated.current = true;
+    setExpanded(current => new Set([...keys, ...current]));
+    setExpandedReady(true);
+  }, []);
   const [workspaceOrder, setWorkspaceOrder] = useState<string[]>(loadStoredWorkspaceOrder);
   const [sessionOrder, setSessionOrder] = useState<Record<string, string[]>>(loadStoredSessionOrder);
   const [workspaceSearchOpen, setWorkspaceSearchOpen] = useState(false);
   const [workspaceQuery, setWorkspaceQuery] = useState('');
   const [sidebarSessionFilter, setSidebarSessionFilter] = useState<SidebarSessionFilter>('all');
   const [searchCollapsed, setSearchCollapsed] = useState<Set<string>>(() => new Set());
+  const knownWorkspaces = useRef(workspaces);
+  knownWorkspaces.current = workspaces;
+  const pendingReveal = useRef('');
   const workspaceOrderRef = useRef(workspaceOrder);
   const sessionOrderRef = useRef(sessionOrder);
   const workspaceSearchTrigger = useRef<HTMLButtonElement>(null);
@@ -50,8 +64,8 @@ export function useSidebarWorkspace({
   }, [sessionOrder]);
 
   useEffect(() => {
-    writeStored(STORED_UI_KEYS.expanded, [...expanded]);
-  }, [expanded]);
+    if (expandedReady) void window.piApi.saveExpandedProjects([...expanded]).catch(() => showToast('项目展开状态保存失败', 'error'));
+  }, [expandedReady, expanded, showToast]);
 
   const activeWorkspace = useMemo(
     () => workspaces.find((item) => item.cwd === workspace),
@@ -62,9 +76,13 @@ export function useSidebarWorkspace({
     () => filterSidebarWorkspaces(workspaces, workspaceQuery, sidebarSessionFilter),
     [workspaces, workspaceQuery, sidebarSessionFilter],
   );
-  const expandableWorkspaces = visibleWorkspaces.filter((item) => item.sessions.length > 0);
-  const allExpanded = expandableWorkspaces.length > 0 && expandableWorkspaces.every((item) => (
-    sidebarFiltering ? !searchCollapsed.has(item.cwd) : expanded.has(item.cwd)
+  const visibleProjects = useMemo(() => groupSidebarProjects(workspaces, visibleWorkspaces), [workspaces, visibleWorkspaces]);
+  const expandableKeys = useMemo(() => visibleProjects.flatMap(project => [
+    ...(project.nested ? [project.key] : []),
+    ...project.workspaces.filter(item => item.sessions.length || item.rooms?.length).map(item => item.cwd),
+  ]), [visibleProjects]);
+  const allExpanded = expandableKeys.length > 0 && expandableKeys.every(key => (
+    sidebarFiltering ? !searchCollapsed.has(key) : expanded.has(key)
   ));
 
   function changeWorkspaceQuery(value: string) {
@@ -89,24 +107,32 @@ export function useSidebarWorkspace({
   }
 
   function toggleAllExpanded() {
-    const withSessions = visibleWorkspaces.filter((item) => item.sessions.length > 0);
     if (sidebarFiltering) {
-      setSearchCollapsed(allExpanded ? new Set(withSessions.map(item => item.cwd)) : new Set());
+      setSearchCollapsed(allExpanded ? new Set(expandableKeys) : new Set());
     } else {
-      setExpanded(allExpanded ? new Set() : new Set(workspaces.filter((item) => item.sessions.length > 0).map((item) => item.cwd)));
+      setExpanded(allExpanded ? new Set() : new Set(expandableKeys));
     }
   }
 
-  function expandWorkspace(cwd: string) {
-    setExpanded((current) => {
-      if (current.has(cwd)) return current;
+  const expandWorkspace = useCallback((cwd: string) => {
+    const item = knownWorkspaces.current.find(entry => entry.cwd === cwd);
+    pendingReveal.current = item ? '' : cwd;
+    const project = item?.worktree && sidebarProjectKey(item.worktree.projectRoot);
+    setExpanded(current => {
+      if (current.has(cwd) && (!project || current.has(project))) return current;
       const next = new Set(current);
       next.add(cwd);
+      if (project) next.add(project);
       return next;
     });
-  }
+  }, []);
 
-  function makeDragPreview(event: React.DragEvent, label: string, kind: '工作区' | '会话' | '标签') {
+  useEffect(() => {
+    const cwd = pendingReveal.current;
+    if (cwd && workspaces.some(item => item.cwd === cwd)) expandWorkspace(cwd);
+  }, [workspaces, expandWorkspace]);
+
+  function makeDragPreview(event: React.DragEvent, label: string, kind: '工作区' | '会话') {
     dragPreviewRef.current?.remove();
     const ghost = document.createElement('div');
     ghost.className = 'drag-preview';
@@ -124,15 +150,17 @@ export function useSidebarWorkspace({
 
   function reorderWorkspaces(source: string, target: string) {
     if (source === target) return;
-    const order = workspaces.map((item) => item.cwd);
-    const from = order.indexOf(source);
-    const to = order.indexOf(target);
-    if (from < 0 || to < 0) return;
-    order.splice(to, 0, ...order.splice(from, 1));
+    const projects = groupSidebarProjects(workspaces);
+    const from = projects.findIndex(project => project.workspaces.some(item => item.cwd === source));
+    const to = projects.findIndex(project => project.workspaces.some(item => item.cwd === target));
+    if (from < 0 || to < 0 || from === to) return;
+    projects.splice(to, 0, ...projects.splice(from, 1));
+    const order = projects.flatMap(project => project.workspaces.map(item => item.cwd));
     setWorkspaceOrder(order);
     setWorkspaces(current => {
       const byCwd = new Map(current.map(item => [item.cwd, item]));
-      return order.flatMap(cwd => byCwd.get(cwd) ?? []);
+      const listed = new Set(order);
+      return [...order.flatMap(cwd => byCwd.get(cwd) ?? []), ...current.filter(item => !listed.has(item.cwd))];
     });
   }
 
@@ -149,11 +177,13 @@ export function useSidebarWorkspace({
     setWorkspaces(current => current.map(item => {
       if (item.cwd !== cwd) return item;
       const byId = new Map(item.sessions.map(entry => [entry.id, entry]));
-      return { ...item, sessions: order.flatMap(id => byId.get(id) ?? []) };
+      const listed = new Set(order);
+      return { ...item, sessions: [...order.flatMap(id => byId.get(id) ?? []), ...item.sessions.filter(session => !listed.has(session.id))] };
     }));
   }
 
   return {
+    restoreExpanded,
     expanded,
     setExpanded,
     workspaceOrder,
@@ -174,6 +204,7 @@ export function useSidebarWorkspace({
     activeWorkspace,
     sidebarFiltering,
     visibleWorkspaces,
+    visibleProjects,
     allExpanded,
     changeWorkspaceQuery,
     changeSidebarFilter,

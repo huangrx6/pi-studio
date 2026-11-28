@@ -1,9 +1,8 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
-import { ChevronLeft, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { isComposingKey, menuFocusIndex } from '../shared/keyboard-navigation';
 import { isTextEntry, matchesShortcut } from '../shared/shortcuts';
-import { ShellSidebar } from './ShellLayout';
 import './styles/settings-navigation.css';
 
 /** A settings page entry used by the shared settings shell. */
@@ -24,10 +23,9 @@ export type SettingsNavigationProps = {
   searchActiveId?: string;
   searchShortcut: string;
   onSelect: (id: string) => void;
-  onBack: () => void;
+  onPreload?: (id: string) => void;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
-  backLabel?: string;
   ariaLabel?: string;
 };
 
@@ -48,13 +46,14 @@ const PAGE_SEARCH_ALIASES: Record<string, readonly string[]> = {
   plugins: ['集成', 'Plugin', '市场', '安装'],
   git: ['Git', '仓库', '分支', '工作树', 'worktree', '差异'],
   network: ['proxy', '代理', '网络', 'VPN', '连接', 'HTTP', 'SOCKS', '超时'],
-  browser: ['浏览器', 'Browser', 'CDP', 'Chrome', '下载', '历史', '网站权限', 'webview', '内嵌'],
+  browser: ['浏览器', 'Browser', 'CDP', 'Chrome', '下载', '历史', '网站权限', 'webview', '内嵌', '扩展'],
+  'desktop-control': ['电脑操控', 'Desktop', 'Computer Use', '屏幕', '辅助功能', '窗口', '截图', '应用映射', '扩展'],
   archives: ['历史', '恢复', '归档'],
   about: ['版本', '更新', '帮助', '许可', '诊断'],
 };
 
 /**
- * Shared navigation for the full-screen settings surface.
+ * Settings categories in the second column of the application sidebar.
  *
  * The component deliberately owns only navigation semantics and markup. The
  * parent remains responsible for the page registry and the active tab state,
@@ -67,17 +66,16 @@ export function SettingsNavigation({
   searchActiveId,
   searchShortcut,
   onSelect,
-  onBack,
+  onPreload,
   collapsed,
   onCollapsedChange,
-  backLabel = '返回对话',
   ariaLabel = '设置导航',
 }: SettingsNavigationProps) {
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
-  const collapseRef = useRef<HTMLButtonElement>(null);
+  const navigationRef = useRef<HTMLElement>(null);
   const focusSearchOnExpand = useRef(false);
-  const pagesRef = useRef<HTMLElement>(null);
+  const pagesRef = useRef<HTMLDivElement>(null);
   const navigationId = useId();
   const terms = normalizeSearch(query).split(/\s+/).filter(Boolean);
   const visiblePages = terms.length === 0 ? pages : [...pages, ...searchPages].filter((page) => {
@@ -99,7 +97,7 @@ export function SettingsNavigation({
   // Normal expansion leaves search one Tab away.
   useEffect(() => {
     if (collapsed) return;
-    const target = focusSearchOnExpand.current ? searchRef.current : collapseRef.current;
+    const target = focusSearchOnExpand.current ? searchRef.current : navigationRef.current;
     focusSearchOnExpand.current = false;
     target?.focus({ preventScroll: true });
   }, [collapsed]);
@@ -137,7 +135,7 @@ export function SettingsNavigation({
   }
 
   return (
-    <ShellSidebar className="settings-nav settings-navigation" label={ariaLabel} onCollapse={() => onCollapsedChange(true)} collapseRef={collapseRef}>
+    <nav ref={navigationRef} className="sidebar-secondary settings-nav settings-navigation" aria-label={ariaLabel} tabIndex={-1}>
       <div className="settings-search settings-navigation-search" role="search" aria-label="搜索设置">
         <Search aria-hidden="true" />
         <input
@@ -150,10 +148,10 @@ export function SettingsNavigation({
           onChange={(event) => setQuery(event.target.value)}
           onKeyDown={(event) => {
             if (isComposingKey(event.nativeEvent)) return;
-            if (event.key === 'Escape') {
+            if (event.key === 'Escape' && query) {
               event.preventDefault();
               event.stopPropagation();
-              if (query) clearSearch(); else onBack();
+              clearSearch();
               return;
             }
             if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && pageButtons().length > 0) {
@@ -165,7 +163,7 @@ export function SettingsNavigation({
         />
         {query && <button type="button" className="icon-button" aria-label="清除设置搜索" title="清除搜索" onClick={clearSearch}><X aria-hidden="true" /></button>}
       </div>
-      <nav ref={pagesRef} id={navigationId} className="settings-navigation-pages" aria-label={ariaLabel}>
+      <div ref={pagesRef} id={navigationId} className="settings-navigation-pages">
         {groups.map((group, groupIndex) => (
           <div className="settings-nav-group" key={group.label || `ungrouped-${groupIndex}`}>
             {group.label && <div className="nav-section-label">{group.label}</div>}
@@ -180,6 +178,8 @@ export function SettingsNavigation({
                   aria-current={active ? 'page' : undefined}
                   data-settings-page={page.id}
                   tabIndex={page.id === focusablePageId ? 0 : -1}
+                  onMouseEnter={() => onPreload?.(page.id)}
+                  onFocus={() => onPreload?.(page.id)}
                   onClick={() => onSelect(page.id)}
                   onKeyDown={(event) => {
                     if (isComposingKey(event.nativeEvent)) return;
@@ -198,15 +198,9 @@ export function SettingsNavigation({
           </div>
         ))}
         {groups.length === 0 && <p className="settings-navigation-empty">没有匹配的设置，请换个关键词。</p>}
-      </nav>
-      <span className="sr-only" role="status" aria-live="polite">{terms.length > 0 ? `找到 ${visiblePages.length} 个设置页面` : ''}</span>
-      <div className="settings-nav-bottom">
-        <button type="button" className="settings-back-button" onClick={onBack}>
-          <ChevronLeft aria-hidden="true" />
-          <span>{backLabel}</span>
-        </button>
       </div>
-    </ShellSidebar>
+      <span className="sr-only" role="status" aria-live="polite">{terms.length > 0 ? `找到 ${visiblePages.length} 个设置页面` : ''}</span>
+    </nav>
   );
 }
 

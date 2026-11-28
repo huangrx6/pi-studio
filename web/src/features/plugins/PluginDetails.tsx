@@ -1,4 +1,4 @@
-import { ChevronRight, Download, ExternalLink, Trash2, X } from 'lucide-react';
+import { ArrowUpRight, ChevronRight, Download, ExternalLink, Trash2, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { DetailDialog } from '../../shared/DetailDialog';
 import { LoadingIndicator } from '../../shared/LoadingState';
@@ -39,7 +39,86 @@ export function pluginResourceLabels(provides: PluginProvides) {
   return pluginResourceBadges(provides).map(item => item.label);
 }
 
-function PackageResources({ provides, onOpen }: { provides: PluginProvides; onOpen?: OpenPluginResource }) {
+function PackageResources({
+  provides,
+  fallbackProvides,
+  onOpen,
+}: {
+  provides: PluginProvides;
+  fallbackProvides?: PluginMarketItem['provides'];
+  onOpen?: OpenPluginResource;
+}) {
+  const mcpItems = Array.isArray(provides.mcp)
+    ? provides.mcp
+    : 'mcpDetails' in provides ? provides.mcpDetails : fallbackProvides?.mcpDetails;
+  const fallbackSkills = new Map(
+    (fallbackProvides?.skillDetails ?? []).map(item => [item.name || item.path, item.description || '']),
+  );
+  const rawSkillItems = Array.isArray(provides.skills)
+    ? provides.skills
+    : 'skillDetails' in provides ? provides.skillDetails : fallbackProvides?.skillDetails;
+  const skillItems = rawSkillItems?.map(item => ({
+    ...item,
+    description: item.description || fallbackSkills.get(item.name || item.path) || '',
+  }));
+  const cliItems = Array.isArray(provides.cli)
+    ? provides.cli
+    : 'cliDetails' in provides ? provides.cliDetails : fallbackProvides?.cliDetails;
+  const primaryExtension = typeof provides.extension === 'object' && provides.extension
+    ? provides.extension
+    : 'extensionDetails' in provides ? provides.extensionDetails : null;
+  const fallbackExtension = fallbackProvides?.extensionDetails ?? null;
+  const extensionInfo = primaryExtension
+    ? {
+      ...fallbackExtension,
+      ...primaryExtension,
+      toolDetails: primaryExtension.toolDetails?.length ? primaryExtension.toolDetails : fallbackExtension?.toolDetails,
+      panels: primaryExtension.panels?.length ? primaryExtension.panels : fallbackExtension?.panels,
+      commands: primaryExtension.commands?.length ? primaryExtension.commands : fallbackExtension?.commands,
+    }
+    : fallbackExtension;
+  const toolItems = extensionInfo?.toolDetails?.length
+    ? extensionInfo.toolDetails
+    : (extensionInfo?.tools ?? []).map(name => ({ name, description: '' }));
+  const panelItems = extensionInfo?.panels ?? [];
+  const commandItems = extensionInfo?.commands ?? [];
+
+  const uiEntries: ReactNode[] = [];
+  for (const panel of panelItems) {
+    uiEntries.push(
+      <li key={`panel:${panel.id}`}>
+        <div className="plugin-resource-row-head">
+          <strong>{panel.title}</strong>
+          <span className="plugin-resource-tag">{panel.scope === 'global' ? '主画布应用' : '工作台面板'}</span>
+        </div>
+        {panel.description && <small>{panel.description}</small>}
+      </li>,
+    );
+  }
+  for (const command of commandItems) {
+    uiEntries.push(
+      <li key={`cmd:${command.id}`}>
+        <div className="plugin-resource-row-head">
+          <code>/{command.id}</code>
+          <span>{command.title}</span>
+          <span className="plugin-resource-tag">快捷命令</span>
+        </div>
+        {command.description && <small>{command.description}</small>}
+      </li>,
+    );
+  }
+  if (!uiEntries.length && provides.extension) {
+    uiEntries.push(
+      <li key="ext:root">
+        <div className="plugin-resource-row-head">
+          <strong>{extensionInfo?.name || '界面扩展'}</strong>
+          {extensionInfo?.path && <code>{extensionInfo.path}</code>}
+        </div>
+        {extensionInfo?.description && <small>{extensionInfo.description}</small>}
+      </li>,
+    );
+  }
+
   const blocks: {
     title: string;
     total: number;
@@ -47,41 +126,52 @@ function PackageResources({ provides, onOpen }: { provides: PluginProvides; onOp
     section?: ResourceSection;
   }[] = [
     {
-      title: 'MCP 服务器',
-      total: count(provides.mcp),
-      section: 'mcp',
-      entries: Array.isArray(provides.mcp)
-        ? provides.mcp.map(item => <li key={item.name}><code>{item.name}</code>{item.description && <small>{item.description}</small>}</li>)
-        : 'mcpNames' in provides && provides.mcpNames?.map(name => <li key={name}><code>{name}</code></li>),
+      title: '界面扩展',
+      total: (panelItems.length + commandItems.length) || (provides.extension ? 1 : 0),
+      section: 'extensions',
+      entries: uiEntries,
+    },
+    {
+      title: '智能体工具',
+      total: toolItems.length,
+      entries: toolItems.map(tool => (
+        <li key={tool.name}>
+          <code>{tool.name}</code>
+          {tool.description && <small>{tool.description}</small>}
+        </li>
+      )),
     },
     {
       title: '技能',
       total: count(provides.skills),
       section: 'skills',
-      entries: Array.isArray(provides.skills)
-        ? provides.skills.map(item => <li key={item.path}>{item.name || item.path}</li>)
-        : 'skillNames' in provides && provides.skillNames?.map(name => <li key={name}>{name}</li>),
+      entries: skillItems?.length
+        ? skillItems.map(item => (
+          <li key={item.path}>
+            <code>{item.name || item.path}</code>
+            {item.description && <small>{item.description}</small>}
+          </li>
+        ))
+        : 'skillNames' in provides && provides.skillNames?.map(name => <li key={name}><code>{name}</code></li>),
+    },
+    {
+      title: 'MCP 服务器',
+      total: count(provides.mcp),
+      section: 'mcp',
+      entries: mcpItems?.length
+        ? mcpItems.map(item => <li key={item.name}><code>{item.name}</code>{item.description && <small>{item.description}</small>}</li>)
+        : 'mcpNames' in provides && provides.mcpNames?.map(name => <li key={name}><code>{name}</code></li>),
     },
     {
       title: '命令行工具',
       total: count(provides.cli),
-      entries: Array.isArray(provides.cli)
-        ? provides.cli.map(item => <li key={item.id}>
+      entries: cliItems?.length
+        ? cliItems.map(item => <li key={item.id}>
           <span>{item.name}</span>
           {item.description && <small>{item.description}</small>}
           {item.commands?.map((command, index) => <code key={index}>{command.example || command.summary}</code>)}
         </li>)
         : 'cliNames' in provides && provides.cliNames?.map(name => <li key={name}><code>{name}</code></li>),
-    },
-    {
-      title: '界面扩展',
-      total: provides.extension ? 1 : 0,
-      section: 'extensions',
-      entries: typeof provides.extension === 'object' && provides.extension
-        ? provides.extension.tools?.length
-          ? provides.extension.tools.map(name => <li key={name}><code>{name}</code></li>)
-          : <li><code>{provides.extension.path}</code></li>
-        : null,
     },
   ];
   return <div className="plugin-resource-list">
@@ -98,12 +188,26 @@ function PackageResources({ provides, onOpen }: { provides: PluginProvides; onOp
   </div>;
 }
 
-export function PluginDetail({ item, installed, busy, preparing, catalogUnavailable, onClose, onOpenResource, onInstall, onUninstall }: PluginCatalogEntry & {
+export function PluginDetail({
+  item,
+  installed,
+  busy,
+  preparing,
+  catalogUnavailable,
+  openablePanelId,
+  onOpenApp,
+  onClose,
+  onOpenResource,
+  onInstall,
+  onUninstall,
+}: PluginCatalogEntry & {
   busy: boolean;
   preparing: boolean;
   catalogUnavailable: boolean;
+  openablePanelId?: string;
+  onOpenApp?: (panelId: string) => void;
   onClose: () => void;
-  onOpenResource: OpenPluginResource;
+  onOpenResource?: OpenPluginResource;
   onInstall: (listing: PluginMarketItem, origin: HTMLButtonElement) => void;
   onUninstall: (plugin: StudioPluginSummary) => void;
 }) {
@@ -112,6 +216,8 @@ export function PluginDetail({ item, installed, busy, preparing, catalogUnavaila
   const version = installed?.version || listing?.latestVersion;
   const description = item.description || listing?.summary || installed?.description;
   const provides = installed?.provides ?? item.provides;
+  const fallbackProvides = installed && listing ? listing.provides : undefined;
+  const canOpenApp = Boolean(installed?.enabled && openablePanelId && onOpenApp);
   return <DetailDialog className="plugin-package-dialog" label={`插件 ${item.name}`}
     dismissable={!busy} onClose={onClose}>{close => <>
     <header className="detail-header">
@@ -131,7 +237,7 @@ export function PluginDetail({ item, installed, busy, preparing, catalogUnavaila
       </dl>
       {pluginResourceLabels(provides).length > 0 && <section>
         <h3>{installed ? '已安装的资源' : '附带资源'}</h3>
-        <PackageResources provides={provides} onOpen={installed ? onOpenResource : undefined} />
+        <PackageResources provides={provides} fallbackProvides={fallbackProvides} onOpen={installed ? onOpenResource : undefined} />
       </section>}
     </div>
     <footer className="detail-footer plugin-package-footer">
@@ -148,7 +254,13 @@ export function PluginDetail({ item, installed, busy, preparing, catalogUnavaila
         onClick={event => onInstall(listing, event.currentTarget)}>
         {preparing ? <LoadingIndicator /> : <Download aria-hidden="true" />}{!installed ? '安装' : installed.version === listing.latestVersion ? '重新安装' : '更换版本'}
       </button>}
-      {installed && <button type="button" className="settings-outline" disabled={busy} onClick={close}>完成</button>}
+      {canOpenApp && <button type="button" className="settings-save" disabled={busy} onClick={() => {
+        close();
+        onOpenApp!(openablePanelId!);
+      }}>
+        <ArrowUpRight aria-hidden="true" />打开应用
+      </button>}
+      {installed && !canOpenApp && <button type="button" className="settings-outline" disabled={busy} onClick={close}>完成</button>}
     </footer>
   </>}</DetailDialog>;
 }

@@ -3,9 +3,8 @@ import type { MenuBarPreference } from './app-types';
 import { errorText } from '../shared/error-text';
 import { useSettingsToast } from '../shared/SettingsToast';
 import {
-  RADIUS_PRESETS,
+  applyWindowAppearance,
   loadPreferences,
-  resolveTheme,
   savePreferences,
   setActivePreferences,
   type Preferences,
@@ -32,8 +31,7 @@ export function useAppAppearance() {
     if (notice) showToast(saved ? notice : '无法保存偏好，本次修改仅在当前窗口生效。', saved ? 'success' : 'error');
     setActivePreferences(preferences);
     const root = document.documentElement;
-    root.dataset.theme = resolveTheme(preferences.theme);
-    root.dataset.palette = preferences.palette;
+    applyWindowAppearance(preferences, root);
     const nativeAppearance = nativeAppearanceChange(nativeAppearanceKeyRef.current, preferences);
     if (nativeAppearance.changed) {
       nativeAppearanceKeyRef.current = nativeAppearance.key;
@@ -50,13 +48,8 @@ export function useAppAppearance() {
         }
       });
     }
-    root.style.setProperty('--chat-font-size', `${preferences.fontSize}px`);
-    const radii = RADIUS_PRESETS[preferences.radiusStyle] || RADIUS_PRESETS.standard;
-    root.style.setProperty('--radius-tag', `${radii.tag}px`);
-    root.style.setProperty('--radius-control', `${radii.control}px`);
-    root.style.setProperty('--radius-card', `${radii.card}px`);
-    root.style.setProperty('--radius-panel', `${radii.panel}px`);
-    root.style.setProperty('--radius-round', `${radii.round}px`);
+    if (preferences.fontSize === null) root.style.removeProperty('--chat-font-size');
+    else root.style.setProperty('--chat-font-size', `${preferences.fontSize}px`);
     if (preferences.theme !== 'system') return;
     const media = window.matchMedia('(prefers-color-scheme: dark)');
     const onChange = () => { root.dataset.theme = media.matches ? 'dark' : 'light'; };

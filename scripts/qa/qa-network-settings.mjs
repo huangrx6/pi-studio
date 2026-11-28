@@ -41,7 +41,7 @@ async function capture(name) {
   await page.screenshot({ path: path.join(output, `${name}.png`) });
 }
 async function openNetwork() {
-  if (!await page.locator('.settings-navigation').count()) await page.locator('.sidebar-bottom button[title="设置"]').click();
+  if (!await page.locator('.settings-navigation').count()) await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await page.locator('.settings-navigation').getByRole('button', { name: '网络代理', exact: true }).click();
   await page.getByRole('button', { name: '重新识别', exact: true }).waitFor();
   await page.waitForFunction(() => !document.querySelector('.network-mode-fieldset')?.disabled);

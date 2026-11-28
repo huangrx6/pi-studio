@@ -42,7 +42,7 @@
   border: 0;
   background: var(--transparent);
   color: var(--text);
-  font: var(--settings-preference-body-font);
+  font: var(--font-label);
   font-variant-numeric: tabular-nums;
   text-align: center;
 }

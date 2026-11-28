@@ -3,19 +3,130 @@
  * enhanced with real-time virtual AI cursor, floating action pills, click
  * ripples, native keyboard/hover input, drag-and-drop, and viewport emulation.
  */
-const { getTabWebContents, resolveBrowserTab } = require('./tabs.cjs');
+const { getTabWebContents, listBrowserTabs, resolveBrowserTab } = require('./tabs.cjs');
+const { scopedTypography } = require('../../theme.cjs');
 const { captureBrowserSnapshot } = require('./snapshot.cjs');
-const { beginBrowserActivity, endBrowserActivity, enqueueBrowserAction } = require('./queue.cjs');
+const {
+  beginBrowserActivity,
+  endBrowserActivity,
+  enqueueBrowserAction,
+  hasActiveBrowserSession,
+  subscribeBrowserControl,
+} = require('./queue.cjs');
 const { requestRevealBrowserTab, requestSetBrowserViewport } = require('./commands.cjs');
 const { assertSiteActionAllowed } = require('./site-policy.cjs');
 const { assertBrowserEvaluateAllowed, getBrowserPreferences } = require('./settings.cjs');
 const {
   buildAgentCursorScript,
+  buildAgentCursorStatusScript,
   buildClearOverlayScript,
   buildOverlayVisibilityScript,
 } = require('./overlay.cjs');
 
 const VISUAL_GLIDE_MS = 220;
+
+const FIND_REF_HELPER = `
+  const findPiRef = (ref) => {
+    if (!ref) return null;
+    const selector = '[data-pi-ref=' + JSON.stringify(String(ref)) + ']';
+    const search = (root) => {
+      if (!root || typeof root.querySelector !== 'function') return null;
+      try {
+        const direct = root.querySelector(selector);
+        if (direct) return direct;
+        const all = root.querySelectorAll('*');
+        for (const el of all) {
+          if (el.shadowRoot) {
+            const hit = search(el.shadowRoot);
+            if (hit) return hit;
+          }
+          if (el.tagName === 'IFRAME') {
+            try {
+              const doc = el.contentDocument;
+              if (doc) {
+                const hit = search(doc);
+                if (hit) return hit;
+              }
+            } catch {}
+          }
+        }
+      } catch {}
+      return null;
+    };
+    return search(document);
+  };
+`;
+
+let overlayCleanupTimer = null;
+let overlayThinkingTimer = null;
+
+function clearOverlaysAcrossTabs() {
+  const clearScript = buildClearOverlayScript();
+  for (const tab of listBrowserTabs()) {
+    const contents = getTabWebContents(tab);
+    if (!contents) continue;
+    try {
+      void contents.executeJavaScript(clearScript, true).catch(() => {});
+    } catch {
+      // Ignore destroyed or navigating tabs.
+    }
+  }
+}
+
+function setThinkingCursorOnTab(tabId) {
+  if (!shouldAnimateOverlay()) return;
+  const statusScript = buildAgentCursorStatusScript('AI 思考下一步…');
+  const tabs = listBrowserTabs();
+  const target = (tabId && tabs.find((item) => item.id === tabId)) || tabs.find((item) => item.active) || tabs[0];
+  if (!target) return;
+  const contents = getTabWebContents(target);
+  if (!contents) return;
+  try {
+    void contents.executeJavaScript(statusScript, true).catch(() => {});
+  } catch {
+    // Ignore destroyed or navigating tabs.
+  }
+}
+
+subscribeBrowserControl((payload) => {
+  if (!payload || typeof payload !== 'object') return;
+  if (payload.type === 'control' && payload.paused === true) {
+    if (overlayCleanupTimer) { clearTimeout(overlayCleanupTimer); overlayCleanupTimer = null; }
+    if (overlayThinkingTimer) { clearTimeout(overlayThinkingTimer); overlayThinkingTimer = null; }
+    clearOverlaysAcrossTabs();
+    return;
+  }
+  const activity = payload.type === 'activity'
+    ? payload
+    : payload.type === 'control'
+      ? payload.activity
+      : null;
+  if (!activity) return;
+  if (activity.active === true) {
+    if (overlayCleanupTimer) { clearTimeout(overlayCleanupTimer); overlayCleanupTimer = null; }
+    if (activity.thinking === true) {
+      if (overlayThinkingTimer) clearTimeout(overlayThinkingTimer);
+      overlayThinkingTimer = setTimeout(() => {
+        overlayThinkingTimer = null;
+        if (hasActiveBrowserSession()) setThinkingCursorOnTab(activity.tabId);
+      }, 1200);
+      overlayThinkingTimer.unref?.();
+    } else if (overlayThinkingTimer) {
+      clearTimeout(overlayThinkingTimer);
+      overlayThinkingTimer = null;
+    }
+    return;
+  }
+  if (activity.active === false) {
+    if (overlayThinkingTimer) { clearTimeout(overlayThinkingTimer); overlayThinkingTimer = null; }
+    if (overlayCleanupTimer) clearTimeout(overlayCleanupTimer);
+    overlayCleanupTimer = setTimeout(() => {
+      overlayCleanupTimer = null;
+      if (!hasActiveBrowserSession()) clearOverlaysAcrossTabs();
+    }, 350);
+    overlayCleanupTimer.unref?.();
+  }
+});
 
 const VIEWPORT_PRESETS = Object.freeze({
   desktop: { width: 1440, height: 900, label: '桌面 1440×900' },
@@ -100,6 +211,7 @@ function highlightScript(ref, label, clearOthers) {
       const style = document.createElement('style');
       style.id = 'pi-browser-highlight-style';
       style.textContent = ${JSON.stringify(`
+    ${scopedTypography('#pi-browser-highlight-label')}
     [data-pi-highlight="1"] {
       outline: 2px solid #3b82f6 !important;
       outline-offset: 2px !important;
@@ -112,7 +224,7 @@ function highlightScript(ref, label, clearOthers) {
       pointer-events: none;
       background: #1d4ed8;
       color: #fff;
-      font: 12px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font: var(--font-description);
       padding: 4px 8px;
       border-radius: 6px;
       box-shadow: 0 4px 14px rgba(15, 23, 42, 0.28);
@@ -127,14 +239,15 @@ function highlightScript(ref, label, clearOthers) {
     }
     const clearOthers = ${clearOthers ? 'true' : 'false'};
     const target = ${JSON.stringify(String(ref || ''))};
-    const labelText = ${JSON.stringify(String(label || ref || ''))};
+    const labelText = ${JSON.stringify(String(label || ''))};
     if (clearOthers) {
       document.querySelectorAll('[data-pi-highlight="1"]').forEach((el) => el.removeAttribute('data-pi-highlight'));
       const old = document.getElementById('pi-browser-highlight-label');
       if (old) old.remove();
     }
     if (!target) return { ok: true, cleared: true };
-    const el = document.querySelector('[data-pi-ref=' + JSON.stringify(target) + ']');
+    ${FIND_REF_HELPER}
+    const el = findPiRef(target);
     if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
     el.setAttribute('data-pi-highlight', '1');
     el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
@@ -144,6 +257,7 @@ function highlightScript(ref, label, clearOthers) {
       if (!badge) {
         badge = document.createElement('div');
         badge.id = 'pi-browser-highlight-label';
+        badge.dataset.platform = ${JSON.stringify(process.platform)};
         document.documentElement.appendChild(badge);
       }
       badge.textContent = labelText;
@@ -196,7 +310,8 @@ async function highlightBrowserRef(tabId, ref, options = {}) {
 async function showBrowserCursorAction(tabId, options = {}) {
   if (!shouldAnimateOverlay()) return null;
   try {
-    const { result } = await runInTab(tabId, buildAgentCursorScript(options));
+    const persistent = options.persistent !== undefined ? options.persistent : hasActiveBrowserSession();
+    const { result } = await runInTab(tabId, buildAgentCursorScript({ ...options, persistent }));
     return result;
   } catch {
     return null;
@@ -229,7 +344,8 @@ async function getElementRect(tabId, ref) {
   const target = String(ref || '').trim();
   if (!target) return null;
   const { result } = await runInTab(tabId, `(() => {
-    const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(target)}) + ']');
+    ${FIND_REF_HELPER}
+    const el = findPiRef(${JSON.stringify(target)});
     if (!el) return null;
     el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
     const r = el.getBoundingClientRect();
@@ -256,7 +372,8 @@ async function clickBrowserRef(tabId, ref, options = {}) {
   return withTabAction(tabId, 'act', async (id) => {
     await flashHighlight(id, target, options.label || actionLabel, 'click');
     const { entry, result } = await runInTab(id, `(() => {
-      const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(target)}) + ']');
+      ${FIND_REF_HELPER}
+      const el = findPiRef(${JSON.stringify(target)});
       if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
       el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
       const rect = el.getBoundingClientRect();
@@ -313,7 +430,8 @@ async function hoverBrowserRef(tabId, ref, options = {}) {
   return withTabAction(tabId, 'act', async (id) => {
     await flashHighlight(id, target, options.label || '悬停', 'move');
     const { entry, contents, result } = await runInTab(id, `(() => {
-      const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(target)}) + ']');
+      ${FIND_REF_HELPER}
+      const el = findPiRef(${JSON.stringify(target)});
       if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
       el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
       const rect = el.getBoundingClientRect();
@@ -356,39 +474,121 @@ async function hoverBrowserRef(tabId, ref, options = {}) {
 
 async function typeBrowserRef(tabId, ref, text, options = {}) {
   const target = String(ref || '').trim();
-  if (!target) throw new Error('需要 ref（先 browser_snapshot）');
   const value = String(text ?? '');
   if (value.length > 20_000) throw new Error('输入过长');
   const clear = options.clear !== false;
   const submit = options.submit === true;
+  const preview = value.length > 20 ? `${value.slice(0, 20)}…` : value;
+  const label = options.label || (preview ? `输入「${preview}」` : '输入文本');
   return withTabAction(tabId, 'act', async (id) => {
-    await flashHighlight(id, target, options.label || '输入', 'move');
-    const { entry, result } = await runInTab(id, `(() => {
-      const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(target)}) + ']');
-      if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
+    if (target) {
+      await flashHighlight(id, target, label, 'click');
+    } else {
+      // Glide the live cursor onto the currently focused input with a click ripple.
+      try {
+        const { result: box } = await runInTab(id, `(() => {
+          let el = document.activeElement;
+          while (el && el.shadowRoot && el.shadowRoot.activeElement) el = el.shadowRoot.activeElement;
+          if (!el || el === document.body || el === document.documentElement) return null;
+          const r = el.getBoundingClientRect();
+          if (r.width <= 0 && r.height <= 0) return null;
+          return { x: Math.round(r.left + Math.min(r.width / 2, Math.max(12, r.width - 12))), y: Math.round(r.top + r.height / 2) };
+        })()`);
+        await showBrowserCursorAction(id, {
+          label,
+          kind: 'click',
+          ...(box ? { x: box.x, y: box.y } : {}),
+        });
+        if (shouldAnimateOverlay()) await sleep(160);
+      } catch {
+        await showBrowserCursorAction(id, { label, kind: 'click' });
+      }
+    }
+    const { entry, result } = await runInTab(id, `(async () => {
+      ${FIND_REF_HELPER}
+      const targetRef = ${JSON.stringify(target)};
+      let el = null;
+      if (targetRef) {
+        el = findPiRef(targetRef);
+        if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
+      } else {
+        el = document.activeElement;
+        while (el && el.shadowRoot && el.shadowRoot.activeElement) {
+          el = el.shadowRoot.activeElement;
+        }
+        if (!el || el === document.body || el === document.documentElement) {
+          return { ok: false, error: '当前没有已聚焦的输入框，请先点击输入框或提供 ref' };
+        }
+      }
       el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
       if (typeof el.focus === 'function') el.focus();
       const text = ${JSON.stringify(value)};
       const clear = ${clear ? 'true' : 'false'};
+      const animate = ${shouldAnimateOverlay() ? 'true' : 'false'};
+      const chars = Array.from(text);
+      const stepSize = chars.length <= 28 ? 1 : Math.max(2, Math.ceil(chars.length / 22));
+      const delayMs = animate && chars.length > 1 ? Math.min(26, Math.max(12, Math.round(420 / Math.ceil(chars.length / stepSize)))) : 0;
+      const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
       if (el.isContentEditable) {
         if (clear) el.textContent = '';
-        el.textContent = (el.textContent || '') + text;
-        el.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
+        if (delayMs > 0) {
+          for (let i = 0; i < chars.length; i += stepSize) {
+            const chunk = chars.slice(i, i + stepSize).join('');
+            el.textContent = (el.textContent || '') + chunk;
+            el.dispatchEvent(new InputEvent('input', { bubbles: true, data: chunk, inputType: 'insertText' }));
+            if (i + stepSize < chars.length) await pause(delayMs);
+          }
+        } else {
+          el.textContent = (el.textContent || '') + text;
+          el.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }));
+        }
       } else if ('value' in el) {
         const proto = el.tagName === 'TEXTAREA'
           ? window.HTMLTextAreaElement.prototype
           : window.HTMLInputElement.prototype;
         const descriptor = Object.getOwnPropertyDescriptor(proto, 'value');
         const setter = descriptor && descriptor.set;
-        const next = (clear ? '' : String(el.value || '')) + text;
-        if (setter) setter.call(el, next);
-        else el.value = next;
-        el.dispatchEvent(new Event('input', { bubbles: true }));
+        const setVal = (next) => {
+          if (setter) setter.call(el, next);
+          else el.value = next;
+        };
+        let current = clear ? '' : String(el.value || '');
+        if (clear) {
+          setVal('');
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        if (delayMs > 0) {
+          for (let i = 0; i < chars.length; i += stepSize) {
+            const chunk = chars.slice(i, i + stepSize).join('');
+            current += chunk;
+            setVal(current);
+            el.dispatchEvent(new InputEvent('input', { bubbles: true, data: chunk, inputType: 'insertText' }));
+            if (i + stepSize < chars.length) await pause(delayMs);
+          }
+        } else {
+          setVal(current + text);
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+        }
         el.dispatchEvent(new Event('change', { bubbles: true }));
       } else {
         return { ok: false, error: '该元素不支持输入' };
       }
       if (${submit ? 'true' : 'false'}) {
+        // Allow reactive web components / frameworks (Lit, React) to flush the final character before submitting.
+        await pause(80);
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        if ('value' in el && !el.isContentEditable && clear && String(el.value || '') !== text) {
+          const proto = el.tagName === 'TEXTAREA'
+            ? window.HTMLTextAreaElement.prototype
+            : window.HTMLInputElement.prototype;
+          const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+          if (setter) setter.call(el, text);
+          else el.value = text;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          await pause(40);
+        }
         const form = typeof el.form !== 'undefined' ? el.form : el.closest('form');
         if (form && typeof form.requestSubmit === 'function') form.requestSubmit();
         else if (form) form.submit();
@@ -406,11 +606,11 @@ async function typeBrowserRef(tabId, ref, text, options = {}) {
       ok: true,
       tabId: entry.id,
       url: entry.url,
-      ref: target,
+      ...(target ? { ref: target } : {}),
       element: result,
       snapshot: await maybeSnapshot(entry, options.snapshot),
     };
-  }, { action: 'type', label: `输入到 ${target}` });
+  }, { action: 'type', label });
 }
 
 function parseKeyCombo(combo) {
@@ -474,7 +674,8 @@ async function pressBrowserKey(tabId, key, options = {}) {
     if (targetRef) {
       await flashHighlight(id, targetRef, `按键 ${parsed.raw}`, 'move');
       await runInTab(id, `(() => {
-        const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(targetRef)}) + ']');
+        ${FIND_REF_HELPER}
+        const el = findPiRef(${JSON.stringify(targetRef)});
         if (el && typeof el.focus === 'function') el.focus();
       })()`);
     } else {
@@ -537,8 +738,9 @@ async function dragBrowserRefs(tabId, sourceRef, targetRef, options = {}) {
   return withTabAction(tabId, 'act', async (id) => {
     await flashHighlight(id, fromRef, '开始拖拽', 'drag');
     const { entry, contents, result } = await runInTab(id, `(() => {
-      const src = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(fromRef)}) + ']');
-      const dst = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(toRef)}) + ']');
+      ${FIND_REF_HELPER}
+      const src = findPiRef(${JSON.stringify(fromRef)});
+      const dst = findPiRef(${JSON.stringify(toRef)});
       if (!src) return { ok: false, error: '找不到拖拽起点元素，请重新 snapshot' };
       if (!dst) return { ok: false, error: '找不到拖拽目标元素，请重新 snapshot' };
       src.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'instant' });
@@ -577,8 +779,9 @@ async function dragBrowserRefs(tabId, sourceRef, targetRef, options = {}) {
       // Continue with DOM drop dispatch.
     }
     await runInTab(id, `(() => {
-      const src = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(fromRef)}) + ']');
-      const dst = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(toRef)}) + ']');
+      ${FIND_REF_HELPER}
+      const src = findPiRef(${JSON.stringify(fromRef)});
+      const dst = findPiRef(${JSON.stringify(toRef)});
       if (!dst) return;
       const dx = ${result.dx};
       const dy = ${result.dy};
@@ -629,12 +832,15 @@ async function setBrowserViewport(tabId, options = {}) {
   return withTabAction(tabId, 'act', async (id) => {
     requestSetBrowserViewport(id, spec);
     await showBrowserCursorAction(id, { label, kind: 'move' });
-    await sleep(160);
-    const { entry, result } = await runInTab(id, `(() => ({
-      innerWidth: window.innerWidth,
-      innerHeight: window.innerHeight,
-      devicePixelRatio: window.devicePixelRatio || 1,
-    }))()`);
+    await sleep(260);
+    const { entry, result } = await runInTab(id, `(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return {
+        innerWidth: window.innerWidth,
+        innerHeight: window.innerHeight,
+        devicePixelRatio: window.devicePixelRatio || 1,
+      };
+    })()`);
     return {
       ok: true,
       tabId: entry.id,
@@ -653,7 +859,8 @@ async function selectBrowserRef(tabId, ref, values, options = {}) {
   return withTabAction(tabId, 'act', async (id) => {
     await flashHighlight(id, target, options.label || `选择「${list[0]}」`, 'click');
     const { entry, result } = await runInTab(id, `(() => {
-      const el = document.querySelector('[data-pi-ref=' + JSON.stringify(${JSON.stringify(target)}) + ']');
+      ${FIND_REF_HELPER}
+      const el = findPiRef(${JSON.stringify(target)});
       if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
       if (el.tagName !== 'SELECT') return { ok: false, error: '目标不是下拉框' };
       const wanted = ${JSON.stringify(list)};
@@ -682,8 +889,18 @@ async function selectBrowserRef(tabId, ref, values, options = {}) {
 
 async function scrollBrowser(tabId, options = {}) {
   const ref = String(options.ref || '').trim();
+  const selector = String(options.selector || '').trim().slice(0, 300);
+  const position = ['top', 'bottom'].includes(String(options.position || '').toLowerCase())
+    ? String(options.position).toLowerCase()
+    : '';
   const direction = String(options.direction || 'down').toLowerCase();
-  const dirLabel = { down: '向下滚动', up: '向上滚动', left: '向左滚动', right: '向右滚动' }[direction] || '滚动页面';
+  const dirLabel = position === 'top'
+    ? '滚回顶部'
+    : position === 'bottom'
+      ? '滚到底部'
+      : selector
+        ? `滚动到 ${selector.slice(0, 24)}`
+        : ({ down: '向下滚动', up: '向上滚动', left: '向左滚动', right: '向右滚动' }[direction] || '滚动页面');
   return withTabAction(tabId, 'act', async (id) => {
     const amount = Math.min(4_000, Math.max(1, Number(options.amount) || 600));
     const delta = {
@@ -694,19 +911,61 @@ async function scrollBrowser(tabId, options = {}) {
     }[direction] || [0, amount];
     if (ref) await flashHighlight(id, ref, '滚动到目标', 'move');
     else {
-      await showBrowserCursorAction(id, { label: `${dirLabel} ${amount}px`, kind: 'move' });
-      if (shouldAnimateOverlay()) await sleep(120);
+      const actionText = (position || selector) ? dirLabel : `${dirLabel} ${amount}px`;
+      await showBrowserCursorAction(id, { label: actionText, kind: 'move' });
+      if (shouldAnimateOverlay()) await sleep(100);
     }
-    const { entry, result } = await runInTab(id, `(() => {
+    const { entry, result } = await runInTab(id, `(async () => {
+      ${FIND_REF_HELPER}
       const ref = ${JSON.stringify(ref)};
+      const selector = ${JSON.stringify(selector)};
+      const position = ${JSON.stringify(position)};
+      let mode = 'window';
       if (ref) {
-        const el = document.querySelector('[data-pi-ref=' + JSON.stringify(ref) + ']');
+        const el = findPiRef(ref);
         if (!el) return { ok: false, error: '找不到元素，请重新 snapshot' };
         el.scrollIntoView({ block: 'center', inline: 'nearest', behavior: 'smooth' });
-        return { ok: true, mode: 'ref', x: window.scrollX, y: window.scrollY };
+        mode = 'ref';
+      } else if (selector) {
+        let el = null;
+        try { el = document.querySelector(selector); } catch { return { ok: false, error: '无效的 selector' }; }
+        if (!el) return { ok: false, error: '找不到匹配元素：' + selector };
+        el.scrollIntoView({ block: 'start', inline: 'nearest', behavior: 'smooth' });
+        mode = 'selector';
+      } else if (position === 'top') {
+        window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+        mode = 'top';
+      } else if (position === 'bottom') {
+        const maxH = Math.max(document.documentElement?.scrollHeight || 0, document.body?.scrollHeight || 0);
+        window.scrollTo({ top: maxH, behavior: 'smooth' });
+        mode = 'bottom';
+      } else {
+        window.scrollBy({ left: ${delta[0]}, top: ${delta[1]}, behavior: 'smooth' });
       }
-      window.scrollBy({ left: ${delta[0]}, top: ${delta[1]}, behavior: 'smooth' });
-      return { ok: true, mode: 'window', x: window.scrollX, y: window.scrollY, direction: ${JSON.stringify(direction)} };
+      // Wait for smooth scroll animation to settle so reported scrollY is accurate.
+      let lastY = Math.round(window.scrollY || 0);
+      let stable = 0;
+      const deadline = Date.now() + 600;
+      while (Date.now() < deadline) {
+        await new Promise((resolve) => setTimeout(resolve, 60));
+        const curY = Math.round(window.scrollY || 0);
+        if (Math.abs(curY - lastY) <= 1) {
+          stable += 1;
+          if (stable >= 2) break;
+        } else {
+          stable = 0;
+          lastY = curY;
+        }
+      }
+      return {
+        ok: true,
+        mode,
+        direction: ${JSON.stringify(direction)},
+        x: Math.round(window.scrollX || 0),
+        y: Math.round(window.scrollY || 0),
+        scrollHeight: Math.round(document.documentElement?.scrollHeight || document.body?.scrollHeight || 0),
+        viewportHeight: Math.round(window.innerHeight || 0),
+      };
     })()`);
     if (!result?.ok) throw new Error(result?.error || '滚动失败');
     return { ok: true, tabId: entry.id, url: entry.url, ...result };
@@ -729,11 +988,12 @@ async function waitBrowser(tabId, options = {}) {
     let lastError = '等待超时';
     while (Date.now() - started < timeoutMs) {
       const { entry, result } = await runInTab(id, `(() => {
+        ${FIND_REF_HELPER}
         const ref = ${JSON.stringify(ref)};
         const urlIncludes = ${JSON.stringify(urlIncludes)};
         const textIncludes = ${JSON.stringify(textIncludes)};
         if (ref) {
-          const el = document.querySelector('[data-pi-ref=' + JSON.stringify(ref) + ']');
+          const el = findPiRef(ref);
           if (!el) return { ok: false, error: 'ref 尚未出现' };
         }
         if (urlIncludes && !String(location.href).includes(urlIncludes)) {

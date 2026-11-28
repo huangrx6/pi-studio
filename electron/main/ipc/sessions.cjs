@@ -31,9 +31,10 @@ const {
   taskGraph,
 } = require('../runtime/conversations.cjs');
 const {
+  availableExtensionRow,
+  contributionId,
   executeStudioExtensionCommand,
   extensionDataSource,
-  extensionHostSnapshot,
   extensionUiSnapshot,
 } = require('../services/studio-extensions.cjs');
 const {
@@ -90,8 +91,8 @@ function closeExtensionDataViews(extensionId) {
   return closeExtensionDataViewServices(extensionId);
 }
 
-function closeAllExtensionDataViews() {
-  return closeAllExtensionDataViewServices();
+function closeReloadableExtensionDataViews() {
+  return closeAllExtensionDataViewServices({ reloading: true });
 }
 
 function notifyConversationList() {
@@ -150,7 +151,7 @@ function registerExtensionDataViewIpc(options = {}) {
       ? reconcileRuntimeForWorkspace(cwd)
       : getDurableRuntime()
   ));
-  const readHostSnapshot = options.extensionHostSnapshot || extensionHostSnapshot;
+  const readAvailableExtension = options.availableExtensionRow || availableExtensionRow;
   const readDataSource = options.extensionDataSource || extensionDataSource;
   const readConversationSnapshot = options.conversationSnapshot || conversationSnapshot;
   const createService = options.createExtensionDataViewService
@@ -198,14 +199,8 @@ function registerExtensionDataViewIpc(options = {}) {
 
     cleanWhenDestroyed(event.sender);
     const runtime = await resolveRuntime(cwd);
-    const row = readHostSnapshot().extensions.find((candidate) => {
-      const declared = Array.isArray(candidate.dataSourceIds)
-        ? candidate.dataSourceIds
-        : (candidate.manifest?.contributes?.dataSources || [])
-          .map((source) => `${candidate.id}/${source.id}`);
-      return candidate.available && declared.includes(sourceId);
-    });
-    if (!row) {
+    const row = readAvailableExtension(sourceId.split('/', 1)[0]);
+    if (!row?.manifest?.contributes?.dataSources?.some(source => contributionId(row, row.scope, source.id) === sourceId)) {
       throw new ExtensionDataViewError('DATA_SOURCE_FORBIDDEN', '实时数据源不存在或所属扩展不可用');
     }
     if (!(row.manifest?.permissions || []).includes('ui.data')) {
@@ -366,7 +361,10 @@ function registerConversationIpc() {
     return interruptConversation(id);
   });
   ipcMain.handle('pi:conversation-action', async (_event, input) => {
-    const result = await conversationAction(input || {});
+    const apply = () => conversationAction(input || {});
+    const result = input?.kind === 'workspace' && input.action === 'remove'
+      ? await require('../services/plan-scheduler.cjs').planScheduler().removingWorkspace(input.id, apply)
+      : await apply();
     notifyConversationList();
     return result;
   });
@@ -403,7 +401,7 @@ function registerConversationIpc() {
 }
 
 module.exports = {
-  closeAllExtensionDataViews,
+  closeReloadableExtensionDataViews,
   closeExtensionDataViews,
   interruptConversation,
   registerConversationIpc,

@@ -3,7 +3,6 @@ export function installSidebarVirtualizationFixture({ splitAt = 0 } = {}) {
   const base = window.piApi;
   const listeners = new Set();
   const secondCwd = '/qa/synthetic/performance-b';
-  if (splitAt) localStorage.setItem('pi-studio:expanded-workspaces', JSON.stringify(['/qa/synthetic/performance', secondCwd]));
   const pending = [];
   const qa = window.__sidebarQa = {
     calls: [], holdActions: false,
@@ -17,7 +16,7 @@ export function installSidebarVirtualizationFixture({ splitAt = 0 } = {}) {
       if (!splitAt) return state;
       const sessions = state.workspaces[0].sessions;
       for (const session of sessions.slice(splitAt)) session.cwd = secondCwd;
-      return { ...state, workspaces: [{ ...state.workspaces[0], sessions: sessions.slice(0, splitAt) }, { cwd: secondCwd, name: '第二组合成会话', sessions: sessions.slice(splitAt) }] };
+      return { ...state, expandedProjects: ['/qa/synthetic/performance', secondCwd], workspaces: [{ ...state.workspaces[0], sessions: sessions.slice(0, splitAt) }, { cwd: secondCwd, name: '第二组合成会话', sessions: sessions.slice(splitAt) }] };
     },
     onOpenSession: (listener) => { listeners.add(listener); return () => listeners.delete(listener); },
     conversationAction: async (request) => {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildTurnContent } from '../../web/src/features/conversation/turn-content.ts';
+import { buildTurnContent, groupTranscript } from '../../web/src/features/conversation/turn-content.ts';
 
 function assistant(content) {
   return { role: 'assistant', content, timestamp: 1 };
@@ -28,4 +28,29 @@ test('unchanged live turn returns the same built object', () => {
   const first = buildTurnContent(messages, results, true);
   const second = buildTurnContent(messages, results, true, first);
   assert.equal(second, first);
+});
+
+test('old and streaming transcripts pair out-of-order results, keep visible images and deduplicate sources across prose boundaries', () => {
+  const text = value => ({ type: 'text', text: value });
+  const call = (id, name, args) => ({ type: 'toolCall', id, name, arguments: args });
+  const toolResult = (id, value) => ({ role: 'toolResult', toolCallId: id, content: [text(value)] });
+  const fetch = (id, url) => call(id, 'web_fetch', { url });
+  const incoming = [
+    { role: 'user', content: [text('question')] },
+    { role: 'assistant', content: [text('intro'), { type: 'thinking', thinking: 'read' }, fetch('a', 'https://example.org/a'), fetch('b', 'https://example.org/b')] },
+    toolResult('b', 'page b'),
+    toolResult('a', 'page a'),
+    { role: 'assistant', content: [text('progress'), call('img', 'generate_image', {}), call('pending', 'subagent', { name: 'worker' })] },
+    { role: 'toolResult', toolCallId: 'img', content: [{ type: 'image', mimeType: 'image/png', data: 'AAA' }] },
+    { role: 'assistant', content: [text('final answer')] },
+  ];
+  const { turns, results } = groupTranscript(incoming);
+  assert.equal(turns.length, 2);
+  const model = buildTurnContent(turns[1].messages, results, true);
+  assert.deepEqual(model.segments.map(x => x.kind), ['text', 'activity', 'text', 'activity', 'tool-images', 'activity', 'text']);
+  assert.equal(model.segments[1].entries.length, 3);
+  assert.equal(model.segments[4].images[0].src, 'data:image/png;base64,AAA');
+  assert.equal(model.segments[5].entries[0].live, true);
+  assert.equal(model.answerText, 'final answer');
+  assert.deepEqual(model.sources.map(s => s.href), ['https://example.org/a']);
 });

@@ -1,5 +1,6 @@
-import { memo, useEffect, type ComponentProps } from 'react';
+import { memo, useEffect, type ReactNode, type ComponentProps } from 'react';
 import { ComposerDock } from '../features/conversation/ComposerDock';
+import { DesktopControlPreview } from '../features/conversation/DesktopControlPreview';
 import { useConversationSearch } from '../features/conversation/useConversationSearch';
 import { ConversationSearchBar } from './ConversationSearchBar';
 import { ConversationTranscriptPane } from './ConversationTranscriptPane';
@@ -8,6 +9,7 @@ import type { OutlineItem } from '../features/conversation/outline-model';
 import type { Preferences } from '../shared/preferences';
 import type { TurnDiff, TurnDiffFile } from '../types/chat-types';
 import { ConversationHeader } from './ConversationHeader';
+import { SurfaceActiveContext } from '../shared/surface-visibility';
 
 type SessionView = {
   id: string;
@@ -44,7 +46,7 @@ type ConversationShell = {
 };
 
 type HeaderState = Omit<ComponentProps<typeof ConversationHeader>,
-  'sidebarCollapsed' | 'onExpandSidebar' | 'isNewConversation' | 'title' | 'sessionId' | 'showTrace'>;
+  'sidebarCollapsed' | 'onExpandSidebar' | 'isNewConversation' | 'title'>;
 
 type OutlineState = {
   items: OutlineItem[];
@@ -54,7 +56,7 @@ type OutlineState = {
 };
 
 type ConversationActions = {
-  openAttachment: (path: string) => void;
+  openAttachment: (path: string, title?: string) => void;
   openFile: (path: string) => void;
   undoTurnDiff: (at: number) => Promise<void>;
   openChanges: (file: TurnDiffFile | undefined, turn: TurnDiff) => void;
@@ -74,6 +76,7 @@ export type ConversationWorkspaceProps = {
   };
   outline: OutlineState;
   composer: ComponentProps<typeof ComposerDock>;
+  inspector?: ReactNode;
 };
 
 function ConversationWorkspaceComponent({
@@ -83,6 +86,7 @@ function ConversationWorkspaceComponent({
   transcript,
   outline,
   composer,
+  inspector,
 }: ConversationWorkspaceProps) {
   const {
     isNewConversation,
@@ -118,7 +122,6 @@ function ConversationWorkspaceComponent({
     if (!searchEnabled && searchOpen) search.close();
   }, [search.close, searchEnabled, searchOpen]);
 
-  // ⌘F / Ctrl+F 打开对话搜索；焦点在终端里时让终端自己处理。
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if (!searchEnabled) return;
@@ -127,8 +130,7 @@ function ConversationWorkspaceComponent({
       if (!primary || event.altKey || event.shiftKey) return;
       if (event.key.toLowerCase() !== 'f') return;
       const target = event.target as HTMLElement | null;
-      if (target?.closest?.('.terminal-host')) return;
-      if (target?.closest?.('.file-panel')) return;
+      if (target?.closest?.('.file-panel, .inspection-card')) return;
       event.preventDefault();
       if (searchOpen) { search.close(); return; }
       search.open();
@@ -146,17 +148,18 @@ function ConversationWorkspaceComponent({
 
   return (
     <>
-      <ConversationHeader
-        {...header}
-        sidebarCollapsed={sidebarCollapsed}
-        onExpandSidebar={() => setSidebarCollapsed(false)}
-        isNewConversation={isNewConversation}
-        title={session?.title || 'Pi Studio'}
-        sessionId={session?.id}
-        showTrace={preferences.showCodeView}
-      />
+      <SurfaceActiveContext.Provider value={!settingsOpen}>
+        <ConversationHeader
+          {...header}
+          sidebarCollapsed={sidebarCollapsed}
+          onExpandSidebar={() => setSidebarCollapsed(false)}
+          isNewConversation={isNewConversation}
+          title={session?.title || 'Pi Studio'}
+        />
+      </SurfaceActiveContext.Provider>
       <main className={`main shell-canvas ${isNewConversation ? 'is-new-conversation' : ''}`} aria-busy={sessionLoading}>
         <div className={`chat-loading-line ${sessionLoading ? 'is-visible' : ''}`} />
+        <DesktopControlPreview sessionId={session?.id} turnActive={turnActive} visible={visible} />
       {searchEnabled && searchOpen && <ConversationSearchBar
         state={search.state}
         onQueryChange={search.setQuery}
@@ -164,6 +167,7 @@ function ConversationWorkspaceComponent({
         onClose={search.close}
       />}
       {!isNewConversation && <ConversationTranscriptPane
+        inspector={inspector}
         sessionId={session?.id}
         sessionCwd={session?.cwd}
         messageCount={messageCount}

@@ -1,3 +1,4 @@
+import type { ReadingPosition } from '../../shell/session-layout';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, RequestTrace, TodoDetails } from '../../types/chat-types';
 import type { OutlineItem } from './outline-model';
@@ -17,6 +18,9 @@ type Setter<T> = React.Dispatch<React.SetStateAction<T>>;
 
 type TranscriptNavigationDependencies = {
   sessionId?: string;
+  savedReading?: ReadingPosition;
+  layoutReady?: boolean;
+  onReading?: (value: ReadingPosition | undefined) => void;
   goalUpdatedAt?: number;
   messages: ChatMessage[];
   requestTraces: RequestTrace[];
@@ -27,7 +31,6 @@ type TranscriptNavigationDependencies = {
   filesOpen: boolean;
   hasNewer?: boolean;
   outlineItems: OutlineItem[];
-  outlineActive: number;
   setOutlineActive: Setter<number>;
   showComposerFeedback: (message: string, tone?: 'info' | 'warning') => void;
   /** 向上补一页更早的历史；返回 false 表示没有更多。 */
@@ -39,7 +42,7 @@ type TranscriptNavigationDependencies = {
 };
 
 export function useTranscriptNavigation({
-  sessionId,
+  sessionId, savedReading, layoutReady, onReading,
   goalUpdatedAt,
   messages,
   requestTraces,
@@ -50,7 +53,6 @@ export function useTranscriptNavigation({
   filesOpen,
   hasNewer = false,
   outlineItems,
-  outlineActive,
   setOutlineActive,
   showComposerFeedback,
   onLoadOlder,
@@ -112,6 +114,44 @@ export function useTranscriptNavigation({
     }
   }, [sessionId]);
 
+  const restored = useRef('');
+  const lastReading = useRef<{save: NonNullable<typeof onReading>; value: ReadingPosition | undefined}>();
+  const readingTimer = useRef<ReturnType<typeof setTimeout>>();
+  function flushReading() {
+    clearTimeout(readingTimer.current);
+    lastReading.current?.save(lastReading.current.value);
+    lastReading.current = undefined;
+  }
+  useLayoutEffect(() => {
+    restored.current = '';
+    window.addEventListener('pagehide', flushReading);
+    return () => {
+      window.removeEventListener('pagehide', flushReading);
+      flushReading();
+    };
+  }, [sessionId, visible]);
+  useEffect(() => {
+    if (!visible || !layoutReady || !sessionId || !messages.length || restored.current === sessionId) return;
+    restored.current = sessionId;
+    if (!savedReading) return;
+    const {entry, offset} = savedReading;
+    const root = scrollRef.current;
+    let cancelled = false;
+    async function position() {
+      pauseTranscriptFollow();
+      if (!root) return;
+      const locate = () => root.querySelector<HTMLElement>('#chat-turn-' + entry + ',#chat-assistant-turn-' + entry);
+      if (!locate() && !await jumpToMessage(entry)) return;
+      if (cancelled || scrollRef.current !== root) return;
+      const node = locate();
+      if (node) {
+        root.scrollTop += node.getBoundingClientRect().top - root.getBoundingClientRect().top - offset;
+        rebindPageAnchorFromViewport();
+      }
+    }
+    void position();
+    return () => { cancelled = true; };
+  },[visible,layoutReady,sessionId,Boolean(messages.length)]);
   function markUserScrollIntent(deltaY?: number) {
     userScrollIntentRef.current = true;
     pageIntentRef.current = deltaY === undefined ? 'unknown' : deltaY < 0 ? 'older' : 'newer';
@@ -431,6 +471,14 @@ export function useTranscriptNavigation({
     // decode holds that reading place instead of an obsolete pre-scroll node.
     if (!followBottomRef.current && userScrollIntentRef.current) {
       rebindPageAnchorFromViewport();
+    }
+    if (visible && layoutReady && onReading && userScrollIntentRef.current) {
+      const anchor = pageAnchorRef.current?.anchors[0];
+      const entry = Number(anchor?.id.split('-').at(-1));
+      const value = !nextFollow && anchor && Number.isSafeInteger(entry) ? {entry,offset:anchor.offset} : undefined;
+      lastReading.current = {save:onReading, value};
+      clearTimeout(readingTimer.current);
+      readingTimer.current = setTimeout(flushReading,160);
     }
     scheduleOutlineSync();
   }

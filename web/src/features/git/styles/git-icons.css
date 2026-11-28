@@ -1,0 +1,29 @@
+.lucide-primary-worktree {
+  fill: var(--accent);
+  stroke: none;
+}
+
+.worktree-ref-label { display: inline-flex; align-items: center; min-width: 0; }
+/* An inline SVG's baseline is its bottom edge. Align its center to the font's x-height. */
+.worktree-ref-label:has(> .lucide-primary-worktree) { align-items: baseline; }
+.worktree-ref-label > .lucide-primary-worktree {
+  translate: 0 calc(50% - .5ex);
+}
+
+.worktree-dot-halo {
+  opacity: .14;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@media (prefers-reduced-motion: no-preference) and (forced-colors: none) {
+  .worktree-dot-halo { animation: worktree-breathe 1.8s ease-in-out infinite alternate; }
+  @keyframes worktree-breathe {
+    from { opacity: .08; transform: scale(.68); }
+    to { opacity: .22; transform: scale(1); }
+  }
+}
+
+@media (forced-colors: active) {
+  .lucide-primary-worktree { fill: currentColor; }
+}

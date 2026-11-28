@@ -26,7 +26,9 @@ const render = overrides => renderToStaticMarkup(React.createElement(NewConversa
 
 test('idle welcome shows only the time-of-day greeting', () => {
   const html = render({ now: new Date(2026, 10, 25, 23, 15, 0) });
-  assert.match(html, /<section[^>]*><h1>夜深了，记得早点休息<\/h1><\/section>/);
+  assert.match(html, /<h1>夜深了，记得早点休息<\/h1>/);
+  assert.equal(html.replace(/<[^>]+>/g, ''), '夜深了，记得早点休息');
+  assert.match(html, /class="welcome-art" aria-hidden="true"/);
   assert.doesNotMatch(html, /new-conversation-lede|new-conversation-suggestion|任务示例/);
   assert.doesNotMatch(html, /选择工作区|配置模型|new-conversation-setup/);
 });

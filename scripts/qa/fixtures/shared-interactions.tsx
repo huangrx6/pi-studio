@@ -8,11 +8,13 @@ import { Stepper } from '../../../web/src/shared/Stepper';
 import { SettingsDialog } from '../../../web/src/shared/SettingsDialog';
 import { WorkspacePicker } from '../../../web/src/shell/WorkspacePicker';
 import { useActionConfirmation, ToolConfirmDialog } from '../../../web/src/shared/ConfirmDialog';
+import { trackDismissFocus } from '../../../web/src/shared/keyboard-navigation';
 import '../../../web/src/styles/tokens.css';
 import '../../../web/src/styles/palette.css';
 import '../../../web/src/styles/app.css';
 
 function Fixture() {
+  React.useEffect(trackDismissFocus, []);
   const confirmation = useActionConfirmation();
   const [toolConfirm, setToolConfirm] = useState(false);
   const [outer, setOuter] = useState(false);

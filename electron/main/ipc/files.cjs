@@ -7,7 +7,7 @@ const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const fs = require('node:fs');
 const path = require('node:path');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
-const { getWindow } = require('../core/state.cjs');
+const { getWindow, DEFAULT_CWD } = require('../core/state.cjs');
 const {
   workspaceFile,
   searchWorkspaceFiles,
@@ -15,6 +15,7 @@ const {
   readFileText,
   writeFileText,
 } = require('../services/workspace.cjs');
+const { searchFileContents } = require('../services/workspace-text-search.cjs');
 const { readFilePreview, readFilePreviewAt } = require('../services/file-preview.cjs');
 const { resolveUserTarget } = require('../services/file-target.cjs');
 const { normalizeExternalHttpUrl } = require('../core/external-url.cjs');
@@ -39,6 +40,16 @@ function resolveFileRequest({ cwd, path: requested, source = 'workspace', sessio
 }
 
 function registerFilesIpc() {
+  ipcMain.handle('pi:workspace-code', (event, request) => {
+    assertMainWindow(event);
+    const { cwd, drafts } = request ?? {};
+    if (event.senderFrame !== event.sender.mainFrame || typeof cwd !== 'string' || !path.isAbsolute(cwd) ||
+        (cwd !== DEFAULT_CWD && !getStudioDatabase().getWorkspace(cwd))) throw new Error('请选择已打开的工作区');
+    if (!Array.isArray(drafts) || drafts.some(draft => typeof draft?.path !== 'string' || typeof draft.text !== 'string')) {
+      throw new Error('无效的编辑器草稿');
+    }
+    return require('../services/workspace-language-worker.cjs').query(request);
+  });
   ipcMain.handle('pi:turn-diff-file', (event, payload) => {
     assertMainWindow(event);
     return require('../services/turn-diff.cjs').readTurnDiffFile(payload);
@@ -172,7 +183,28 @@ function registerFilesIpc() {
     return { ok: true };
   });
 
-  // `@` 文件搜索
+  let activeSearch;
+  ipcMain.handle('pi:search-file-contents', async (event, { cwd, query, options, requestId }) => {
+    assertMainWindow(event);
+    activeSearch?.controller.abort();
+    const controller = new AbortController();
+    activeSearch = { requestId, controller };
+    const abort = () => controller.abort();
+    event.sender.once('destroyed', abort);
+    try {
+      return await searchFileContents(cwd, query, options, controller.signal);
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
+      return { files: [], count: 0, truncated: false };
+    } finally {
+      event.sender.removeListener('destroyed', abort);
+      if (activeSearch?.controller === controller) activeSearch = undefined;
+    }
+  });
+  ipcMain.on('pi:cancel-file-content-search', (event, requestId) => {
+    assertMainWindow(event);
+    if (activeSearch?.requestId === requestId) activeSearch.controller.abort();
+  });
   ipcMain.handle('pi:search-files', async (event, { cwd, query } = {}) => {
     assertMainWindow(event);
     return searchWorkspaceFiles(cwd, query);

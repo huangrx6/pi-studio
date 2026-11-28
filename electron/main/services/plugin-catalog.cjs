@@ -236,6 +236,63 @@ function normalizeProvides(raw) {
   };
 }
 
+function enrichLocalPackageProvides(baseProvides, packageDir) {
+  if (!packageDir || !fs.existsSync(packageDir)) return baseProvides;
+  try {
+    const manifestPath = path.join(packageDir, 'pi-studio.plugin.json');
+    if (!fs.existsSync(manifestPath)) return baseProvides;
+    const raw = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+    const provides = raw?.provides && typeof raw.provides === 'object' ? raw.provides : {};
+    const { readSkillMeta, readExtensionSummaryFromDisk } = require('./plugin-distribution.cjs');
+
+    const skillDetails = Array.isArray(provides.skills)
+      ? provides.skills
+        .filter((item) => item && typeof item.path === 'string')
+        .map((item) => {
+          const meta = readSkillMeta(path.join(packageDir, item.path));
+          return { path: item.path, name: meta.name, description: meta.description };
+        })
+      : [];
+
+    const extensionPath = typeof provides.extension?.path === 'string'
+      ? provides.extension.path
+      : provides.extension ? 'extension' : '';
+    const extensionDetails = extensionPath
+      ? readExtensionSummaryFromDisk(packageDir, extensionPath)
+      : null;
+
+    const mcpDetails = Array.isArray(provides.mcp)
+      ? provides.mcp
+        .filter((item) => item?.name)
+        .map((item) => ({
+          name: String(item.name),
+          description: typeof item.description === 'string' ? item.description.trim() : '',
+        }))
+      : [];
+
+    const cliDetails = Array.isArray(provides.cli)
+      ? provides.cli
+        .filter((item) => item?.id || item?.name)
+        .map((item) => ({
+          id: String(item.id || item.name),
+          name: String(item.name || item.id),
+          description: typeof item.description === 'string' ? item.description.trim() : '',
+          commands: Array.isArray(item.commands) ? item.commands : undefined,
+        }))
+      : [];
+
+    return {
+      ...baseProvides,
+      ...(mcpDetails.length ? { mcpDetails } : {}),
+      ...(skillDetails.length ? { skillDetails } : {}),
+      ...(cliDetails.length ? { cliDetails } : {}),
+      ...(extensionDetails ? { extensionDetails } : {}),
+    };
+  } catch {
+    return baseProvides;
+  }
+}
+
 function pickLatestVersion(versions) {
   if (!Array.isArray(versions) || versions.length === 0) return null;
   return versions[versions.length - 1];
@@ -341,7 +398,7 @@ function parseRegistry(data, registryLocation, source) {
         keywords: Array.isArray(entry.keywords)
           ? entry.keywords.map((item) => String(item).trim()).filter(Boolean).slice(0, 32)
           : [],
-        provides: normalizeProvides(entry.provides),
+        provides: enrichLocalPackageProvides(normalizeProvides(entry.provides), baseDir && latest?.resolvedPackagePath ? latest.resolvedPackagePath : ''),
         versions,
         latestVersion: latest?.version || '',
         sourceId: source.id,
@@ -429,7 +486,7 @@ async function loadRegistryForSource(source) {
           homepage: String(manifest.homepage || ''),
           repository: '',
           keywords: [],
-          provides: normalizeProvides(provides),
+          provides: enrichLocalPackageProvides(normalizeProvides(provides), dir),
           versions: [{
             version: String(manifest.version || '0.0.0'),
             packagePath: entry.name,

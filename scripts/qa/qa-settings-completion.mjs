@@ -40,7 +40,7 @@ async function closeDefaults() {
 async function openSettings(route) {
   if (route === '子智能体' && await sub().isVisible()) return;
   await closeDefaults();
-  if (!await nav().count()) await page.locator('.sidebar-bottom button[title="设置"]').click();
+  if (!await nav().count()) await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await nav().getByRole('button', { name: route, exact: true }).click();
   if (route === '子智能体') await content().getByRole('button', { name: '共用运行默认值', exact: true }).click();
 }

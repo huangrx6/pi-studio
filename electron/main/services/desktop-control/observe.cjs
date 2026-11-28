@@ -7,6 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { promisify } = require('node:util');
+const { bindSnapshotNodes, JXA_AX_IDENTITY } = require('./ax-targets.cjs');
 
 const execFileAsync = promisify(execFile);
 
@@ -17,11 +18,146 @@ const DEFAULT_MAX_CHARS = 12000;
 const DEFAULT_MAX_SCREENSHOT_BYTES = 900 * 1024;
 const DEFAULT_MAX_SCREENSHOT_EDGE = 1600;
 
-function escapeAppleScriptString(value) {
-  return String(value || '')
-    .replace(/\\/g, '\\\\')
-    .replace(/"/g, '\\"');
+function readPngDimensions(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 24) return null;
+  if (buffer[0] !== 0x89 || buffer[1] !== 0x50 || buffer[2] !== 0x4e || buffer[3] !== 0x47) return null;
+  const width = buffer.readUInt32BE(16);
+  const height = buffer.readUInt32BE(20);
+  if (!(width > 0) || !(height > 0)) return null;
+  return { width, height };
 }
+
+/**
+ * Shared JXA helpers for macOS desktop observation/actions:
+ * - Resolves running apps by bundleId, path, localizedName, or executable name
+ *   so either the localized or executable name can identify an application.
+ * - Enumerates real CGWindow IDs & bounds via CoreGraphics across ALL displays
+ *   (primary + secondary monitors), instead of relying on System Events'
+ *   unreliable AXWindowNumber attribute.
+ * - Matches a CGWindow ID to an AX window by ID, or by uniquely corresponding frames.
+ */
+const JXA_DESKTOP_HELPERS = `
+function findRunningApp(name, bundleId, appPath) {
+  var ws = $.NSWorkspace.sharedWorkspace;
+  var apps = ObjC.unwrap(ws.runningApplications) || [];
+  var wantBundle = String(bundleId || '').trim().toLowerCase();
+  var wantPath = String(appPath || '').trim().toLowerCase();
+  var wantName = String(name || '').trim().toLowerCase();
+  var byName = null;
+  for (var i = 0; i < apps.length; i++) {
+    var app = apps[i];
+    try {
+      var b = String(ObjC.unwrap(app.bundleIdentifier) || '').trim();
+      var n = String(ObjC.unwrap(app.localizedName) || '').trim();
+      var p = '';
+      var execName = '';
+      try { var u = app.bundleURL; if (u) p = String(ObjC.unwrap(u.path) || '').trim(); } catch (e) {}
+      try { var eu = app.executableURL; if (eu) execName = String(ObjC.unwrap(eu.lastPathComponent) || '').trim(); } catch (e) {}
+      var pid = Number(app.processIdentifier) || 0;
+      if (!pid) continue;
+      if (wantBundle && b.toLowerCase() !== wantBundle) continue;
+      if (wantPath && p.toLowerCase() !== wantPath) continue;
+      if (wantBundle || wantPath) {
+        return { pid: pid, name: n || execName, bundleId: b, path: p, execName: execName, nsApp: app };
+      }
+      if (!byName && wantName && (n.toLowerCase() === wantName || execName.toLowerCase() === wantName)) {
+        byName = { pid: pid, name: n || execName, bundleId: b, path: p, execName: execName, nsApp: app };
+      }
+    } catch (e) {}
+  }
+  return byName;
+}
+
+function listCgWindowsForPid(pid) {
+  if (!pid) return [];
+  var raw = $.CGWindowListCopyWindowInfo($.kCGWindowListOptionAll | $.kCGWindowListExcludeDesktopElements, 0);
+  var wins = ObjC.deepUnwrap(ObjC.castRefToObject(raw)) || [];
+  var out = [];
+  for (var i = 0; i < wins.length; i++) {
+    var w = wins[i];
+    if (!w || Number(w.kCGWindowOwnerPID) !== Number(pid)) continue;
+    if (Number(w.kCGWindowLayer) !== 0) continue;
+    var b = w.kCGWindowBounds || {};
+    var width = Number(b.Width) || 0;
+    var height = Number(b.Height) || 0;
+    // Skip tiny status/helper bars (e.g. 1920x30 or 1x1 invisible overlays).
+    if (width < 80 || height < 60) continue;
+    var winId = Number(w.kCGWindowNumber);
+    if (!winId || isNaN(winId)) continue;
+    out.push({
+      windowId: winId,
+      title: String(w.kCGWindowName || ''),
+      x: Number(b.X) || 0,
+      y: Number(b.Y) || 0,
+      width: width,
+      height: height,
+      onscreen: Boolean(w.kCGWindowIsOnscreen) && (w.kCGWindowAlpha == null || Number(w.kCGWindowAlpha) > 0.01),
+      captureProtected: w.kCGWindowSharingState != null && Number(w.kCGWindowSharingState) === 0,
+    });
+  }
+  out.sort(function (a, b) {
+    if (a.onscreen !== b.onscreen) return a.onscreen ? -1 : 1;
+    return (b.width * b.height) - (a.width * a.height);
+  });
+  return out;
+}
+
+function findSeProcess(se, name, bundleId, pid) {
+  var list = [];
+  if (pid) {
+    try { list = se.processes.whose({ unixId: Number(pid) })(); } catch (e) { list = []; }
+    return list && list.length === 1 ? list[0] : null;
+  }
+  if (bundleId) {
+    try { list = se.processes.whose({ bundleIdentifier: String(bundleId) })(); } catch (e) { list = []; }
+    if (list && list.length) return list[0];
+  }
+  if (name) {
+    try { list = se.processes.whose({ displayedName: String(name) })(); } catch (e) { list = []; }
+    if (list && list.length) return list[0];
+    try { list = se.processes.whose({ name: String(name) })(); } catch (e) { list = []; }
+    if (list && list.length) return list[0];
+  }
+  return null;
+}
+
+function describeAxWindows(proc) {
+  var windows = [];
+  try { windows = proc.windows(); } catch (e) { windows = []; }
+  return windows.map(function (win) {
+    var row = { window: win, windowId: 0, title: '' };
+    try { row.windowId = Number(win.attributes.byName('AXWindowNumber').value()) || 0; } catch (e) {}
+    try { row.title = String(win.name() || ''); } catch (e) {}
+    try {
+      var p = win.position(), s = win.size();
+      row.x = Number(p[0]); row.y = Number(p[1]);
+      row.width = Number(s[0]); row.height = Number(s[1]);
+    } catch (e) {}
+    return row;
+  });
+}
+
+function correspondingFrames(ax, cg) {
+  if (ax.title && cg.title && ax.title !== cg.title) return false;
+  return ['x', 'y', 'width', 'height'].every(function (k) { return Math.abs(ax[k] - cg[k]) <= 2; });
+}
+
+function matchAxWindow(axWindows, cgWindow, cgWindows) {
+  var exact = axWindows.filter(function (ax) { return ax.windowId === cgWindow.windowId; });
+  if (exact.length) return exact.length === 1 ? exact[0] : null;
+  if (!cgWindows) return null;
+  var possible = axWindows.filter(function (ax) { return !ax.windowId && correspondingFrames(ax, cgWindow); });
+  if (possible.length !== 1) return null;
+  var ax = possible[0];
+  return cgWindows.filter(function (cg) { return correspondingFrames(ax, cg); }).length === 1 ? ax : null;
+}
+
+function findSeWindowForWindowId(proc, cgWindow, wantWindowId, cgWindows) {
+  if (!proc || !cgWindow || cgWindow.windowId !== Number(wantWindowId)) return null;
+  var match = matchAxWindow(describeAxWindows(proc), cgWindow, cgWindows);
+  return match ? match.window : null;
+}
+`.trim();
 
 function defaultRunner(command, args, options = {}) {
   return execFileAsync(command, args, {
@@ -133,7 +269,9 @@ async function listDesktopWindowsForApp(appTarget, deps = {}) {
   }
 
   const processName = String(appTarget?.name || '').trim();
-  if (!processName) {
+  const bundleId = String(appTarget?.bundleId || '').trim();
+  const appPath = String(appTarget?.path || '').trim();
+  if (!processName && !bundleId) {
     const error = new Error('缺少应用名称，无法列出窗口。');
     error.code = 'desktop_invalid_app';
     throw error;
@@ -141,46 +279,62 @@ async function listDesktopWindowsForApp(appTarget, deps = {}) {
 
   const script = `
 ObjC.import('AppKit');
+ObjC.import('CoreGraphics');
+${JXA_DESKTOP_HELPERS}
 function run(argv) {
-  var target = String(argv[0] || '');
-  var se = Application('System Events');
-  se.includeStandardAdditions = true;
-  var processes = se.processes.whose({ name: target })();
-  if (!processes || processes.length === 0) return JSON.stringify([]);
-  var proc = processes[0];
-  var windows = [];
-  try { windows = proc.windows(); } catch (e) { return JSON.stringify([]); }
+  var targetName = String(argv[0] || '');
+  var targetBundle = String(argv[1] || '');
+  var targetPath = String(argv[2] || '');
+  var app = findRunningApp(targetName, targetBundle, targetPath);
+  if (!app) return JSON.stringify([]);
+  var cgWins = listCgWindowsForPid(app.pid);
+  if (!cgWins.length) return JSON.stringify([]);
+
+  var axWindows = [], mainIds = [];
+  try {
+    var se = Application('System Events');
+    var proc = findSeProcess(se, app.name || targetName, app.bundleId || targetBundle, app.pid);
+    if (proc) {
+      axWindows = describeAxWindows(proc);
+      try {
+        var mainWindow = proc.attributes.byName('AXMainWindow').value();
+        var mainId = Number(mainWindow.attributes.byName('AXWindowNumber').value());
+        if (mainId > 0) mainIds.push(mainId);
+      } catch (e) {}
+    }
+  } catch (e) {}
+
   var rows = [];
-  for (var i = 0; i < windows.length; i++) {
-    var win = windows[i];
-    var title = '';
-    var windowId = null;
-    var minimized = false;
-    var visible = true;
-    try { title = String(win.name()); } catch (e) { title = ''; }
-    try { windowId = win.attributes.byName('AXWindowNumber').value(); } catch (e) { windowId = null; }
-    try { minimized = Boolean(win.attribute('AXMinimized').value()); } catch (e1) {
-      try { minimized = Boolean(win.miniaturized()); } catch (e2) { minimized = false; }
+  for (var i = 0; i < cgWins.length; i++) {
+    var cw = cgWins[i];
+    var title = cw.title || '';
+    var minimized = cw.onscreen ? false : null;
+    var match = matchAxWindow(axWindows, cw, cgWins);
+    if (match) {
+      if (!title) title = match.title;
+      try {
+        if (match.window.attributes.byName('AXMain').value() === true) mainIds.push(cw.windowId);
+      } catch (e) {}
+      try {
+        var state = match.window.attributes.byName('AXMinimized').value();
+        if (typeof state === 'boolean') minimized = state;
+      } catch (e) {}
     }
-    try {
-      var pos = win.position();
-      var size = win.size();
-      var w = Number(size[0] || 0);
-      var h = Number(size[1] || 0);
-      visible = !minimized && w > 1 && h > 1;
-    } catch (e) {
-      visible = !minimized;
-    }
-    if (windowId == null) continue;
     rows.push({
-      id: String(windowId),
-      windowId: Number(windowId),
+      id: String(cw.windowId),
+      windowId: cw.windowId,
       title: title,
       index: i + 1,
-      appName: target,
+      appName: targetName || app.name,
       minimized: minimized,
-      visible: visible
+      visible: cw.onscreen && !minimized,
+      captureProtected: Boolean(cw.captureProtected),
+      bounds: { x: cw.x, y: cw.y, width: cw.width, height: cw.height }
     });
+  }
+  if (mainIds.length && mainIds.every(function (id) { return id === mainIds[0]; })) {
+    var mainRows = rows.filter(function (row) { return row.windowId === mainIds[0]; });
+    if (mainRows.length === 1) mainRows[0].main = true;
   }
   return JSON.stringify(rows);
 }
@@ -189,7 +343,7 @@ function run(argv) {
   try {
     const { stdout } = await runner(
       '/usr/bin/osascript',
-      ['-l', 'JavaScript', '-e', script, processName],
+      ['-l', 'JavaScript', '-e', script, processName, bundleId, appPath],
       { timeout: 10000 },
     );
     const rows = parseJsonLines(stdout);
@@ -203,8 +357,11 @@ function run(argv) {
         appName: String(row.appName || processName),
         bundleId: String(appTarget.bundleId || ''),
         path: String(appTarget.path || ''),
-        minimized: Boolean(row.minimized),
+        minimized: row.minimized == null ? null : Boolean(row.minimized),
+        ...(row.main === true ? { main: true } : {}),
         visible: row.visible == null ? true : Boolean(row.visible),
+        captureProtected: Boolean(row.captureProtected),
+        ...(row.bounds ? { bounds: row.bounds } : {}),
       }));
   } catch (cause) {
     const error = new Error(`无法列出「${processName}」的窗口：${cause && cause.message ? cause.message : cause}`);
@@ -215,12 +372,12 @@ function run(argv) {
 }
 
 /**
- * List windows for many apps in one System Events pass when possible.
+ * List windows for many apps in one CoreGraphics pass when possible.
  * Falls back to per-app listing when a custom listWindows injector is provided.
  */
 async function listDesktopWindowsForApps(appTargets = [], deps = {}) {
   const targets = (Array.isArray(appTargets) ? appTargets : [])
-    .filter((app) => app && String(app.name || '').trim());
+    .filter((app) => app && (String(app.name || '').trim() || String(app.bundleId || '').trim()));
   if (!targets.length) return [];
 
   if ((deps.platform || process.platform) !== 'darwin') {
@@ -244,51 +401,38 @@ async function listDesktopWindowsForApps(appTargets = [], deps = {}) {
   }
 
   const runner = deps.runner || defaultRunner;
-  const names = targets.map((app) => String(app.name || '').trim());
+  const descriptors = targets.map((app) => ({
+    name: String(app.name || '').trim(),
+    bundleId: String(app.bundleId || '').trim(),
+    path: String(app.path || '').trim(),
+  }));
   const script = `
+ObjC.import('AppKit');
+ObjC.import('CoreGraphics');
+${JXA_DESKTOP_HELPERS}
 function run(argv) {
-  var names = [];
-  try { names = JSON.parse(String(argv[0] || '[]')); } catch (e) { names = []; }
-  var se = Application('System Events');
+  var list = [];
+  try { list = JSON.parse(String(argv[0] || '[]')); } catch (e) { list = []; }
   var all = [];
-  for (var n = 0; n < names.length; n++) {
-    var target = String(names[n] || '');
-    if (!target) continue;
-    var processes = [];
-    try { processes = se.processes.whose({ name: target })(); } catch (e) { processes = []; }
-    if (!processes || !processes.length) continue;
-    var proc = processes[0];
-    var windows = [];
-    try { windows = proc.windows(); } catch (e) { windows = []; }
-    for (var i = 0; i < windows.length; i++) {
-      var win = windows[i];
-      var title = '';
-      var windowId = null;
-      var minimized = false;
-      var visible = true;
-      try { title = String(win.name()); } catch (e) { title = ''; }
-      try { windowId = win.attributes.byName('AXWindowNumber').value(); } catch (e) { windowId = null; }
-      try { minimized = Boolean(win.attribute('AXMinimized').value()); } catch (e1) {
-        try { minimized = Boolean(win.miniaturized()); } catch (e2) { minimized = false; }
-      }
-      try {
-        var pos = win.position();
-        var size = win.size();
-        var w = Number(size[0] || 0);
-        var h = Number(size[1] || 0);
-        visible = !minimized && w > 1 && h > 1;
-      } catch (e) {
-        visible = !minimized;
-      }
-      if (windowId == null) continue;
+  for (var n = 0; n < list.length; n++) {
+    var spec = list[n] || {};
+    var app = findRunningApp(spec.name, spec.bundleId, spec.path);
+    if (!app) continue;
+    var cgWins = listCgWindowsForPid(app.pid);
+    for (var i = 0; i < cgWins.length; i++) {
+      var cw = cgWins[i];
       all.push({
-        id: String(windowId),
-        windowId: Number(windowId),
-        title: title,
+        id: String(cw.windowId),
+        windowId: cw.windowId,
+        title: cw.title || '',
         index: i + 1,
-        appName: target,
-        minimized: minimized,
-        visible: visible
+        appName: spec.name || app.name,
+        bundleId: spec.bundleId || app.bundleId || '',
+        path: spec.path || app.path || '',
+        minimized: cw.onscreen ? false : null,
+        visible: Boolean(cw.onscreen),
+        captureProtected: Boolean(cw.captureProtected),
+        bounds: { x: cw.x, y: cw.y, width: cw.width, height: cw.height }
       });
     }
   }
@@ -299,25 +443,27 @@ function run(argv) {
   try {
     const { stdout } = await runner(
       '/usr/bin/osascript',
-      ['-l', 'JavaScript', '-e', script, JSON.stringify(names)],
+      ['-l', 'JavaScript', '-e', script, JSON.stringify(descriptors)],
       { timeout: 15000 },
     );
     const rows = parseJsonLines(stdout);
-    const byName = new Map(targets.map((app) => [String(app.name || '').trim(), app]));
+    const byKey = new Map(targets.map((app) => [String(app.bundleId || app.name || '').trim(), app]));
     return rows
       .filter((row) => row && row.windowId != null)
       .map((row, index) => {
-        const app = byName.get(String(row.appName || '').trim()) || {};
+        const app = byKey.get(String(row.bundleId || row.appName || '').trim()) || {};
         return {
           id: String(row.id || row.windowId),
           windowId: Number(row.windowId),
           title: String(row.title || ''),
           index: Number(row.index || index + 1),
           appName: String(row.appName || app.name || ''),
-          bundleId: String(app.bundleId || ''),
-          path: String(app.path || ''),
-          minimized: Boolean(row.minimized),
+          bundleId: String(row.bundleId || app.bundleId || ''),
+          path: String(row.path || app.path || ''),
+          minimized: row.minimized == null ? null : Boolean(row.minimized),
           visible: row.visible == null ? true : Boolean(row.visible),
+          captureProtected: Boolean(row.captureProtected),
+          ...(row.bounds ? { bounds: row.bounds } : {}),
         };
       });
   } catch (cause) {
@@ -343,7 +489,7 @@ function clampText(value, maxChars) {
 
 /**
  * Ensure windowId belongs to the allowed app before snapshot/screenshot.
- * @returns {Promise<{ windowId: number, title: string, appName: string, minimized: boolean, visible: boolean }>}
+ * @returns {Promise<{ windowId: number, title: string, appName: string, minimized: boolean | null, visible: boolean }>}
  */
 async function assertWindowBelongsToApp(appTarget, windowId, deps = {}) {
   const id = Number(windowId);
@@ -365,8 +511,10 @@ async function assertWindowBelongsToApp(appTarget, windowId, deps = {}) {
     windowId: id,
     title: String(match.title || ''),
     appName: String(match.appName || appTarget?.name || ''),
-    minimized: Boolean(match.minimized),
+    minimized: match.minimized == null ? null : Boolean(match.minimized),
     visible: match.visible == null ? true : Boolean(match.visible),
+    captureProtected: Boolean(match.captureProtected),
+    ...(match.bounds ? { bounds: match.bounds } : {}),
   };
 }
 
@@ -393,7 +541,7 @@ async function captureDesktopSnapshot(appTarget, options = {}, deps = {}) {
   }
 
   // Require explicit window ownership when an id is provided; otherwise pin to first owned window.
-  if (windowId != null && !Number.isNaN(windowId)) {
+  if (windowId != null) {
     await assertWindowBelongsToApp(appTarget, windowId, deps);
   } else {
     const windows = await listDesktopWindowsForApp(appTarget, deps);
@@ -413,39 +561,43 @@ async function captureDesktopSnapshot(appTarget, options = {}, deps = {}) {
   }
 
   const script = `
+ObjC.import('AppKit');
+ObjC.import('CoreGraphics');
+${JXA_DESKTOP_HELPERS}
+${JXA_AX_IDENTITY}
 function run(argv) {
   var target = String(argv[0] || '');
   var wantWindowId = argv[1] ? Number(argv[1]) : null;
   var maxNodes = Number(argv[2] || 80);
+  var targetBundle = String(argv[3] || '');
+  var targetPath = String(argv[4] || '');
+  var runningApp = findRunningApp(target, targetBundle, targetPath);
+  var cgWins = runningApp ? listCgWindowsForPid(runningApp.pid) : [];
+  var cgWin = null;
+  if (wantWindowId != null && !isNaN(wantWindowId)) {
+    for (var c = 0; c < cgWins.length; c++) {
+      if (cgWins[c].windowId === wantWindowId) { cgWin = cgWins[c]; break; }
+    }
+  } else if (cgWins.length) {
+    cgWin = cgWins[0];
+  }
   var se = Application('System Events');
-  var processes = se.processes.whose({ name: target })();
-  if (!processes || processes.length === 0) {
+  var proc = findSeProcess(se, runningApp ? runningApp.name : target, runningApp ? runningApp.bundleId : targetBundle, runningApp ? runningApp.pid : 0);
+  if (!proc) {
     throw new Error('process_not_found');
   }
-  var proc = processes[0];
-  var windows = [];
-  try { windows = proc.windows(); } catch (e) { windows = []; }
-  if (!windows.length) {
-    return JSON.stringify({ appName: target, windowId: null, title: '', nodes: [], truncated: false });
+  if (!cgWin) throw new Error('window_not_found');
+  var win = findSeWindowForWindowId(proc, cgWin, wantWindowId, cgWins);
+  if (!win) {
+    throw new Error('ax_window_unresolved');
   }
 
-  var win = windows[0];
-  if (wantWindowId != null && !isNaN(wantWindowId)) {
-    var matched = null;
-    for (var i = 0; i < windows.length; i++) {
-      var candidate = windows[i];
-      var id = null;
-      try { id = Number(candidate.attributes.byName('AXWindowNumber').value()); } catch (e) { id = null; }
-      if (id === wantWindowId) { matched = candidate; break; }
-    }
-    if (!matched) throw new Error('window_not_found');
-    win = matched;
+  var title = cgWin && cgWin.title ? cgWin.title : '';
+  var windowId = cgWin ? cgWin.windowId : wantWindowId;
+  try { var axTitle = String(win.name() || ''); if (axTitle) title = axTitle; } catch (e) {}
+  if (windowId == null) {
+    try { windowId = Number(win.attributes.byName('AXWindowNumber').value()); } catch (e) {}
   }
-
-  var title = '';
-  var windowId = null;
-  try { title = String(win.name()); } catch (e) {}
-  try { windowId = Number(win.attributes.byName('AXWindowNumber').value()); } catch (e) {}
 
   var nodes = [];
   var truncated = false;
@@ -514,6 +666,7 @@ function run(argv) {
     if (role || name || value || description || bounds) {
       nodes.push({
         ref: 'n' + (nodes.length + 1),
+        axIdentity: axIdentity(el, role, name, subrole, description),
         role: role,
         name: name,
         value: value,
@@ -538,6 +691,7 @@ function run(argv) {
 
   walk(win, 0, '1');
   return JSON.stringify({
+    pid: runningApp.pid,
     appName: target,
     windowId: windowId,
     title: title,
@@ -552,6 +706,8 @@ function run(argv) {
     processName,
     windowId != null && !Number.isNaN(windowId) ? String(windowId) : '',
     String(maxNodes),
+    String(appTarget?.bundleId || ''),
+    String(appTarget?.path || ''),
   ];
 
   try {
@@ -587,9 +743,11 @@ function run(argv) {
         truncated = true;
         break;
       }
+      next.axIdentity = node.axIdentity;
       limited.push(next);
       used += cost;
     }
+    bindSnapshotNodes(deps.sessionId, windowId, payload.pid, limited);
     return {
       appName: String(payload.appName || processName),
       bundleId: String(appTarget.bundleId || ''),
@@ -601,7 +759,12 @@ function run(argv) {
       nodeCount: limited.length,
     };
   } catch (cause) {
-    const message = String(cause && cause.message ? cause.message : cause);
+    const message = String(cause?.stderr || cause?.message || cause);
+    if (/ax_window_unresolved/i.test(message)) {
+      const error = new Error(`窗口 ${windowId} 仍存在，但辅助功能未能唯一识别它。可以用同一 windowId 检查单窗口画面。`);
+      error.code = 'desktop_ax_window_unresolved';
+      throw error;
+    }
     if (/window_not_found/i.test(message)) {
       const error = new Error('找不到指定窗口。请先用 desktop_windows 确认 windowId。');
       error.code = 'desktop_window_not_found';
@@ -637,13 +800,64 @@ async function captureDesktopScreenshot(appTarget, options = {}, deps = {}) {
     throw error;
   }
 
-  const owned = await assertWindowBelongsToApp(appTarget, windowId, deps);
-  if (owned.minimized || owned.visible === false) {
+  const owned = deps.ownedWindow?.windowId === windowId
+    ? deps.ownedWindow : await assertWindowBelongsToApp(appTarget, windowId, deps);
+  if (owned.minimized === true) {
     const error = new Error(
-      `窗口 ${windowId} 当前不可见或已最小化，无法截图。请先恢复窗口，或换一个可见窗口。`,
+      `窗口 ${windowId} 已最小化。请先恢复这个窗口再截图。`,
     );
     error.code = 'desktop_window_not_visible';
     throw error;
+  }
+  if (owned.captureProtected) {
+    const error = new Error(
+      `窗口 ${windowId} 的 Core Graphics 共享状态为 0，Pi Studio 已跳过自动截图。要验证该窗口能否共享，请在 macOS 屏幕共享选择器中手动选择它。`,
+    );
+    error.code = 'desktop_window_capture_protected';
+    throw error;
+  }
+
+  const maxBytes = Number(options.maxBytes) || DEFAULT_MAX_SCREENSHOT_BYTES;
+  const maxEdge = Number(options.maxEdge) || DEFAULT_MAX_SCREENSHOT_EDGE;
+  const popupWaitMs = Math.min(3000, Math.max(0, Number(options.popupWaitMs) || 0));
+  const captureStarted = Date.now();
+
+  // Prefer native ScreenCaptureKit composite capture (captures target window + its
+  // search dropdowns/popovers/menus while still excluding all other applications).
+  if (typeof deps.captureWindow === 'function') {
+    try {
+      const sck = await deps.captureWindow({
+        windowId,
+        includePopups: options.includePopups !== false,
+        popupWaitMs,
+        maxEdge,
+        format: options.format || 'png',
+        quality: options.quality,
+        timeoutMs: Number(options.timeoutMs) || 12000,
+      });
+      if (sck && sck.data) {
+        return {
+          mimeType: String(sck.mimeType || 'image/png'),
+          data: String(sck.data),
+          windowId,
+          appName: String(appTarget?.name || ''),
+          bundleId: String(appTarget?.bundleId || ''),
+          title: owned.title || '',
+          bounds: sck.bounds || owned.bounds || null,
+          imageWidth: Number(sck.imageWidth) || null,
+          imageHeight: Number(sck.imageHeight) || null,
+          bytes: Number(sck.bytes) || Buffer.byteLength(String(sck.data), 'base64'),
+          scaled: Boolean(sck.scaled),
+          overlayCount: Number(sck.overlayCount || 0),
+          panels: sck.panels || [],
+          accessibilityOptions: sck.accessibilityOptions || [],
+          popupRegions: sck.popupRegions || [],
+          ...(sck.captureMode ? { captureMode: String(sck.captureMode) } : {}),
+        };
+      }
+    } catch {
+      /* Fall back cleanly to screencapture -l on macOS 13 or transient SCK errors. */
+    }
   }
 
   const tempFile = path.join(
@@ -653,7 +867,11 @@ async function captureDesktopScreenshot(appTarget, options = {}, deps = {}) {
   const scaledFile = `${tempFile}.scaled.png`;
 
   try {
-    await runner('/usr/sbin/screencapture', ['-x', '-l', String(windowId), tempFile], { timeout: 12000 });
+    // A single-window fallback can still see suggestions drawn inside the window.
+    const remaining = popupWaitMs - (Date.now() - captureStarted);
+    if (remaining > 0) await new Promise(resolve => setTimeout(resolve, remaining));
+    // `-o` omits the macOS drop shadow so image pixel (0,0) aligns strictly with window bounds (x,y).
+    await runner('/usr/sbin/screencapture', ['-x', '-o', '-l', String(windowId), tempFile], { timeout: 12000 });
     if (!fs.existsSync(tempFile)) {
       const error = new Error('截图失败：未生成图像文件。请确认屏幕录制权限已授予，且 windowId 有效。');
       error.code = 'desktop_screenshot_failed';
@@ -667,12 +885,11 @@ async function captureDesktopScreenshot(appTarget, options = {}, deps = {}) {
     }
 
     // Soft-cap large retina captures before they enter tool/session history.
-    const maxBytes = Number(options.maxBytes) || DEFAULT_MAX_SCREENSHOT_BYTES;
-    const maxEdge = Number(options.maxEdge) || DEFAULT_MAX_SCREENSHOT_EDGE;
     let scaled = false;
     if (buffer.length > maxBytes) {
       try {
-        await runner(
+        const resize = deps.localRunner || runner;
+        await resize(
           '/usr/bin/sips',
           ['-Z', String(maxEdge), tempFile, '--out', scaledFile],
           { timeout: 12000 },
@@ -689,16 +906,28 @@ async function captureDesktopScreenshot(appTarget, options = {}, deps = {}) {
       }
     }
 
+    const dims = readPngDimensions(buffer);
     return {
+      captureMode: 'single_window_fallback',
+      overlayCount: 0,
       mimeType: 'image/png',
       data: buffer.toString('base64'),
       windowId,
       appName: String(appTarget?.name || ''),
       bundleId: String(appTarget?.bundleId || ''),
+      title: owned.title || '',
+      bounds: owned.bounds || null,
+      imageWidth: dims ? dims.width : null,
+      imageHeight: dims ? dims.height : null,
       bytes: buffer.length,
       scaled,
     };
   } catch (cause) {
+    if (owned.visible === false && (!cause?.code || !String(cause.code).startsWith('desktop_') || cause.code === 'desktop_screenshot_failed')) {
+      const error = new Error(`窗口 ${windowId} 仍在该应用的窗口列表，但系统未返回离屏画面。可尝试读取同一窗口的辅助功能结构，或切回其桌面。`, { cause });
+      error.code = 'desktop_window_offscreen';
+      throw error;
+    }
     if (cause && cause.code && String(cause.code).startsWith('desktop_')) throw cause;
     const error = new Error(`窗口截图失败：${cause && cause.message ? cause.message : cause}`);
     error.code = 'desktop_screenshot_failed';
@@ -719,7 +948,7 @@ async function captureDesktopScreenshot(appTarget, options = {}, deps = {}) {
 }
 
 module.exports = {
-  escapeAppleScriptString,
+  JXA_DESKTOP_HELPERS,
   defaultRunner,
   listRunningDesktopApps,
   listDesktopWindowsForApp,

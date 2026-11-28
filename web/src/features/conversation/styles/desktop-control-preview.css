@@ -1,0 +1,267 @@
+.desktop-pip-card {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-4);
+  z-index: 24;
+  width: 268px;
+  max-width: calc(100% - 2 * var(--space-4));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface-floating);
+  box-shadow: var(--shadow-float);
+  animation: pi-popover-in var(--motion-enter) both;
+  transition: width var(--motion-expand);
+}
+
+.desktop-pip-card.is-expanded {
+  width: 404px;
+}
+
+.desktop-pip-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 6px 8px 6px 10px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.desktop-pip-identity {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.desktop-pip-identity > strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--text-label);
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-pip-stage-tag {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radius-round);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent);
+  font-size: var(--text-caption);
+  font-weight: var(--weight-medium);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.desktop-pip-badge {
+  flex: none;
+  padding: 1px 6px;
+  border-radius: var(--radius-round);
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: var(--text-caption);
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.desktop-pip-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--faint);
+}
+
+.desktop-pip-dot.is-live {
+  background: var(--success);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--success) 22%, transparent);
+}
+
+.desktop-pip-dot.is-error {
+  background: var(--warning);
+}
+
+.desktop-pip-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.desktop-pip-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: var(--icon-button-compact);
+  height: var(--icon-button-compact);
+  padding: 0;
+  border-radius: var(--radius-tag);
+  color: var(--muted);
+  transition: background var(--transition-fast), color var(--transition-fast);
+}
+
+.desktop-pip-icon-btn:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text);
+}
+
+.desktop-pip-icon-btn:disabled {
+  opacity: 0.45;
+}
+
+.desktop-pip-icon-btn svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+}
+
+.desktop-pip-stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.desktop-pip-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--bg);
+}
+
+.desktop-pip-panels {
+  display: grid;
+  justify-items: start;
+  overflow: auto;
+  max-height: min(40vh, 320px);
+  border-top: 1px solid var(--divider);
+  background: var(--bg);
+}
+
+.desktop-pip-panels img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.desktop-pip-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  height: 100%;
+  color: var(--faint);
+  font-size: var(--text-caption);
+}
+
+.desktop-pip-placeholder svg {
+  width: var(--icon-lg);
+  height: var(--icon-lg);
+  opacity: 0.6;
+}
+
+.desktop-pip-cursor {
+  position: absolute;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+.desktop-pip-cursor-dot {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--on-button);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--shadow-thumb);
+}
+
+.desktop-pip-cursor-ring {
+  position: absolute;
+  inset: -7px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  opacity: 0;
+  animation: desktop-pip-ripple 720ms var(--settings-motion-out) 1;
+}
+
+@keyframes desktop-pip-ripple {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.45);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.65);
+  }
+}
+
+.desktop-pip-note {
+  padding: 5px 10px;
+  border-top: 1px solid var(--divider);
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: var(--text-description);
+  line-height: var(--leading-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-pip-pill {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-4);
+  z-index: 24;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-round);
+  background: var(--surface-floating);
+  box-shadow: var(--shadow-float);
+  animation: pi-popover-in var(--motion-enter) both;
+}
+
+.desktop-pip-pill-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text);
+  font-size: var(--text-caption);
+}
+
+.desktop-pip-pill-main svg {
+  width: var(--icon-xs);
+  height: var(--icon-xs);
+  color: var(--muted);
+}
+
+.desktop-pip-pill-name {
+  font-weight: var(--weight-semibold);
+}
+
+.desktop-pip-pill-action {
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-pip-card,
+  .desktop-pip-pill,
+  .desktop-pip-cursor-ring {
+    animation: none;
+  }
+  .desktop-pip-card {
+    transition: none;
+  }
+}

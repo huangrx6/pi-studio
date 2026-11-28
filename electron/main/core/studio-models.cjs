@@ -412,16 +412,8 @@ async function getStudioModelsRuntime() {
   return initializeStudioModels();
 }
 
-async function getStudioModels() {
-  return (await getStudioModelsRuntime()).models;
-}
-
 function getStudioModelsRuntimeSync() {
   return current;
-}
-
-async function getCredentialStore() {
-  return (await getStudioModelsRuntime()).credentials;
 }
 
 async function rebuildStudioModels() {
@@ -432,21 +424,8 @@ function studioModelsRevision() {
   return revision;
 }
 
-async function getProviderCatalog() {
-  const { models, providerBaseUrl: baseUrlOf } = await getStudioModelsRuntime();
-  return models.getProviders().map((provider) => ({
-    id: provider.id,
-    name: provider.name,
-    baseUrl: baseUrlOf(provider),
-    authenticated: false,
-  }));
-}
-
 module.exports = {
   closeStudioModelsRuntime,
-  getCredentialStore,
-  getProviderCatalog,
-  getStudioModels,
   getStudioModelsRuntime,
   getStudioModelsRuntimeSync,
   initializeStudioModels,

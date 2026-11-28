@@ -1,4 +1,5 @@
 /** Real isolated PTY diagnostic. Does not replace IPC results or alter production source. */
+import { openToolPanel, resizeToolHost } from './fixtures/tool-panel.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, writeFile, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -22,12 +23,12 @@ try {
   app = await _electron.launch({ args: [root, '--disable-background-networking', '--proxy-server=http://127.0.0.1:9', '--proxy-bypass-list=<-loopback>'], cwd: workspace, env });
   page = await app.firstWindow(); page.setDefaultTimeout(15000);
   page.on('pageerror', e => result.errors.push(e.message));
-  await page.locator('.brand').waitFor();
+  await page.getByRole('navigation', {name:'主导航'}).waitFor();
   await app.evaluate(({ ipcMain, dialog }, directory) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
     globalThis.__terminalDiagnostic = [];
     // Electron private handler map is used only for diagnostics; every call delegates unchanged.
-    for (const channel of ['pi:terminal-create', 'pi:terminal-resize', 'pi:terminal-write', 'pi:terminal-close']) {
+    for (const channel of ['pi:terminal-create']) {
       const original = ipcMain._invokeHandlers.get(channel);
       if (!original) throw new Error(`Missing diagnostic target ${channel}`);
       ipcMain.removeHandler(channel);
@@ -36,18 +37,23 @@ try {
         const value = await original(event, payload); record.end = Date.now(); record.result = value; return value;
       });
     }
+    ipcMain.on('pi:terminal-resize', (_, payload) => globalThis.__terminalDiagnostic.push({channel:'pi:terminal-resize', payload, start:Date.now()}));
   }, workspace);
+  await page.getByRole('button', {name:'打开工作区', exact:true}).click();
+  const main = page;
+  page = await openToolPanel(app, main);
+  page.on('pageerror', error => result.errors.push(error.message));
+  const resize = (width, height) => resizeToolHost(app, main, width, height);
+  await page.getByRole('button', {name:'新终端', exact:true}).waitFor();
   await page.evaluate(() => { window.__terminalEvents = []; window.__stopTerminalDiagnostic = window.piApi.onTerminalEvent(event => window.__terminalEvents.push({ ...event, at: Date.now() })); });
-  await page.getByRole('button', { name: '打开工作区', exact: true }).click();
-  await page.getByRole('button', { name: '打开右侧面板', exact: true }).click();
-  await page.locator('.panel-start-tools').waitFor();
-  await page.waitForFunction(() => (document.querySelector('.file-panel')?.getBoundingClientRect().width || 0) > 300);
-  await page.waitForTimeout(350);
-  const handle = await page.locator('.panel-resize-handle').boundingBox();
-  const bounds = await page.locator('.file-panel').boundingBox();
-  await page.mouse.move(handle.x + handle.width / 2, handle.y + 100); await page.mouse.down();
-  await page.mouse.move(bounds.x + bounds.width - 320, handle.y + 100, { steps: 8 }); await page.mouse.up();
-  await page.locator('.panel-launcher-tile, .panel-tool').filter({ hasText: /新建终端|终端/ }).first().click();
+  await resize(980, 760);
+  await page.evaluate(() => {
+    const original = HTMLCanvasElement.prototype.getContext;
+    HTMLCanvasElement.prototype.getContext = function(type,...args) {
+      return /webgl/i.test(type) ? null : original.call(this,type,...args);
+    };
+  });
+  await page.getByRole('button', {name:'新终端', exact:true}).click();
   await page.locator('.xterm-helper-textarea').waitFor();
   await page.waitForTimeout(400);
   // A finite background process reproduces asynchronous shell output without any listener or leftover child.
@@ -61,32 +67,33 @@ try {
     result.stages.push({ name, ...state }); await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' });
   };
   await capture('01-live');
-  await page.getByRole('button', { name: '打开工具', exact: true }).click(); await page.getByRole('menuitem', { name: '运行服务', exact: true }).click();
-  await page.getByRole('tab').filter({ hasText: '终端' }).click(); await page.locator('.xterm').waitFor();
+  const terminal = page.locator('.tool-tab:has(.lucide-square-terminal) button').first();
+  const selectOther = async () => {
+    await page.getByRole('button', {name:'新建工具标签页', exact:true}).click();
+    await page.getByRole('menuitem', {name:'打开起始页', exact:true}).click();
+  };
+  const reconnect = async () => {
+    const old = await page.locator('.terminal-host .xterm').elementHandle();
+    await page.getByRole('button', {name:'重新连接终端', exact:true}).click();
+    await page.waitForFunction(node => !node.isConnected, old);
+    await page.getByText('运行中', {exact:true}).waitFor();
+  };
+  await selectOther(); await terminal.click(); await reconnect();
   await capture('02-same-size-remount');
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1100, 760));
-  await capture('03-live-resize');
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1280, 860));
-  await capture('04-live-resize-back');
-  await page.getByRole('tab').filter({ hasText: '服务' }).click();
-  await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1100, 760));
-  await page.waitForTimeout(350);
-  await page.getByRole('tab').filter({ hasText: '终端' }).click(); await page.locator('.xterm').waitFor();
+  await resize(980, 650); await capture('03-live-resize');
+  await resize(980, 760); await capture('04-live-resize-back');
+  await selectOther(); await resize(980, 650); await terminal.click(); await reconnect();
   await capture('05-smaller-remount');
-  await page.getByRole('button', { name: '重新连接终端', exact: true }).click(); await page.waitForTimeout(350);
+  await reconnect();
   await capture('06-reconnect');
   // Eliminate the asynchronous writer before checking genuine column changes.
   await page.locator('.xterm-helper-textarea').focus();
   await page.keyboard.type("kill %1 2>/dev/null; wait %1 2>/dev/null; printf '%s\\n' QA_STABLE_HISTORY"); await page.keyboard.press('Enter');
   await page.waitForFunction(() => [...document.querySelectorAll('.xterm-rows > div')].some(row => row.textContent.trim() === 'QA_STABLE_HISTORY'));
   await capture('07-foreground-history');
-  const widerHandle = await page.locator('.panel-resize-handle').boundingBox();
-  const narrowerBounds = await page.locator('.file-panel').boundingBox();
-  await page.mouse.move(widerHandle.x + widerHandle.width / 2, widerHandle.y + 100); await page.mouse.down();
-  await page.mouse.move(narrowerBounds.x + narrowerBounds.width - 480, widerHandle.y + 100, { steps: 8 }); await page.mouse.up();
+  await resize(1250, 650);
   await capture('08-live-wider-columns');
-  await page.getByRole('tab').filter({ hasText: '服务' }).click();
-  await page.getByRole('tab').filter({ hasText: '终端' }).click(); await page.locator('.xterm').waitFor();
+  await selectOther(); await terminal.click(); await reconnect();
   await capture('09-wider-remount');
   for (const name of ['10-first-reconnect', '11-second-reconnect']) {
     const oldTerminal = await page.locator('.terminal-host .xterm').elementHandle();
@@ -95,13 +102,8 @@ try {
     await page.locator('.terminal-host .xterm').waitFor();
     await capture(name);
   }
-  const shrinkHandle = await page.locator('.panel-resize-handle').boundingBox();
-  const wideBounds = await page.locator('.file-panel').boundingBox();
-  await page.mouse.move(shrinkHandle.x + shrinkHandle.width / 2, shrinkHandle.y + 100); await page.mouse.down();
-  await page.mouse.move(wideBounds.x + wideBounds.width - 320, shrinkHandle.y + 100, { steps: 8 }); await page.mouse.up();
-  await capture('12-original-columns');
-  await page.getByRole('tab').filter({ hasText: '服务' }).click();
-  await page.getByRole('tab').filter({ hasText: '终端' }).click(); await page.locator('.xterm').waitFor();
+  await resize(980, 650); await capture('12-original-columns');
+  await selectOther(); await terminal.click(); await reconnect();
   await capture('13-original-columns-remount');
   result.calls = await app.evaluate(() => globalThis.__terminalDiagnostic);
   result.events = await page.evaluate(() => window.__terminalEvents);

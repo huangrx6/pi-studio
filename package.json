@@ -1,6 +1,6 @@
 {
   "name": "pi-studio",
-  "version": "0.0.17",
+  "version": "0.0.18",
   "private": true,
   "type": "module",
   "description": "Pi Studio — a native desktop workspace built on Pi Durable.",
@@ -27,6 +27,7 @@
     "dev": "concurrently -k \"pnpm run web\" \"wait-on tcp:5180 && cross-env PI_STUDIO_DEV=1 node scripts/dev/launch.mjs\"",
     "web": "vite --host 127.0.0.1 --port 5180",
     "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "build:computer-use": "node scripts/build/build-computer-use-helper.mjs",
     "build:notes-ui": "tsc -p scripts/build/notes-plugin-ui/tsconfig.json --noEmit && node scripts/build/build-notes-plugin-ui.mjs",
     "extension": "node sdk/cli/pi-studio-extension.mjs",
     "skill": "node sdk/cli/pi-studio-skill.mjs",
@@ -67,6 +68,8 @@
     "qa:composer-persistence": "node scripts/qa/qa-composer-persistence.mjs",
     "qa:shared-interactions": "node scripts/qa/qa-shared-interactions.mjs",
     "qa:settings-utilities": "node scripts/qa/qa-settings-utilities.mjs",
+    "qa:session-tabs": "node scripts/qa/qa-workbench-tabs.mjs",
+    "qa:source-editor": "node scripts/qa/qa-source-editor.mjs",
     "qa:panel-files": "node scripts/qa/qa-panel-files.mjs",
     "qa:panel-lifecycle": "node scripts/qa/qa-panel-lifecycle.mjs",
     "qa:browser-panel": "node scripts/qa/qa-browser-panel.mjs",
@@ -76,7 +79,6 @@
     "plugin": "node sdk/cli/pi-studio-plugin.mjs"
   },
   "dependencies": {
-    "@caldwell619/react-kanban": "0.0.12",
     "@dagrejs/dagre": "^3.1.3",
     "@earendil-works/chord": "1.5.2",
     "@earendil-works/pi-ai": "1.5.2",
@@ -84,7 +86,7 @@
     "@earendil-works/pi-mcp": "1.5.2",
     "@earendil-works/pi-telemetry": "1.5.2",
     "@excalidraw/excalidraw": "0.18.1",
-    "@hello-pangea/dnd": "18.0.1",
+    "@vscode/ripgrep": "1.18.0",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/addon-search": "^0.16.0",
     "@xterm/addon-serialize": "^0.14.0",
@@ -103,6 +105,7 @@
     "rehype-highlight": "^7.0.2",
     "remark-gfm": "^4.0.1",
     "simple-icons": "16.36.0",
+    "typescript": "5.9.3",
     "yaml": "2.9.0",
     "yet-another-react-lightbox": "^3.32.2"
   },
@@ -120,9 +123,9 @@
     "katex": "0.19.1",
     "material-icon-theme": "5.40.0",
     "mermaid": "11.17.2",
+    "monaco-editor": "0.58.0",
     "playwright-core": "1.61.1",
     "remark-math": "6.0.0",
-    "typescript": "^5.7.2",
     "vite": "^6.0.0",
     "wait-on": "^8.0.1"
   },
@@ -131,7 +134,8 @@
     "productName": "Pi Studio",
     "afterPack": "scripts/release/electron-builder-after-pack.cjs",
     "asarUnpack": [
-      "node_modules/node-pty/**"
+      "node_modules/node-pty/**",
+      "node_modules/@vscode/ripgrep-*/bin/**"
     ],
     "directories": {
       "output": "release"
@@ -144,10 +148,17 @@
       "dist/renderer/**",
       "web/src/styles/palette.css",
       "web/src/styles/tokens.css",
+      "web/src/styles/typography.css",
+      "web/src/styles/icon-sizes.css",
       "THIRD_PARTY_NOTICES.md",
       "package.json"
     ],
     "extraResources": [
+      {
+        "from": "node_modules/monaco-editor",
+        "to": "licenses/monaco-editor",
+        "filter": ["LICENSE", "ThirdPartyNotices.txt"]
+      },
       {
         "from": "extensions",
         "to": "official-extensions"

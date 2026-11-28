@@ -1,14 +1,12 @@
 import type { ComposerEditorHandle } from './ComposerEditor';
-import { useRef } from 'react';
+import { useRef, useState } from 'react';
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react';
 import type {
   ChatMessage,
   RequestTrace,
-  TurnDiff,
 } from '../../types/chat-types';
 import type {
   ConversationPage,
-  LongTaskState,
 } from '../../types/durable-types';
 import type {
   ModelSelection,
@@ -55,6 +53,8 @@ type TranscriptCacheEntry = {
 };
 
 type ConversationSessionsDependencies = {
+  onNavigate: () => void;
+  onPresent: (cwd: string, session: { id: string; title: string } | null, focus?: boolean) => void;
   session: SessionState;
   messages: ChatMessage[];
   sessionRef: MutableRefObject<SessionState>;
@@ -63,7 +63,6 @@ type ConversationSessionsDependencies = {
   workspaces: PiWorkspace[];
   settingsOpen: boolean;
   canLeaveSettings: () => Promise<boolean>;
-  modelSelection: ModelSelection;
   defaultModelSelection: ModelSelection;
   defaultModelWorkspaceRef: MutableRefObject<string>;
   modelRevisionRef: MutableRefObject<Map<string, number>>;
@@ -111,6 +110,7 @@ type ConversationSessionsDependencies = {
 };
 
 export function useConversationSessions({
+  onNavigate, onPresent,
   session,
   messages,
   sessionRef,
@@ -119,7 +119,6 @@ export function useConversationSessions({
   workspaces,
   settingsOpen,
   canLeaveSettings,
-  modelSelection,
   defaultModelSelection,
   defaultModelWorkspaceRef,
   modelRevisionRef,
@@ -166,15 +165,31 @@ export function useConversationSessions({
   // 向上补页的并发保护：滚动哨兵会连续触发，不能同时发两页请求。
   const olderLoadingRef = useRef(false);
   const pendingPreloads = useRef(new Map<string, ReturnType<typeof loadTranscriptWindow>>());
+  const [pendingDraftModel, setPendingDraftModel] = useState<number>();
+
+  function restoreDraftModel(cwd: string) {
+    const defaultsKnown = defaultModelWorkspaceRef.current === cwd;
+    const selection = defaultsKnown ? defaultModelSelection : createEmptyModelSelection();
+    setModelSelection(selection);
+    if (!defaultsKnown) setDefaultModelSelection(selection);
+    if (defaultsKnown && selection.modelRef) return;
+    const generation = sessionLoadRef.current;
+    setPendingDraftModel(generation);
+    void loadModelCatalog(cwd).catch(() => {}).finally(() => {
+      setPendingDraftModel(current => current === generation ? undefined : current);
+    });
+  }
 
   async function startSession(
     cwd = session?.cwd || workspace,
-    options: { restoreDraft?: boolean; checkpoint?: boolean } = {},
+    options: { restoreDraft?: boolean; checkpoint?: boolean; focusTab?: boolean } = {},
   ) {
     if (settingsOpen) {
       if (!await canLeaveSettings()) return;
       setSettingsOpen(false);
     }
+    onNavigate();
+    onPresent(cwd, null, options.focusTab);
     if (options.checkpoint !== false) checkpointComposerDraft();
     ++sessionLoadRef.current;
     ++outlineRequestRef.current;
@@ -202,16 +217,14 @@ export function useConversationSessions({
     if (cwd) expandWorkspace(cwd);
     setComposerMenu(null);
     setModelPickerRequest(null);
-    const defaultsKnown = defaultModelWorkspaceRef.current === cwd;
-    setModelSelection(defaultsKnown ? defaultModelSelection : createEmptyModelSelection());
-    if (!defaultsKnown) setDefaultModelSelection(createEmptyModelSelection());
-    if (!defaultsKnown || !defaultModelSelection.modelRef) void loadModelCatalog(cwd).catch(() => {});
+    restoreDraftModel(cwd);
     setBusy(false);
     setRetryInfo(null);
     requestAnimationFrame(() => composerEditorRef.current?.focus());
   }
 
-  function selectDraftWorkspace(cwd: string) {
+  function selectDraftWorkspace(cwd: string, focusTab = true) {
+    onPresent(cwd, null, focusTab);
     const previousKey = composerDraftKeyRef.current;
     const pending = currentComposerDraft();
     const hasPending = Boolean(pending.text.trim()) || pending.attachments.length > 0;
@@ -238,10 +251,7 @@ export function useConversationSessions({
     installComposerDraft(nextKey);
     setComposerMenu(null);
     setModelPickerRequest(null);
-    const defaultsKnown = defaultModelWorkspaceRef.current === cwd;
-    setModelSelection(defaultsKnown ? defaultModelSelection : createEmptyModelSelection());
-    if (!defaultsKnown) setDefaultModelSelection(createEmptyModelSelection());
-    if (!defaultsKnown || !defaultModelSelection.modelRef) void loadModelCatalog(cwd).catch(() => {});
+    restoreDraftModel(cwd);
     setError(null);
     if (cwd) expandWorkspace(cwd);
   }
@@ -283,11 +293,12 @@ export function useConversationSessions({
     }
   }
 
-  async function openSession(item: PiSessionSummary, reportError = true): Promise<boolean> {
+  async function openSession(item: Pick<PiSessionSummary, 'id'>, reportError = true, focusTab = true): Promise<boolean> {
     if (settingsOpen) {
       if (!await canLeaveSettings()) return false;
       setSettingsOpen(false);
     }
+    onNavigate();
     checkpointComposerDraft();
     void preloadMarkdownRenderer().catch(() => { /* Markdown renders as readable plain text */ });
     const load = ++sessionLoadRef.current;
@@ -295,7 +306,9 @@ export function useConversationSessions({
     const modelRevision = modelRevisionRef.current.get(modelScope) ?? 0;
     const outlineRequest = ++outlineRequestRef.current;
     const cached = transcriptCacheRef.current.get(item.id);
-    const cacheFresh = cached && Date.now() - cached.at < 60_000;
+    const summary = workspaces.find(row => row.sessions.some(s => s.id === item.id))?.sessions.find(s => s.id === item.id);
+    const cacheFresh = cached && !summary?.running && (!summary || summary.updatedAt <= cached.detail.updatedAt)
+      && Date.now() - cached.at < 60_000;
     setSessionLoading(!cacheFresh);
     try {
       const [detail, outline, children] = cacheFresh
@@ -319,6 +332,7 @@ export function useConversationSessions({
         turnDiffs: detail.turnDiffs,
         totalMessages: outline?.totalMessages,
       };
+      onPresent(detail.cwd, nextSession, focusTab);
       sessionRef.current = nextSession;
       setSession(nextSession);
       const lastWrite = modelWriteResultsRef.current.get(modelScope);
@@ -439,6 +453,7 @@ export function useConversationSessions({
   }
 
   return {
+    draftModelLoading: pendingDraftModel === sessionLoadRef.current,
     startSession,
     selectDraftWorkspace,
     prefetchSession,

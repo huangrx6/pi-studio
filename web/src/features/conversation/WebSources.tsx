@@ -20,10 +20,11 @@ export function WebSources({ sources }: { sources: WebSource[] }) {
     <button type="button" className="message-action web-sources-trigger" aria-haspopup="dialog"
       aria-label={label} title={label} onClick={() => setOpen(true)}><Globe aria-hidden="true" /></button>
     {open && <DetailDialog className="web-sources-dialog" onClose={() => setOpen(false)}>
+      {close => <>
       <header className="web-sources-header">
         <span className="web-sources-emblem" aria-hidden="true"><Globe /></span>
         <div><h2>网页来源</h2><p>{sources.length} 个网站</p></div>
-        <button type="button" className="icon-button" aria-label="关闭网页来源" onClick={() => setOpen(false)}><X /></button>
+        <button type="button" className="icon-button" aria-label="关闭网页来源" onClick={close}><X /></button>
       </header>
       <ul className="web-sources-list">
         {sources.map(site => {
@@ -33,7 +34,7 @@ export function WebSources({ sources }: { sources: WebSource[] }) {
           const address = site.href.replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
           return <li key={site.host}><a href={site.href} title={site.href} onClick={event => {
             event.preventDefault();
-            setOpen(false);
+            close();
             if (openLink) openLink(site.href);
             else void window.piApi.openLink(site.href, 'external');
           }}>
@@ -47,6 +48,7 @@ export function WebSources({ sources }: { sources: WebSource[] }) {
           </a></li>;
         })}
       </ul>
+      </>}
     </DetailDialog>}
   </>;
 }

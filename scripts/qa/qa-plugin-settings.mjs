@@ -52,7 +52,7 @@ try {
   const catalog = content.getByRole('region', { name: '插件目录', exact: true });
   const sources = page.getByRole('dialog', { name: '插件源', exact: true });
   const review = page.getByRole('dialog', { name: '安装预览', exact: true });
-  const settings = () => page.locator('.sidebar-bottom button[title="设置"]').click();
+  const settings = () => page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   const click = (parent, name) => parent.getByRole('button', { name, exact: true }).click();
   const detailButton = (parent, name) => parent.getByRole('button', { name: `查看插件 ${name}`, exact: true });
   const tab = name => tabs.getByRole('tab', { name, exact: true }).click();

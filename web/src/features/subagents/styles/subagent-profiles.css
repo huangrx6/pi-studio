@@ -1,7 +1,6 @@
 .role-settings-page :is(.settings-save, .settings-outline, .settings-text-button, .role-delete) {
   min-height: var(--settings-control-height);
 }
-.role-settings-page .settings-profile-foot { min-height: var(--settings-control-height); }
 .subagent-form-dialog .icon-button {
   width: var(--settings-icon-hit);
   height: var(--settings-icon-hit);
@@ -9,7 +8,6 @@
 .role-settings-page .settings-page-header-icon > .lucide-bot { stroke-width: 1.35; }
 .role-settings-page .settings-page-header-icon .lucide-bot path:first-child { stroke: var(--accent); }
 .role-enable { margin-inline-start: var(--space-1); color: var(--text); }
-.role-settings-page .settings-profile-head .subagent-avatar { --subagent-avatar-size: 40px; }
 .role-empty-portraits { display: flex; align-items: center; margin-bottom: var(--space-2); }
 .role-empty-portraits .subagent-avatar { --subagent-avatar-size: 36px; outline: 2px solid var(--settings-card-bg); }
 .role-empty-portraits .subagent-avatar + .subagent-avatar { margin-inline-start: -6px; }
@@ -30,7 +28,7 @@
   gap: var(--settings-field-gap);
   min-width: 0;
   color: var(--text);
-  font: var(--settings-label-font);
+  font: var(--font-label);
 }
 .role-editor :is(input:not([type=checkbox]), textarea) { min-width: 0; width: 100%; }
 .role-editor textarea { min-height: 84px; resize: vertical; }
@@ -51,7 +49,7 @@
   border-radius: var(--radius-control);
   color: var(--text);
   background: var(--surface);
-  font: var(--settings-preference-body-font);
+  font: var(--font-label);
 }
 .role-avatar-trigger .subagent-avatar {
   --subagent-avatar-size: var(--space-7);
@@ -110,7 +108,7 @@
   border-top: 1px solid var(--divider);
   padding-block-start: var(--space-4);
 }
-.role-thinking-field .role-field-error { color: var(--error); font: var(--settings-description-font); }
+.role-thinking-field .role-field-error { color: var(--error); font: var(--font-description); }
 .role-thinking-field[aria-invalid=true] .pi-select-trigger { border-color: var(--error); }
 .role-editor-row {
   display: flex;
@@ -118,10 +116,10 @@
   justify-content: space-between;
   gap: var(--settings-row-gap);
   min-width: 0;
-  font: var(--settings-label-font);
+  font: var(--font-label);
 }
-.role-editor h3, .role-editor h4 { margin: 0; color: var(--text); font: var(--settings-label-font); }
-.role-editor p { margin: 0; color: var(--muted); font: var(--settings-description-font); }
+.role-editor h3, .role-editor h4 { margin: 0; color: var(--text); font: var(--font-label); }
+.role-editor p { margin: 0; color: var(--muted); font: var(--font-description); }
 .role-resources { border-block-start: 1px solid var(--divider); }
 .role-resources > .role-editor-block {
   display: grid;
@@ -178,7 +176,7 @@
   background: var(--settings-page-bg);
 }
 .role-run-defaults .pi-accordion-label { justify-content: space-between; }
-.role-run-defaults .pi-accordion-badge { color: var(--muted); font: var(--settings-description-font); }
+.role-run-defaults .pi-accordion-badge { color: var(--muted); font: var(--font-description); }
 .subagent-form .subagent-form-disclosure[open] > .pi-accordion-trigger {
   margin: 0;
   border-bottom: 1px solid var(--divider);
@@ -208,7 +206,7 @@
   gap: var(--settings-field-gap);
   min-width: 0;
 }
-.role-number small { flex: none; color: var(--muted); font: var(--settings-description-font); }
+.role-number small { flex: none; color: var(--muted); font: var(--font-description); }
 .role-number input {
   flex: 1 1 0;
   min-width: 0;

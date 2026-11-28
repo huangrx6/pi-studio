@@ -63,13 +63,17 @@ try {
     const b = await api.createConversation({ cwd, title: '独立指标会话 B' });
     return { a: a.id, b: b.id };
   }, workspace);
+  await page.evaluate(() => {
+    const key = 'pi-studio:preferences';
+    localStorage.setItem(key, JSON.stringify({ ...JSON.parse(localStorage.getItem(key) || '{}'), theme: 'dark' }));
+  });
   await page.reload();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
   await selectTestSession(page, workspace, sessions.a);
-  const openExtensions = () => page.locator('.chat-header').getByRole('button', { name: '扩展', exact: true }).click();
-  const metricsCard = page.getByRole('dialog', { name: '扩展', exact: true }).getByRole('article', { name: 'Studio 指标', exact: true });
-  await openExtensions();
-  await metricsCard.getByText('等待首次模型请求', { exact: true }).waitFor();
-  await metricsCard.evaluate(card => {
+  const footer = page.getByRole('contentinfo', { name: '状态栏' });
+  const inFooter = footer.getByRole('button', { name: '打开 实时指标 详情' });
+  await inFooter.getByText('等待首次模型请求', { exact: true }).waitFor();
+  await inFooter.evaluate(card => {
     window.metricsCardRates = [];
     const observation = new MutationObserver(() => {
       const rate = Number(card.textContent.match(/([\d.]+) tok\/s/)?.[1]);
@@ -90,7 +94,7 @@ try {
   const aEvents = await waitForStream(ids.first);
   assertLiveTps(aEvents.at(-1).snapshot);
   await page.waitForFunction(() => new Set(window.metricsCardRates).size >= 2);
-  await metricsCard.screenshot({ path: path.join(output, 'card-streaming.png') });
+  await inFooter.screenshot({ path: path.join(output, 'card-streaming.png') });
   assert.equal((await page.evaluate(id => window.piApi.conversationSnapshot(id), ids.a)).running, true);
   const streamed = await page.evaluate(() => window.metricEvents);
   assert.ok(aEvents.some(e => JSON.stringify(e.snapshot.content).includes('流式指标会话 A')));
@@ -99,7 +103,7 @@ try {
   for (const e of streamed.filter(e => e.subscriptionId === ids.second)) assert.ok(!Number(metric(e.snapshot, 'output-tokens')));
   finish();
   await waitForCompletion(ids.first);
-  await metricsCard.getByText(/^最近请求 · [\d.]+ tok\/s · TTFT /).waitFor();
+  await inFooter.getByText(/^最近请求 · [\d.]+ tok\/s · TTFT /).waitFor();
   const afterFirst = await page.evaluate(async (id) => {
     const start = window.metricEvents.length;
     await window.piApi.conversationSubmit({ id, text: 'Generate another synthetic test answer.', requestId: 'qa-streaming-follow-up' });
@@ -120,15 +124,54 @@ try {
   const events = await page.evaluate(() => window.metricEvents);
   const final = events.filter(e => e.subscriptionId === ids.first).at(-1).snapshot;
   assert.equal(Number(metric(final, 'live-tps')), final.content.find(block => block.kind === 'sparkline').values.at(-1));
-  await metricsCard.getByText(/^最近请求 · [\d.]+ tok\/s · TTFT /).waitFor();
+  await inFooter.getByText(/^最近请求 · [\d.]+ tok\/s · TTFT /).waitFor();
+  const done = /^最近请求 · [\d.]+ tok\/s · TTFT /;
+  const button = (name) => page.getByRole('button', { name, exact: true });
+  async function setPlacement(label) {
+    await page.locator('.sidebar-bottom').getByRole('button', { name: '设置', exact: true }).click();
+    await page.locator('.settings-navigation').getByRole('button', { name: '插件', exact: true }).click();
+    await page.getByRole('tab', { name: '扩展', exact: true }).click();
+    const builtins = page.locator('summary').filter({ hasText: '内置扩展' });
+    if (!await builtins.evaluate(node => node.parentElement.open)) await builtins.click();
+    await button('打开 Studio 指标 设置').click();
+    const detail = page.locator('.extension-detail-dialog');
+    await detail.getByRole('group', { name: '实时指标 显示位置' }).getByRole('button', { name: label, exact: true }).click();
+    await detail.getByRole('button', { name: '完成', exact: true }).click();
+    await page.locator('[data-sidebar-section="conversations"]').click();
+  }
+  const detail = page.getByRole('dialog', { name: '实时指标', exact: true });
+  await inFooter.click();
+  await detail.getByText('最近一轮', { exact: true }).first().waitFor();
+  assert.equal(await page.locator('.file-panel:visible').count(), 0);
+  await page.screenshot({ path: path.join(output, 'metrics-popover.png') });
   await page.keyboard.press('Escape');
-  await selectTestSession(page, workspace, ids.b);
-  await openExtensions();
-  await metricsCard.getByText('等待首次模型请求', { exact: true }).waitFor();
+  await detail.waitFor({ state: 'detached' });
+  for (const [option, region] of [['输入框上方', '输入框上方扩展状态'], ['输入框下方', '输入框下方扩展状态']]) {
+    await setPlacement(option);
+    const summary = page.getByRole('group', { name: region }).getByRole('button', { name: '打开 实时指标 详情' });
+    await summary.getByText(done).waitFor();
+    assert.equal(await button('打开 实时指标 详情').count(), 1);
+    const editor = await page.locator('.composer').boundingBox();
+    const box = await summary.boundingBox();
+    assert.ok(option === '输入框下方' ? box.y >= editor.y + editor.height - 1 : box.y + box.height <= editor.y + 1);
+    assert.ok(box.y + box.height <= (await footer.boundingBox()).y);
+  }
+  await page.getByText('已保存', { exact: true }).waitFor({ state: 'hidden' });
+  await page.screenshot({ path: path.join(output, 'completed-below.png') });
+  await setPlacement('隐藏摘要');
+  assert.equal(await button('打开 实时指标 详情').count(), 0);
+  await setPlacement('底部状态栏');
+  await inFooter.getByText(done).waitFor();
   await page.evaluate(async () => { for (const view of window.metricViews) await window.piApi.closeExtensionDataView(view.subscriptionId); });
-  await writeFile(output + 'result.json', JSON.stringify({ checks: ['extension card updates before completion and retains the recent rate', 'public session maps to its Durable metrics and title', 'other session remains empty', 'TPS card matches the stream chart in consecutive and queued rounds', 'final output reconciles to 73 provider tokens'], streamingUpdates: aEvents.length, outputValues: aEvents.map(e => metric(e.snapshot, 'output-tokens')), final }, null, 2));
+  await page.reload();
+  await selectTestSession(page, workspace, ids.a);
+  await inFooter.getByText(done).waitFor();
+  await selectTestSession(page, workspace, ids.b);
+  await inFooter.getByText('等待首次模型请求', { exact: true }).waitFor();
+  await writeFile(output + 'result.json', JSON.stringify({ checks: ['all four placements through settings on a completed conversation', 'status details open without the workbench', 'reloaded placement and independent session', 'extension summary updates before completion and retains the recent rate', 'public session maps to its Durable metrics and title', 'other session remains empty', 'TPS card matches the stream chart in consecutive and queued rounds', 'final output reconciles to 73 provider tokens'], streamingUpdates: aEvents.length, outputValues: aEvents.map(e => metric(e.snapshot, 'output-tokens')), final }, null, 2));
   console.log('Real Electron streaming metrics QA passed');
 } catch (error) {
-  if (page) await writeFile(output + 'failure.json', JSON.stringify(await page.evaluate(() => ({ events: window.metricEvents, views: window.metricViews })), null, 2));
+  if (page && !page.isClosed()) { await page.screenshot({ path: path.join(output, 'failure.png') }); }
+  if (page && !page.isClosed()) await writeFile(output + 'failure.json', JSON.stringify(await page.evaluate(() => ({ events: window.metricEvents, views: window.metricViews })), null, 2));
   throw error;
 } finally { finish?.(); if (app) await app.close(); model.closeAllConnections(); await new Promise(resolve => model.close(resolve)); }

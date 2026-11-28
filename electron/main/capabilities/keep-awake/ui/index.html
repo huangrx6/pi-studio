@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>防止电脑休眠</title>
+  <link rel="stylesheet" href="styles.css">
+  <script defer src="modes.js"></script>
+</head>
+<body>
+  <header><output id="status" aria-live="polite">正在读取状态…</output><button id="retry" type="button" hidden>重试</button></header>
+  <fieldset aria-label="防休眠模式" disabled>
+    <label><input type="radio" name="mode" value="always"><span><strong>开启</strong><small>Pi Studio 运行期间始终保持本机唤醒</small></span></label>
+    <label><input type="radio" name="mode" value="agent"><span><strong>代理</strong><small>仅在代理执行任务时保持本机唤醒</small></span></label>
+    <label><input type="radio" name="mode" value="off"><span><strong>关闭</strong><small>允许电脑按系统设置自动休眠</small></span></label>
+  </fieldset>
+  <section id="lid" hidden>
+    <label class="lid-control"><strong>合盖运行</strong><input id="lid-switch" type="checkbox" role="switch" aria-describedby="lid-status"></label>
+    <small id="lid-status" aria-live="polite"></small>
+  </section>
+</body>
+</html>

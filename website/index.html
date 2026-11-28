@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#090c18">
   <title>Pi Studio · Windows 与 macOS 桌面 Agent 工作台</title>
-  <meta name="description" content="让 Agent 在你的项目里工作。从一次标签搜索的实现出发，看看 Pi Studio 如何并排呈现对话、文件、验证结果，以及模型与工具的选择。">
+  <meta name="description" content="让 Agent 在你的项目里工作。跟随一次标签搜索的实现，了解如何在 Pi Studio 中按工作树组织会话、检查文件、验证改动并选择模型与工具。">
   <link rel="icon" type="image/svg+xml" href="assets/pi-mark.svg">
   <link rel="stylesheet" href="styles/docs.css">
   <link rel="stylesheet" href="styles/home.css">
@@ -32,11 +32,11 @@
           <p class="product-type"><span aria-hidden="true" class="status-dot"></span> Windows 与 macOS 桌面 Agent 工作台</p>
           <h1 id="hero-title"><i>Pi</i> Studio<span class="sr-only"> 桌面工作台</span></h1>
           <p class="hero-lead">从一句需求，到一次可以核对的改动。</p>
-          <p class="hero-description">让 Agent 阅读项目、修改代码、运行测试。左边讨论实现，右边打开文件，逐行核对它做过的改动。</p>
+          <p class="hero-description">让 Agent 阅读项目、修改代码、运行测试。从右侧文件树打开源码，在同一工作树的标签间切换，逐行核对它做过的改动。</p>
           <div class="hero-actions"><a class="download" href="https://github.com/huangrx6/pi-studio/releases/latest">下载 Pi Studio <span aria-hidden="true">↓</span></a><a class="hero-guide" href="#tour">看一次完整任务 <span aria-hidden="true">↘</span></a></div>
         </div>
         <figure class="hero-figure">
-          <div class="hero-perspective"><a class="hero-screen shot-link" href="assets/screens/workbench-dark.png" aria-label="放大 Atlas Notes 工作台截图"><img src="assets/screens/workbench-dark.png" width="2880" height="1840" fetchpriority="high" alt="Atlas Notes 工作台。对话说明搜索改动，右侧 README 列出索引字段与匹配顺序。"></a></div>
+          <div class="hero-perspective"><a class="hero-screen shot-link" href="assets/screens/workbench-dark.png" aria-label="放大 Atlas Notes 工作台截图"><img src="assets/screens/workbench-dark.png" width="2880" height="1840" fetchpriority="high" alt="Atlas Notes 左侧按 main 和 feat/tag-search 工作树列出对话，中间打开标签搜索会话的 README，右侧显示文件树。"></a></div>
           <figcaption><span><b>Atlas Notes</b> / 标签搜索</span><a class="shot-link" href="assets/screens/workbench-dark.png">查看原图 ↗</a></figcaption>
         </figure>
       </div>
@@ -62,8 +62,8 @@
             <a class="scene-shot shot-link" href="assets/screens/subagents-light.png" aria-label="打开子智能体任务列表"><img src="assets/screens/subagents-light.png" width="2880" height="1840" loading="lazy" alt="索引策略审查正在运行，文档校对已经完成。"></a>
           </article>
           <article class="scene" id="verify">
-            <div class="scene-copy"><p class="section-tag">文件与验证</p><h3>答案旁边，<br>就是改过的文件。</h3><p>右侧打开 README，就能对照检查标题与标签的匹配顺序。需要亲自验证，可以在同一工作区开终端重跑测试，再从本轮变更查看差异。</p><a class="text-link" href="guide.html#files-changes">查看文件与变更 ↗</a></div>
-            <a class="scene-shot shot-link" href="assets/screens/workbench-dark.png" aria-label="打开并排文档预览"><img src="assets/screens/workbench-dark.png" width="2880" height="1840" loading="lazy" alt="右侧 README 的索引字段表格和匹配顺序与对话并排显示。"></a>
+            <div class="scene-copy"><p class="section-tag">文件与验证</p><h3>回到这轮会话，<br>核对改过的文件。</h3><p>从右侧文件树打开 README，就能在工作树的文件标签页检查标题与标签的匹配顺序。需要亲自验证，可以在工具面板开终端重跑测试，再从本轮变更查看差异。</p><a class="text-link" href="guide.html#files-changes">查看文件与变更 ↗</a></div>
+            <a class="scene-shot shot-link" href="assets/screens/workbench-dark.png" aria-label="放大标签搜索会话的 README"><img src="assets/screens/workbench-dark.png" width="2880" height="1840" loading="lazy" alt="工作树中的 README 标签列出标题和标签的匹配顺序，旁边还有 search.mjs 标签。"></a>
           </article>
         </div>
       </div>
@@ -102,7 +102,7 @@
       <div class="tool-grid">
         <article data-reveal><div class="tool-glyph" aria-hidden="true">⌘</div><h3>技能与命令</h3><p>把重复的审查、测试或文档步骤存成技能。在输入框键入 <kbd>/</kbd> 就能调用，键入 <kbd>@</kbd> 可以引用项目文件。</p><a class="text-link" href="guide.html#skills">管理技能 ↗</a></article>
         <article id="extensions" data-reveal><div class="tool-glyph" aria-hidden="true">⇄</div><h3>MCP 与扩展</h3><p>用 MCP 接入已有工具。扩展可以提供自己的命令、面板或状态摘要，例如在会话工作区里查看上下文占用。</p><a class="text-link" href="guide.html#extensions">开发与安装扩展 ↗</a></article>
-        <article data-reveal><div class="tool-glyph" aria-hidden="true">›_</div><h3>终端与运行服务</h3><p>打开项目目录的终端，启动本地服务，再把预览留在右侧。查看输出和返回对话都在同一个工作区完成。</p><a class="text-link" href="guide.html#desktop">了解桌面工具 ↗</a></article>
+        <article data-reveal><div class="tool-glyph" aria-hidden="true">›_</div><h3>终端与运行服务</h3><p>在悬浮工具面板的终端启动本地服务，再打开浏览器标签检查页面。切回对话时，服务继续运行。</p><a class="text-link" href="guide.html#desktop">了解桌面工具 ↗</a></article>
       </div>
     </section>
     <section class="start" id="start" aria-labelledby="start-title"><div class="wrap start-grid">

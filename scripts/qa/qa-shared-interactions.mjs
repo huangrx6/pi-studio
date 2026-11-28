@@ -25,12 +25,20 @@ try {
   await page.keyboard.press('Tab'); await focusIs(modal.getByRole('button', { name: '关闭确认', exact: true }));
   await ime(modal, 'Escape'); assert.equal(await modal.count(), 1);
   await page.keyboard.press('Escape'); await modal.waitFor({ state: 'detached' }); await focusIs(openConfirm);
-  result.checks.push('confirmation traps both tab boundaries, IME Escape remains open, ordinary Escape restores opener');
+  const outline = locator => locator.evaluate(node => getComputedStyle(node).outlineStyle);
+  assert.equal(await outline(openConfirm), 'none', 'Escape returns to a pointer opener without a ring, even after Tab inside the dialog');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab'); await focusIs(openConfirm);
+  assert.equal(await outline(openConfirm), 'solid');
+  await page.keyboard.press('Enter'); await modal.waitFor();
+  await page.keyboard.press('Escape'); await modal.waitFor({ state: 'detached' }); await focusIs(openConfirm);
+  assert.equal(await outline(openConfirm), 'solid', 'a keyboard opener keeps its focus ring on return');
+  result.checks.push('confirmation traps Tab, respects IME and restores the original pointer or keyboard focus indication on Escape');
   await page.getByRole('button', { name: '打开表单', exact: true }).click();
   const outer = page.getByRole('dialog', { name: '测试表单', exact: true });
   const imeInput = outer.getByRole('textbox', { name: '编辑名称', exact: true });
   await focusIs(imeInput);
-  const { dimensions, controlHeight, rowHeight } = await outer.evaluate(dialog => {
+  const { dimensions, fieldHeight, compactHeight, settingsHeight, rowHeight } = await outer.evaluate(dialog => {
     const height = selector => dialog.querySelector(selector).getBoundingClientRect().height;
     const styles = getComputedStyle(dialog);
     return {
@@ -42,15 +50,17 @@ try {
         action: height('.dialog-footer > button[type="submit"]'),
         disclosure: height('.pi-accordion-trigger'),
       },
-      controlHeight: parseFloat(styles.getPropertyValue('--settings-control-height')),
+      fieldHeight: parseFloat(styles.getPropertyValue('--control')),
+      compactHeight: parseFloat(styles.getPropertyValue('--control-sm')),
+      settingsHeight: parseFloat(styles.getPropertyValue('--settings-control-height')),
       rowHeight: parseFloat(styles.getPropertyValue('--settings-row-height')),
     };
   });
   assert.deepEqual(dimensions, {
-    text: controlHeight, select: controlHeight, date: controlHeight,
-    stepper: controlHeight, action: controlHeight, disclosure: rowHeight,
+    text: fieldHeight, select: fieldHeight, date: settingsHeight,
+    stepper: settingsHeight, action: compactHeight, disclosure: rowHeight,
   });
-  result.checks.push('single-line fields, date, select, stepper and action have equal hit heights; a disclosure retains its larger row');
+  result.checks.push('dialog fields, picker and stepper, footer action and disclosure each use their shared control height');
   await page.evaluate(() => {
     window.__nativeImeLog = [];
     for (const type of ['compositionstart', 'compositionend', 'keydown', 'cancel']) document.addEventListener(type, event => {
@@ -83,8 +93,16 @@ try {
   modal = page.getByRole('dialog', { name: '嵌套确认', exact: true }); await modal.waitFor();
   await page.keyboard.press('Shift+Tab'); await focusIs(modal.getByRole('button', { name: '继续', exact: true }));
   await page.keyboard.press('Escape'); await modal.waitFor({ state: 'detached' }); await focusIs(nestedOpener); assert.equal(await outer.count(), 1);
-  const dateTrigger = outer.getByRole('button', { name: /^测试日期/ }); await dateTrigger.click(); const calendar = page.getByRole('dialog', { name: '选择测试日期', exact: true }); await calendar.waitFor();
+  const dateTrigger = outer.getByRole('button', { name: /^测试日期/ });
+  const dateBorder = () => dateTrigger.evaluate(async node => {
+    await Promise.allSettled(node.getAnimations().map(animation => animation.finished));
+    return getComputedStyle(node).borderColor;
+  });
+  const idleDateBorder = await dateBorder();
+  await dateTrigger.click(); const calendar = page.getByRole('dialog', { name: '选择测试日期', exact: true }); await calendar.waitFor();
+  await page.mouse.move(0, 0);
   await ime(calendar, 'Escape'); assert.equal(await calendar.count(), 1); await page.keyboard.press('Escape'); await calendar.waitFor({ state: 'detached' }); await focusIs(dateTrigger);
+  assert.equal(await dateBorder(), idleDateBorder, 'pointer return also suppresses a focus indicator drawn with a border');
   const summary = outer.locator('summary').filter({ hasText: '展开高级选项' });
   await page.keyboard.press('Tab'); await focusIs(summary);
   await page.keyboard.press('Tab'); await focusIs(outer.getByRole('button', { name: '表单末字段', exact: true }));
@@ -92,6 +110,7 @@ try {
   await page.keyboard.press('Enter'); await page.keyboard.press('Tab'); await focusIs(outer.getByRole('button', { name: '折叠内操作', exact: true }));
   await page.keyboard.press('Shift+Tab'); await focusIs(summary);
   await page.keyboard.press('Shift+Tab'); await focusIs(dateTrigger);
+  assert.notEqual(await dateBorder(), idleDateBorder, 'Shift+Tab restores the keyboard border on the date picker');
   result.checks.push('native summary participates in forward and reverse modal Tab order; collapsed content is skipped and expanded controls remain reachable');
   const stepValue = outer.getByRole('button', { name: /^行高：/ });
   await outer.getByRole('button', { name: '增加行高', exact: true }).click();

@@ -27,7 +27,7 @@ try {
   const id = await page.evaluate(async cwd => (await window.piApi.createConversation({ cwd })).id, workspace);
   await selectTestSession(page, workspace, id);
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   const nav = page.locator('.settings-navigation');
   const open = name => nav.getByRole('button', { name, exact: true }).click();
   const tools = page.locator('.agent-tools-settings');

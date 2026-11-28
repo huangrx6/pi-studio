@@ -1,4 +1,4 @@
-// Ship only the theme's file associations and their SVG assets. Vite gives
+// Ship only the theme's file and folder associations and their SVG assets. Vite gives
 // each SVG a local URL that also works from Electron's packaged file:// page.
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -9,9 +9,13 @@ import type { Plugin } from 'vite';
 const require = createRequire(import.meta.url);
 const theme = require('material-icon-theme/dist/material-icons.json') as {
   file: string;
+  folder: string;
+  folderExpanded: string;
+  folderNames: Record<string, string>;
+  folderNamesExpanded: Record<string, string>;
   fileNames: Record<string, string>;
   fileExtensions: Record<string, string>;
-  light: { fileNames: Record<string, string>; fileExtensions: Record<string, string> };
+  light: Partial<Record<'fileNames' | 'fileExtensions' | 'folderNames' | 'folderNamesExpanded', Record<string, string>>>;
   iconDefinitions: Record<string, { iconPath: string }>;
 };
 
@@ -25,14 +29,14 @@ export function materialFileTheme(): Plugin {
     resolveId(id) { if (id === moduleId) return '\0' + id; },
     load(id) {
       if (id !== '\0' + moduleId) return;
-      const assets = new Set([theme.file, 'github-actions-workflow']);
+      const assets = new Set([theme.file, theme.folder, theme.folderExpanded, 'github-actions-workflow']);
       const lightIcons: Record<string, string> = {};
       const iconColors: Record<string, string> = {};
       const source: string[] = [];
-      for (const group of ['fileNames', 'fileExtensions'] as const) {
+      for (const group of ['fileNames', 'fileExtensions', 'folderNames', 'folderNamesExpanded'] as const) {
         const entries = Object.entries(theme[group]).map(([key, icon]) => {
           assets.add(icon);
-          const light = theme.light[group][key];
+          const light = theme.light[group]?.[key];
           if (light) {
             assets.add(light);
             lightIcons[icon] = light;

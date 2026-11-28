@@ -97,10 +97,10 @@ export function SecretVaultSettings() {
   }
 
   return <div className="settings-preference-page secret-vault-page">
-    <SettingsPageHeader title="测试凭据" iconPosition="end" meta="在本机加密保存凭据，在对话中通过名称引用。"
+    <SettingsPageHeader title="测试凭据" iconPosition="end" meta="本机加密保存，对话中通过 {{secret:NAME}} 引用。"
       icon={<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
         <path d="M19.5 4.5a8 8 0 0 0-7.5 11L4 23.5V28h4.5l2.5-2.5v-3h3l3.5-3.5a8 8 0 1 0 2-14.5z" />
-        <circle cx="22" cy="10.5" r="1.75" stroke="var(--accent)" />
+        <circle cx="22" cy="10.5" r="1.75" />
       </svg>} />
     <div className="settings-preference-groups">
       <PreferenceGroup title="添加或更新凭据">
@@ -133,7 +133,7 @@ export function SecretVaultSettings() {
             </label>
             <div className="secret-vault-submit">
               <div className="secret-vault-submit-copy">
-                <span className="secret-vault-hint" id="secret-name-hint">{replacing ? '保存后将替换同名凭据，已有引用会使用新值。' : '名称以字母开头，可使用大写字母、数字和下划线。'}</span>
+                <span className="secret-vault-hint" id="secret-name-hint">{replacing ? '保存后将替换同名凭据' : '大写字母开头，支持数字与下划线'}</span>
                 {name.trim() && <code className="secret-vault-preview">{`{{secret:${name.trim().toUpperCase()}}}`}</code>}
               </div>
               <button type="submit" className="settings-save" disabled={busy || !name.trim() || !value}>
@@ -143,7 +143,7 @@ export function SecretVaultSettings() {
           </fieldset>
         </form>
       </PreferenceGroup>
-      <PreferenceGroup title="已保存的凭据" description="复制引用后可直接粘贴到消息中，工具执行时会读取对应的值。"
+      <PreferenceGroup title="已保存的凭据"
         actions={!loading && !loadError && items.length > 0 && <span className="secret-vault-count">{items.length} 项</span>}>
         {loading ? <LoadingState variant="section">正在读取凭据…</LoadingState>
           : loadError ? <div className="secret-vault-load-error"><p role="alert">{loadError}</p>

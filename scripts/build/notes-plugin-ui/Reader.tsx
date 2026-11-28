@@ -85,7 +85,7 @@ function LocalImage({ from, src, alt, library }: { from: string; src?: string; a
   }, [from, library, src]);
   const url = src && IMAGE.test(src) ? src : loaded;
   return url ? <img className="note-image" src={url} alt={alt || ''} loading="lazy" />
-    : <span className="note-image-placeholder"><ImageOff size={15} />{alt || '图片暂不可预览'}</span>;
+    : <span className="note-image-placeholder"><ImageOff size="calc(var(--icon-sm) + 1px)" />{alt || '图片暂不可预览'}</span>;
 }
 
 let diagramOrdinal = 0;
@@ -136,7 +136,7 @@ function CodeBox({ language, children }: { language: string; children: ReactNode
     <div className="note-code-tools">
       {language && <span className="note-code-lang">{language}</span>}
       <button type="button" onClick={copy} aria-label={copied ? '已复制' : '复制代码'} title={copied ? '已复制' : '复制代码'}>
-        {copied ? <Check size={13} /> : <Copy size={13} />}
+        {copied ? <Check size="calc(var(--icon-xs) + 1px)" /> : <Copy size="calc(var(--icon-xs) + 1px)" />}
       </button>
     </div>
     <pre>{children}</pre>
@@ -204,7 +204,7 @@ export function MarkdownReader({ from, text, scheme, library, onLink, onHeadings
   }, [body, onHeadings]);
   return <article className="markdown-note" ref={ref}>
     {properties.length > 0 && <details className="note-properties">
-      <summary><Braces size={13} /> <span>笔记属性</span><span className="properties-count">{properties.length}</span></summary>
+      <summary><Braces size="calc(var(--icon-xs) + 1px)" /> <span>笔记属性</span><span className="properties-count">{properties.length}</span></summary>
       <dl>{properties.map(([key, value]) => <div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>
     </details>}
     <Markdown skipHtml remarkPlugins={[remarkGfm, remarkMath, noteSyntax]}

@@ -263,7 +263,7 @@ export function PermissionPolicyFormFields({
         })}
       </div>
       <div className="permission-policy-default">
-        <div><span>默认决定</span><p>规则、保护检查和基础模式均未决定时使用。</p></div>
+        <div><span>默认决定</span></div>
         <Select
           disabled={busy}
           label="未命中时的权限决定"
@@ -278,7 +278,6 @@ export function PermissionPolicyFormFields({
       <header className="permission-policy-section-head"><h3>例外规则</h3></header>
       <Accordion className="permission-disclosure permission-overrides" summary="工具覆盖" badge={toolOverrides.length ? `${toolOverrides.length} 条` : '未设置'}>
         <div className="permission-disclosure-body">
-          <p>按工具名称或通配符设置决定，匹配时优先于基础模式。</p>
           {toolOverrides.length > 0 && <div className="permission-policy-rows">
             {toolOverrides.map(([pattern, decision]) => <div className="permission-policy-row" key={pattern}>
               <span className="permission-policy-row-key"><code>{pattern}</code></span>
@@ -344,7 +343,6 @@ export function PermissionPolicyFormFields({
         badge={policy.rules.length ? `${policy.rules.length} 条` : '未设置'}
       >
         <div className="permission-disclosure-body">
-          <p>按命令或工作区路径细分条件。多条规则命中时，依次优先采用拒绝、询问、允许。</p>
           {policy.rules.length > 0 && <div className="permission-rule-list">
             {policy.rules.map((rule) => {
               const condition = ruleCondition(rule);
@@ -432,7 +430,6 @@ export function PermissionPolicyFormFields({
     <Accordion
       className={previewClass}
       summary="策略预览"
-      description="模拟一次工具调用，查看当前草稿的决定和命中规则。"
     >
       <div className="permission-preview-body">
         <div className="permission-preview-form">

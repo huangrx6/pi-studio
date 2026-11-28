@@ -89,14 +89,13 @@ export function McpEditorFields({ draft, setDraft, editing, mcpTesting, settings
       <div className="mcp-editor-exposure-row">
         <div className="mcp-editor-exposure-copy">
           <h3>工具暴露</h3>
-          <p>决定该服务器的方法何时进入模型上下文。</p>
         </div>
         <Select label="工具暴露" disabled={settingsBusy} value={draft.exposure} onChange={value => update('exposure', value)}
           options={[{ value: 'deferred', label: '按需搜索 · tool_search' }, { value: 'direct', label: '直接提供' }, { value: 'hidden', label: '不提供给模型' }]} />
       </div>
       <Accordion className="plugin-flat-disclosure mcp-editor-advanced" open={advancedOpen} onToggle={event => setAdvancedOpen(event.currentTarget.open)}
         onInvalidCapture={event => { event.currentTarget.open = true; setAdvancedOpen(true); }}
-        summary="高级选项" description="工作目录、超时、备注与逐工具覆盖" badge={configured ? '已配置' : undefined}>
+        summary="高级选项" badge={configured ? '已配置' : undefined}>
         <div className="plugin-flat-disclosure-body">
           <div className="settings-form-grid">
             {stdio && <div className="settings-field field-wide">

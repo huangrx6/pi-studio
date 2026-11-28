@@ -28,6 +28,7 @@ test('the standalone excalidraw plugin publishes playback scenes, saves per-conv
     assert.deepEqual(revealed, [['board', 17]]);
     assert.ok(snapshots.some(snapshot => snapshot.drawing && snapshot.playback?.firstElement === 0));
     const final = provider.read(context).viewData;
+    assert.deepEqual(snapshots.at(-1), final, 'the tool panel receives the committed, editable scene');
     assert.equal(final.revision, 1);
     assert.equal(final.drawing, false);
     assert.equal(final.scene.elements.length, 7);
@@ -88,7 +89,7 @@ test('the plugin scene validator rejects active embeds, non-local images, and du
   assert.throws(() => normalizeCanvasScene({ elements: [shape, shape] }), /重复 ID/);
 });
 
-test('excalidraw_draw waits for a newly revealed sidebar subscriber before starting playback timing', async t => {
+test('excalidraw_draw waits for a newly opened tool panel subscriber before starting playback timing', async t => {
   const dataDirectory = await mkdtemp(path.join(os.tmpdir(), 'studio-board-delay-'));
   t.after(() => rm(dataDirectory, { recursive: true, force: true }));
   const snapshots = [];
@@ -112,7 +113,7 @@ test('excalidraw_draw waits for a newly revealed sidebar subscriber before start
     assert.ok(subscribedAt > 0, 'revealPanel should attach a subscriber');
     const animated = snapshots.find(snapshot => snapshot.drawing && snapshot.playback);
     assert.ok(animated, 'newly revealed subscriber must receive the animated playback state');
-    assert.ok(animated.playback.startAt >= subscribedAt, 'playback should begin after sidebar subscribes');
+    assert.ok(animated.playback.startAt >= subscribedAt, 'playback should begin after the tool panel subscribes');
   } finally {
     dispose?.();
   }

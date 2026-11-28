@@ -1,8 +1,8 @@
-.todo-history { width: min(var(--session-view-width), 100%); margin-inline: auto; padding: var(--space-4) var(--workbench-tool-gutter); }
+.todo-history { width: min(var(--session-view-width), 100%); margin-inline: auto; padding: var(--space-4) var(--space-4); }
 .todo-history details + details { border-top: 1px solid var(--divider); }
-.todo-history summary { display: flex; gap: var(--space-2); align-items: center; min-height: var(--row-height); padding: var(--space-1) var(--space-2); list-style: none; cursor: pointer; border-radius: var(--radius-control); font-size: var(--text-13); }
+.todo-history summary { display: flex; gap: var(--space-2); align-items: center; min-height: var(--row-height); padding: var(--space-1) var(--space-2); list-style: none; cursor: pointer; border-radius: var(--radius-control); font-size: var(--text-body); }
 .todo-history summary::-webkit-details-marker { display: none; }
-.todo-history :is(summary, nav button, p > button):is(:hover, :focus-visible):not(:disabled) { background: var(--conversation-hover-surface); color: var(--text-1); }
+.todo-history :is(summary, nav button, p > button):is(:hover, :focus-visible):not(:disabled) { background: var(--surface-hover); color: var(--text-1); }
 .todo-history summary:focus-visible { outline-offset: -2px; }
 .todo-history summary strong { flex: 1; min-width: 0; font-weight: var(--weight-medium); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .todo-history summary svg { width: var(--icon-xs); height: var(--icon-xs); flex: none; }
@@ -30,11 +30,11 @@
 @media (prefers-reduced-motion: reduce) {
   .todo-history summary > svg:first-child { transition: none; }
 }
-.todo-history small { font-size: var(--text-xs); white-space: nowrap; }
+.todo-history small { font-size: var(--text-caption); white-space: nowrap; }
 .todo-history ul { list-style: none; margin: 0 0 6px 12px; padding: 0 0 0 9px; border-inline-start: 1px solid var(--divider); }
-.todo-history-task { display: flex; align-items: start; gap: var(--space-2); padding: var(--space-1) 0; font-size: var(--text-13); line-height: var(--leading-normal); overflow-wrap: anywhere; }
+.todo-history-task { display: flex; align-items: start; gap: var(--space-2); padding: var(--space-1) 0; font-size: var(--text-body); line-height: var(--leading-normal); overflow-wrap: anywhere; }
 .todo-history-task[data-status="completed"] > span + span { color: var(--text-2); }
 .todo-history-task small { margin-inline-start: 6px; }
 .todo-history > p { margin: 4px 6px; color: var(--text-2); }
 .todo-history nav { display: flex; gap: var(--space-1); justify-content: flex-end; padding-block-start: var(--space-2); }
-.todo-history :is(nav button, p > button) { min-height: var(--control-sm); padding-inline: var(--space-2); border-radius: var(--radius-control); color: var(--text-2); font-size: var(--text-sm); }
+.todo-history :is(nav button, p > button) { min-height: var(--control-sm); padding-inline: var(--space-2); border-radius: var(--radius-control); color: var(--text-2); font-size: var(--text-label); }

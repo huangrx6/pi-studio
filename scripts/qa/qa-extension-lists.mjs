@@ -18,7 +18,7 @@ let page;
 
 async function openLibrary(mode = '') {
   await page.goto(server.origin + (mode ? '?library=' + mode : ''));
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await page.locator('.settings-navigation').getByRole('button', { name: '插件', exact: true }).click();
   await page.getByRole('tab', { name: '扩展', exact: true }).click();
   await page.locator('.installed-extension-section').waitFor();

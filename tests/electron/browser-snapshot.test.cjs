@@ -33,15 +33,46 @@ test('trimSnapshot compacts oversized trees', () => {
   assert.ok(snapshot.warnings.some((item) => /truncat|compact/i.test(item)));
 });
 
-const { buildSnapshotScript } = require('../../electron/main/services/browser/snapshot.cjs');
+const { buildSnapshotScript, formatSnapshotOutline } = require('../../electron/main/services/browser/snapshot.cjs');
 
-test('buildSnapshotScript stamps refs and supports a11y mode', () => {
+test('buildSnapshotScript compiles valid JS across all modes and options', () => {
   const domLite = buildSnapshotScript({ mode: 'dom_lite', maxNodes: 50 });
+  assert.doesNotThrow(() => new Function(domLite), 'dom_lite script must be valid JS');
   assert.match(domLite, /data-pi-ref/);
   assert.match(domLite, /iframe:cross-origin omitted/);
-  const a11y = buildSnapshotScript({ mode: 'a11y', maxNodes: 50 });
+  assert.match(domLite, /shadowRoot/);
+
+  const a11y = buildSnapshotScript({ mode: 'a11y', maxNodes: 50, viewportOnly: true, selector: 'main' });
+  assert.doesNotThrow(() => new Function(a11y), 'a11y viewportOnly script must be valid JS');
   assert.match(a11y, /mode === 'a11y'/);
   assert.match(a11y, /a11yInteresting|tabIndex/);
+  assert.match(a11y, /viewportOnly = true/);
+
+  const textMode = buildSnapshotScript({ mode: 'text', maxChars: 6000, viewportOnly: true, selector: 'article' });
+  assert.doesNotThrow(() => new Function(textMode), 'text mode script must be valid JS');
+  assert.match(textMode, /mode: 'text'/);
+  assert.match(textMode, /formatTable/);
+});
+
+test('formatSnapshotOutline produces compact single-pass outline without duplicating refs JSON', () => {
+  const outline = formatSnapshotOutline({
+    refs: {
+      e1: { role: 'heading', name: 'field-sizing' },
+      e2: { role: 'textbox', name: 'Search', value: 'css', states: ['required'] },
+      e3: { role: 'button', name: 'Go', states: ['disabled'] },
+    },
+    tree: [{
+      role: 'group',
+      children: [
+        { ref: 'e1', role: 'heading', name: 'field-sizing' },
+        { ref: 'e2', role: 'textbox', name: 'Search', value: 'css', states: ['required'] },
+        { ref: 'e3', role: 'button', name: 'Go', states: ['disabled'] },
+      ],
+    }],
+  }, 2000);
+  assert.match(outline, /- heading "field-sizing" \[e1\]/);
+  assert.match(outline, /- textbox "Search" \[e2\] val="css" \(required\)/);
+  assert.match(outline, /- button "Go" \[e3\] \(disabled\)/);
 });
 
 test('trimSnapshot preserves mode and warnings', () => {

@@ -24,7 +24,7 @@
 
 .info-hint:hover,
 .info-hint:focus {
-  background: var(--surface-soft);
+  background: var(--surface-hover);
   color: var(--text);
 }
 
@@ -47,7 +47,7 @@
   background: var(--overlay-surface);
   box-shadow: var(--shadow-dialog);
   color: var(--text);
-  font-size: var(--text-xs);
+  font-size: var(--text-description);
   line-height: var(--leading-normal);
   text-align: left;
   white-space: normal;

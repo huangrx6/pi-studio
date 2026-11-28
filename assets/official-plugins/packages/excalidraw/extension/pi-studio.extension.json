@@ -2,24 +2,24 @@
   "format": 1,
   "id": "studio.excalidraw",
   "name": "Excalidraw",
-  "version": "2.0.1",
+  "version": "2.1.1",
   "author": "Pi Studio",
   "publisher": "Pi Studio",
   "license": "MIT",
   "engines": { "piStudio": ">=0.0.14" },
-  "description": "完全独立的实时画布插件，在当前会话侧栏中编辑、绘制和导出图形。",
+  "description": "完全独立的实时画布插件，在当前会话工具面板中编辑、绘制和导出图形。",
   "permissions": ["agent.tools", "ui.panels", "ui.data", "ui.commands"],
   "runtime": { "durableEntry": "extension.mjs" },
   "contributes": {
     "tools": [
-      { "name": "excalidraw_draw", "description": "画图默认首选：自动打开当前会话侧栏画布并实时逐笔绘制；同一会话新标题会自动建独立画板并支持切换。" },
+      { "name": "excalidraw_draw", "description": "画图默认首选：自动打开当前会话工具面板画布并实时逐笔绘制；同一会话新标题会自动建独立画板并支持切换。" },
       { "name": "excalidraw_read", "description": "查看当前会话的画板清单、活动画板版本、节点及其连线。" }
     ],
     "panels": [
       {
         "id": "board",
         "title": "Excalidraw",
-        "slot": "panel.side",
+        "slot": "tool.view",
         "description": "实时画布",
         "view": {
           "entry": "ui/index.html",

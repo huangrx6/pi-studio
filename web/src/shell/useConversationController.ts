@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from 'react';
@@ -10,16 +11,19 @@ import { useSettingsToast } from '../shared/SettingsToast';
 import { useMessageDelivery } from '../features/conversation/useMessageDelivery';
 import { useConversationSessions } from '../features/conversation/useConversationSessions';
 import { useConversationSubscription } from '../features/conversation/useConversationSubscription';
+import { peekTemporary } from '../features/conversation/temporary-chat-store';
+import { errorText } from '../shared/error-text';
 import { useTranscriptNavigation } from '../features/conversation/useTranscriptNavigation';
 import { useComposerCommands } from '../features/conversation/useComposerCommands';
 import { useComposerPersistence } from '../features/conversation/useComposerPersistence';
 import type { ChatMessage, TurnDiff, TurnDiffFile } from '../types/chat-types';
-import type { SubagentChild } from '../types/subagent-types';
-import type { ConversationPage } from '../types/durable-types';
 import type { OutlineData } from '../features/conversation/outline-model';
 import type { PiSessionSummary, PanelFileSource } from './app-types';
+import { useSessionInspection } from './useSessionInspection';
+import { inspectionSummary, type Inspection } from './session-inspection';
 import { useSettingsWorkspace } from './useSettingsWorkspace';
 import { useConversationExtensions } from './useConversationExtensions';
+import { modelQuotaSource } from '../types/provider-quota';
 import { useSidebarActions } from './useSidebarActions';
 import { useAppCommandPalette } from './useAppCommandPalette';
 import { useSidebarWorkspaceActions } from './useSidebarWorkspaceActions';
@@ -32,7 +36,11 @@ import type { AppFoundation } from './useAppFoundation';
  * root and individual conversation surfaces stay independently testable.
  */
 export function useConversationController(foundation: AppFoundation) {
+  const createFromDraft = (input: Parameters<typeof window.piApi.createConversation>[0]) =>
+    window.piApi.createConversation({ ...input, adoptDraftTools: true });
   const showToast = useSettingsToast();
+  const workbench = foundation.workbench;
+  const { section, setSection: selectSection, temporary } = foundation;
   const {
     actionConfirmation,
     settingsLeaveConfirmation,
@@ -41,7 +49,6 @@ export function useConversationController(foundation: AppFoundation) {
     setSessionLoading,
     settingsError,
     setSettingsError,
-    retryInfo,
     setRetryInfo,
     compaction,
     setCompaction,
@@ -49,11 +56,9 @@ export function useConversationController(foundation: AppFoundation) {
     setQueuedPromptsBySession,
     queuedPromptsRef,
     queuedDrainSessionsRef,
-    queueAdmissionPendingBySession,
     setQueueAdmissionPendingBySession,
     queueAdmissionPendingRef,
     queuedEditContextsRef,
-    outlineActive,
     setOutlineActive,
     outlineItems,
     setOutlineItems,
@@ -69,7 +74,6 @@ export function useConversationController(foundation: AppFoundation) {
     setModelSelection,
     defaultModelSelection,
     setDefaultModelSelection,
-    modelPickerRequest,
     setModelPickerRequest,
     longTaskBusy,
     setLongTaskBusy,
@@ -85,10 +89,8 @@ export function useConversationController(foundation: AppFoundation) {
     changeWorkspace,
     expandWorkspace,
     loadState,
-    expanded,
     setExpanded,
     queuedPrompts,
-    queuedEditContext,
     messages,
     setMessages,
     contextPolicy,
@@ -101,12 +103,10 @@ export function useConversationController(foundation: AppFoundation) {
     setComposerAttachments,
     composerMenu,
     setComposerMenu,
-    composerMenuIndex,
     setComposerMenuIndex,
     composerCommands,
     composerCommandOptions,
     composerMentionOptions,
-    retryComposerSuggestions,
     composerDraftKeyRef,
     composerDraftsRef,
     composerPersistenceReady,
@@ -123,7 +123,6 @@ export function useConversationController(foundation: AppFoundation) {
     composerEditorRef,
     busy,
     setBusy,
-    stoppingSessionIds,
     setStoppingSessionIds,
     stopping,
     turnActive,
@@ -134,7 +133,6 @@ export function useConversationController(foundation: AppFoundation) {
     conversationSubscriptionError,
     setConversationSubscriptionError,
     conversationSubscriptionRetryRef,
-    composerFeedback,
     setComposerFeedback,
     composerFeedbackScopeRef,
     filesOpen,
@@ -188,7 +186,6 @@ export function useConversationController(foundation: AppFoundation) {
     settingsTab,
     pluginSection,
     settingsData,
-    settingsBusy,
     setMcpRefreshError,
     setMcpRefreshSummary,
     skillRefreshError,
@@ -246,6 +243,7 @@ export function useConversationController(foundation: AppFoundation) {
     jumpToOutline,
     jumpToMessage,
   } = useTranscriptNavigation({
+    savedReading: workbench.reading, layoutReady: workbench.ready, onReading: workbench.saveReading,
     onLoadOlder: (beforeApply) => loadOlderMessagesRef.current(beforeApply),
     onLoadNewer: (beforeApply) => loadNewerMessagesRef.current(beforeApply),
     hasNewer: transcriptTruncated,
@@ -257,10 +255,9 @@ export function useConversationController(foundation: AppFoundation) {
     busy,
     turnActive,
     error,
-    visible: !settingsOpen && !foundation.panelFullscreen,
+    visible: section === 'conversations' && !settingsOpen && !workbench.activeTab,
     filesOpen,
     outlineItems,
-    outlineActive,
     setOutlineActive,
     showComposerFeedback,
   });
@@ -268,52 +265,60 @@ export function useConversationController(foundation: AppFoundation) {
   const notifyExtension = useCallback((notice: ExtensionNotice) => {
     showToast(notice.message, notice.tone === 'error' || notice.tone === 'success' ? notice.tone : 'info');
   }, [showToast]);
-  const workbench = foundation.workbench;
   const focusConversation = useCallback(() => {
-    workbench.setPanelFullscreen(false);
-    if (workbench.panelOverlay) workbench.closePanel();
+    selectSection('conversations');
+    workbench.activate('chat');
     requestAnimationFrame(() => composerEditorRef.current?.focus());
-  }, [workbench.closePanel, workbench.panelOverlay, workbench.setPanelFullscreen, composerEditorRef]);
-  const openTrace = workbench.openTraceTab;
-  const [extensionMenuOpen, setExtensionMenuOpen] = useState(false);
-  const openExtensionMenu = () => {
-    workbench.setPanelFullscreen(false);
-    setExtensionMenuOpen(true);
+  }, [selectSection, composerEditorRef, workbench.activate]);
+  const inspection = useSessionInspection(session?.id, setError);
+  const inspectorToggleRef = useRef<HTMLButtonElement>(null);
+  const openInspection = (details: Partial<Inspection>) => {
+    if (!session) return;
+    selectSection('conversations');
+    workbench.activate('chat');
+    inspection.patch({ ...details, mode: 'expanded' });
   };
-  const currentProviderId = modelSelection.modelRef.split('/')[0];
-  const source = settingsData?.providers.find(item => item.id === currentProviderId);
-  const quotaSource = settingsData
-    ? source?.enabled && source.quotaEnabled ? { id: source.id, name: source.name } : undefined
-    : modelSelection.quotaProvider?.id === currentProviderId ? modelSelection.quotaProvider : undefined;
+  const openProgress = (progressPage: Inspection['progressPage'] = 'summary') => openInspection({ tab: 'progress', progressPage });
+  const openTrace = () => openInspection({ tab: 'trace' });
+  const appHubOpen = section === 'plugins';
+  const [statusPanelId, setStatusPanelId] = useState<string | null>(null);
+  const closeStatusPanel = useCallback(() => setStatusPanelId(null), []);
+  const temporaryId = section === 'temporary' ? temporary.activeId : undefined;
+  useEffect(closeStatusPanel, [closeStatusPanel, section, session?.id, temporaryId, workspace]);
+  useEffect(() => { if (settingsOpen) closeStatusPanel(); }, [closeStatusPanel, settingsOpen]);
+  const chatModel = section === 'temporary' ? temporary.selection : modelSelection;
+  const quotaSource = modelQuotaSource(chatModel, settingsData?.providers);
   const conversationExtensions = useConversationExtensions({
     sourceQuotaEnabled: Boolean(quotaSource),
-    cwd: session?.cwd || workspace,
-    sessionId: session?.id,
-    turnActive,
+    cwd: section === 'conversations' ? session?.cwd || workspace : workspace,
+    sessionId: section === 'conversations' ? session?.id : undefined,
+    turnActive: section === 'conversations' && turnActive,
     extensionPlacements: foundation.preferences.extensionPlacements,
   });
   const openExtensionPanel = useCallback(async (panelId: string) => {
     const item = conversationExtensions.panels.find(panel => panel.id === panelId);
     if (!item) {
-      showToast('这个扩展面板当前不可用。', 'error');
+      showToast('这个扩展视图当前不可用。', 'error');
       return;
     }
-    if (settingsOpen) {
-      if (!await settingsWorkspace.controller.closeSettings({ restoreFocus: false })) return;
-      if (sessionRef.current?.id !== session?.id || workspaceRef.current !== workspace) return;
+    if (item.slot === 'status.detail') {
       setExtensionDetail(null);
+      setStatusPanelId(current => current === item.id ? null : item.id);
+      return;
     }
-    workbench.openExtensionTab(item);
-  }, [conversationExtensions.panels, session?.id, sessionRef, setExtensionDetail,
-    settingsOpen, settingsWorkspace.controller, showToast, workbench.openExtensionTab, workspace, workspaceRef]);
+    try {
+      await window.piApi.openToolWindow({ kind: 'extension', panelId: item.id });
+    } catch (error) {
+      showToast(errorText(error), 'error');
+    }
+  }, [conversationExtensions.panels, setExtensionDetail, showToast]);
 
-  useEffect(() => window.piApi.onExtensionPanelRequested?.(({ sessionId, panelId }) => {
-    if (sessionId !== sessionRef.current?.id || sessionId !== session?.id || settingsOpen) return;
-    const panel = conversationExtensions.panels.find(item => item.id === panelId);
-    if (panel) workbench.openExtensionTab(panel);
-  }), [conversationExtensions.panels, session?.id, sessionRef, settingsOpen, workbench.openExtensionTab]);
-
-  useEffect(() => { setExtensionMenuOpen(false); }, [session?.id, workspace, settingsOpen]);
+  const openAppHub = useCallback(() => selectSection('plugins'), [selectSection]);
+  useEffect(() => window.piApi.onExtensionPanelRequested?.(({ ownerKey, sessionId, panelId }) => {
+    const matches = ownerKey ? ownerKey === (workbench.owner || 'studio')
+      : section === 'conversations' && sessionId && sessionId === sessionRef.current?.id && sessionId === session?.id;
+    if (matches && (ownerKey || !settingsOpen)) void openExtensionPanel(panelId);
+  }), [openExtensionPanel, section, session?.id, sessionRef, settingsOpen, workbench.owner]);
   const [liveDiff, setLiveDiff] = useState<TurnDiff | null>(null);
   const requestRef = useRef<string | null>(null);
   const modelPickerRequestRef = useRef(0);
@@ -330,15 +335,15 @@ export function useConversationController(foundation: AppFoundation) {
     open: async () => false,
     start: async () => {},
   });
-  const openFileHandlerRef = useRef<(path: string, source?: PanelFileSource) => Promise<boolean>>(async () => false);
+  const openFileHandlerRef = useRef<(path: string, source?: PanelFileSource, title?: string) => Promise<boolean>>(async () => false);
   const openChangesHandlerRef = useRef<(file: TurnDiffFile | undefined, turn: TurnDiff) => void>(() => {});
-  openFileHandlerRef.current = (path, source = 'diff') => openFile(path, session?.id, source);
+  openFileHandlerRef.current = (path, source = 'diff', title) => openFile(path, undefined, source, {title});
   openChangesHandlerRef.current = (nextFile, turn) => {
     if (session) openChangesTab(nextFile, turn, session);
   };
   const handleOpenFile = useCallback((path: string) => openFileHandlerRef.current(path, 'diff'), []);
-  const handleOpenAttachment = useCallback((path: string) => {
-    openFileHandlerRef.current(path, 'attachment');
+  const handleOpenAttachment = useCallback((path: string, title?: string) => {
+    openFileHandlerRef.current(path, 'attachment', title);
   }, []);
   const undoSessionId = session?.id;
   const undoTurnDiff = useCallback(async (at: number) => {
@@ -359,13 +364,18 @@ export function useConversationController(foundation: AppFoundation) {
   const subagentWorkspace = useSubagentWorkspace({
     session,
     sessionRef,
-    childKey: workbench.panelTabs.find(tab => tab.kind === 'subagents')?.childKey,
-    visible: !settingsOpen && filesOpen && workbench.activePanelTab?.kind === 'subagents',
-    openSubagentsTab: workbench.openSubagentsTab,
+    childKey: inspection.view.childKey,
+    visible: !settingsOpen && !workbench.activeTab && section === 'conversations' && inspection.view.mode === 'expanded' && inspection.view.tab === 'subagents',
+    openSubagentsTab: childKey => openInspection({ tab: 'subagents', childKey }),
     turnActive,
     actionConfirmation,
     loadState,
   });
+  const cardSummary = useMemo(() => inspectionSummary(todoDetails, subagentWorkspace.subagentChildren, session?.longTask),
+    [todoDetails, subagentWorkspace.subagentChildren, session?.longTask]);
+  useEffect(() => {
+    if (cardSummary.activity) inspection.hydrate(cardSummary.activity);
+  }, [cardSummary.activity, inspection.hydrate]);
   const {
     subagentChildren,
     setSubagentChildren,
@@ -430,6 +440,8 @@ export function useConversationController(foundation: AppFoundation) {
     deleteQueued,
     reorderQueued,
   } = useMessageDelivery({
+    onDraftCreated: created => workbench.showConversation(created.cwd, created),
+    createFromDraft,
     session,
     sessionRef,
     sessionLoadRef,
@@ -437,7 +449,6 @@ export function useConversationController(foundation: AppFoundation) {
     workspaces,
     workspace,
     modelSelection,
-    busy,
     setBusy,
     setError,
     setRetryInfo,
@@ -459,7 +470,6 @@ export function useConversationController(foundation: AppFoundation) {
     setQueuedPromptsBySession,
     queuedPromptsRef,
     queuedDrainSessionsRef,
-    queueAdmissionPendingBySession,
     setQueueAdmissionPendingBySession,
     queueAdmissionPendingRef,
     queuedEditContextsRef,
@@ -479,7 +489,7 @@ export function useConversationController(foundation: AppFoundation) {
     requestRef,
     modelPickerRequestRef,
     setModelPickerRequest,
-    openTodoHistory: () => workbench.openProgressTab('history'),
+    openTodoHistory: () => openProgress('history'),
     setSession,
     setMessages,
     setRequestTraces,
@@ -496,6 +506,7 @@ export function useConversationController(foundation: AppFoundation) {
     commandHandlersRef: composerCommandHandlersRef,
   });
   const {
+    draftModelLoading,
     startSession,
     selectDraftWorkspace,
     prefetchSession,
@@ -507,6 +518,8 @@ export function useConversationController(foundation: AppFoundation) {
     loadMessageWindow,
     resetToLatest,
   } = useConversationSessions({
+    onNavigate: () => selectSection('conversations'),
+    onPresent: workbench.showConversation,
     session,
     messages,
     sessionRef,
@@ -515,7 +528,6 @@ export function useConversationController(foundation: AppFoundation) {
     workspaces,
     settingsOpen,
     canLeaveSettings,
-    modelSelection,
     defaultModelSelection,
     defaultModelWorkspaceRef,
     modelRevisionRef,
@@ -573,6 +585,7 @@ export function useConversationController(foundation: AppFoundation) {
     findExtensionCommand,
     selectComposerOption,
   } = useComposerCommands({
+    createFromDraft,
     session,
     sessionRef,
     sessionLoadRef,
@@ -613,6 +626,7 @@ export function useConversationController(foundation: AppFoundation) {
     loadState,
     showComposerFeedback,
     openExtensionPanel,
+    onCompose: () => selectSection('conversations'),
   });
   composerCommandHandlersRef.current = {
     findExtensionCommand,
@@ -647,12 +661,14 @@ export function useConversationController(foundation: AppFoundation) {
 
   // 扩展请求工具确认时，渲染进程负责显示统一样式的弹窗。
   useEffect(() => window.piApi.onConfirmRequest((request) => foundation.setConfirmRequest(request)), [foundation.setConfirmRequest]);
+  useEffect(() => window.piApi.onConfirmDismissed?.(id =>
+    foundation.setConfirmRequest(current => current?.id === id ? null : current)), [foundation.setConfirmRequest]);
 
   // Viewing one finished conversation acknowledges only that result. Opening
   // the application itself must not clear completion marks for other sessions.
   useEffect(() => {
-    if (session?.id && !turnActive) window.piApi.markMenuBarSessionSeen?.(session.id);
-  }, [session?.id, turnActive]);
+    if (section === 'conversations' && !settingsOpen && session?.id && !turnActive) window.piApi.markMenuBarSessionSeen?.(session.id);
+  }, [section, settingsOpen, session?.id, turnActive]);
 
   useEffect(() => window.piApi.onOpenSettings(() => { void settingsNavigationRef.current.open(); }), []);
   useEffect(() => window.piApi.onOpenMain(() => { void settingsNavigationRef.current.close(); }), []);
@@ -684,10 +700,11 @@ export function useConversationController(foundation: AppFoundation) {
   useEffect(() => {
     const opener = settingsReturnFocusRef.current;
     if (settingsOpen || !opener) return;
-    opener.focus();
-    // The settings toggle may have folded the sidebar containing the opener.
-    if (document.activeElement === document.body) {
-      document.querySelector<HTMLButtonElement>('.chat-header .sidebar-expand')?.focus();
+    // A sidebar opener can still be fading out when the user returns to the workbench.
+    const folded = opener.closest('.is-sidebar-collapsed .shell-sidebar');
+    if (!folded && opener.isConnected) opener.focus({ preventScroll: true });
+    if (folded || document.activeElement === document.body) {
+      document.querySelector<HTMLButtonElement>('.app > .content-region:not([hidden]) .sidebar-expand')?.focus();
     }
   }, [settingsOpen]);
 
@@ -695,7 +712,15 @@ export function useConversationController(foundation: AppFoundation) {
     setCompaction({ active: false });
   }, [session?.id]);
 
-  useEffect(() => window.piApi.onConversationListChanged(() => { void loadState(); }), [loadState]);
+  useEffect(() => {
+    const refresh = () => { void loadState(); };
+    const unsubscribe = window.piApi.onConversationListChanged(refresh);
+    window.addEventListener('focus', refresh);
+    return () => {
+      unsubscribe();
+      window.removeEventListener('focus', refresh);
+    };
+  }, [loadState]);
 
   const { retryConversationSubscription } = useConversationSubscription({
     sessionId: session?.id,
@@ -732,6 +757,7 @@ export function useConversationController(foundation: AppFoundation) {
     permanentlyDeleteArchivedConversation,
     deleteArchivedGroup,
   } = useSidebarActions({
+    forgetConversations: workbench.forgetConversations,
     workspaces,
     removeWorkspaceFromList: foundation.removeWorkspaceFromList,
     sessionRef,
@@ -754,17 +780,33 @@ export function useConversationController(foundation: AppFoundation) {
   });
 
   const isNewConversation = !session?.id;
+  async function openWorktree(cwd: string) {
+    const generation = ++sessionLoadRef.current;
+    const last = await workbench.workspaceConversation(cwd);
+    if (sessionLoadRef.current !== generation) return;
+    if (last && await openSession({ id: last }, true, false)) return;
+    if (!last || sessionLoadRef.current === generation + 1) await startSession(cwd, { focusTab: false });
+  }
+  async function inspectSession(id: string) {
+    if (sessionRef.current?.id === id && section === 'conversations') {
+      workbench.activate('chat');
+    } else if (!await openSession({ id })) return;
+    inspection.patch({ mode: 'expanded' }, id);
+    requestAnimationFrame(() => {
+      if (sessionRef.current?.id === id) inspectorToggleRef.current?.focus({ preventScroll: true });
+    });
+  }
   const sidebarActions = useSidebarWorkspaceActions({
+    inspectSession,
+    openWorktree,
     workspaces,
-    isNewConversation,
     sidebarFiltering: foundation.sidebarFiltering,
     dragPreviewRef: foundation.dragPreviewRef,
     setExpanded,
     setSearchCollapsed: foundation.setSearchCollapsed,
-    selectDraftWorkspace,
     openSession,
     prefetchSession,
-    startSession: (cwd) => startSession(cwd),
+    startSession,
     sidebarAction,
     reorderWorkspaces: foundation.reorderWorkspaces,
     reorderSessions: foundation.reorderSessions,
@@ -792,7 +834,7 @@ export function useConversationController(foundation: AppFoundation) {
     sessionLoading,
     messageCount: messages.length,
     subagentCount: subagentChildren.length,
-    extensionCount: conversationExtensions.groups.length,
+    extensionCount: conversationExtensions.toolPanels.length,
     prompt,
     conversationNavigationRef,
     setComposerMenu,
@@ -802,12 +844,17 @@ export function useConversationController(foundation: AppFoundation) {
     openPanel: foundation.openPanel,
     openBrowserTab: foundation.openBrowserTab,
     openTerminalTab: foundation.openTerminalTab,
-    stopGeneration,
-
+    stopFocusedGeneration: () => {
+      if (section === 'temporary' && peekTemporary(temporary.activeId)?.busy) {
+        void window.piApi.temporaryStop(temporary.activeId).catch(cause => showToast(errorText(cause), 'error'));
+      } else if (section === 'conversations' && turnActive) {
+        void stopGeneration();
+      }
+    },
     focusConversation,
     openAgentOverview,
-    openExtensions: openExtensionMenu,
-    openProgress: workbench.openProgressTab,
+    openExtensions: openAppHub,
+    openProgress,
     openTrace,
     openGit: workbench.openGitTab,
     openTemporaryChat: foundation.openTemporaryChat,
@@ -823,7 +870,6 @@ export function useConversationController(foundation: AppFoundation) {
     settingsOpen,
     settingsTab,
     settingsData,
-    settingsBusy,
     settingsError,
     setMcpRefreshError,
     setMcpRefreshSummary,
@@ -893,10 +939,17 @@ export function useConversationController(foundation: AppFoundation) {
     notifyExtension,
     focusConversation,
     openTrace,
+    inspection, inspectorToggleRef, cardSummary, openProgress, inspectSession,
+    appHubOpen,
+    openAppHub,
+    section,
+    selectSection,
+    temporary,
+    statusPanelId,
+    closeStatusPanel,
+    draftModelLoading,
     quotaSource,
     conversationExtensions,
-    extensionMenuOpen,
-    setExtensionMenuOpen,
     openExtensionPanel,
     liveDiff,
     handleOpenFile,
@@ -937,7 +990,7 @@ export function useConversationController(foundation: AppFoundation) {
     restoreArchivedConversation,
     permanentlyDeleteArchivedConversation,
     deleteArchivedGroup,
-    sidebarActions,
+    sidebarActions, openWorktree,
     actionPaletteOpen,
     setActionPaletteOpen,
     availableConversationActions,

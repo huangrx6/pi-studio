@@ -3,8 +3,10 @@ import { QUOTA_EXTENSION_ID } from '../../types/provider-quota.ts';
 import type { ExtensionPlacement } from '../../shared/preferences';
 import type { StatusPanel } from '../../shared/extension-appearance';
 
+export const KEEP_AWAKE_EXTENSION_ID = 'builtin:studio-keep-awake';
+
 const summaryPositions = {
-  'status.chip': 'header',
+  'status.chip': 'statusbar',
   'composer.above': 'above',
   'composer.below': 'below',
 } as const satisfies Record<ExtensionSummarySlot, ExtensionPlacement>;
@@ -15,10 +17,9 @@ export type ConfigurablePanel = StatusPanel & {
 };
 
 const placementOptions: Array<{ value: ExtensionPlacement; label: string }> = [
-  { value: 'header', label: '顶栏' },
   { value: 'above', label: '输入框上方' },
   { value: 'below', label: '输入框下方' },
-  { value: 'menu', label: '扩展菜单' },
+  { value: 'statusbar', label: '底部状态栏' },
   { value: 'hidden', label: '隐藏摘要' },
 ];
 
@@ -26,12 +27,11 @@ export function isSummarySlot(slot: ExtensionUiSlot): slot is ExtensionSummarySl
   return Object.hasOwn(summaryPositions, slot);
 }
 
-export function placementOptionsFor(slots: readonly ExtensionUiSlot[], extensionId?: string) {
+export function placementOptionsFor(slots: readonly ExtensionUiSlot[]) {
   const positions = new Set<ExtensionPlacement>(['hidden']);
   for (const slot of slots) {
-    if (isSummarySlot(slot) && extensionId !== QUOTA_EXTENSION_ID) positions.add(summaryPositions[slot]);
+    if (isSummarySlot(slot)) positions.add(summaryPositions[slot]);
   }
-  if (slots.includes('status.chip')) positions.add('menu');
   return placementOptions.filter(option => positions.has(option.value));
 }
 
@@ -44,7 +44,7 @@ export function configurablePanels(item: ExtensionHostItem): ConfigurablePanel[]
   if (!manifest) return [];
   return (manifest.contributes?.panels ?? []).flatMap(panel => {
     const slots = (panel.slots ?? [panel.slot]).filter(isSummarySlot);
-    if (!slots.length && panel.slot !== 'panel.side') return [];
+    if (!slots.length && panel.slot !== 'tool.view' && panel.slot !== 'status.detail') return [];
     return [{
       id: panelContributionId(item.scope, manifest.id, panel.id),
       title: panel.title,
@@ -52,7 +52,7 @@ export function configurablePanels(item: ExtensionHostItem): ConfigurablePanel[]
       slots,
       icon: panel.icon,
       color: panel.color,
-      ...(panel.slot === 'panel.side' && item.iconDataUrl ? { iconDataUrl: item.iconDataUrl } : {}),
+      ...(panel.slot === 'tool.view' && item.iconDataUrl ? { iconDataUrl: item.iconDataUrl } : {}),
     }];
   });
 }
@@ -61,12 +61,13 @@ export function placementFor(
   placements: Readonly<Record<string, ExtensionPlacement>> | undefined,
   id: string,
   slots: readonly ExtensionUiSlot[],
-  extensionId: string,
 ): ExtensionPlacement {
   const stored = placements?.[id];
-  const options = placementOptionsFor(slots, extensionId);
+  const options = placementOptionsFor(slots);
   if (stored && options.some(option => option.value === stored)) return stored;
-  if (slots.includes('status.chip')) return 'menu';
+  if (slots.includes('status.chip')) {
+    return 'statusbar';
+  }
   return options[0].value;
 }
 
@@ -74,5 +75,30 @@ export function placementForItem(
   placements: Readonly<Record<string, ExtensionPlacement>> | undefined,
   item: ExtensionUiItem,
 ): ExtensionPlacement {
-  return placementFor(placements, item.id, item.slots ?? [item.slot], item.extensionId);
+  return placementFor(placements, item.id, item.slots ?? [item.slot]);
+}
+
+/** Resolve each contribution once for the selected conversation and its model source. */
+export function conversationExtensionPositions(
+  items: readonly ExtensionUiItem[],
+  placements: Readonly<Record<string, ExtensionPlacement>>,
+  sessionId: string | undefined,
+  turnActive: boolean,
+) {
+  const inline: Record<'above' | 'below' | 'statusbar', ExtensionUiItem[]> = {
+    above: [], below: [], statusbar: [],
+  };
+  for (const item of items) {
+    if (!(item.slots ?? [item.slot]).some(isSummarySlot)) continue;
+    if (!sessionId && item.extensionId !== QUOTA_EXTENSION_ID && item.extensionId !== KEEP_AWAKE_EXTENSION_ID) continue;
+    if (item.visibility === 'while-active' && !turnActive) continue;
+    const position = placementForItem(placements, item);
+    if (position !== 'hidden') inline[position].push(item);
+  }
+  return {
+    aboveItems: inline.above,
+    belowItems: inline.below,
+    statusBarItems: inline.statusbar,
+    globalStatusBarItems: inline.statusbar.filter(item => item.extensionId === KEEP_AWAKE_EXTENSION_ID),
+  };
 }

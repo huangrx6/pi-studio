@@ -1,41 +1,52 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
-import { ChevronDown, Folder, FolderOpen } from 'lucide-react';
+import { lazy, Suspense, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent } from 'react';
+import { ChevronDown, UsersRound } from 'lucide-react';
+import { BranchIcon } from '../features/git/git-icons';
 import { LoadingIndicator } from '../shared/LoadingState';
+import { HintButton } from '../shared/HintButton';
 import type { ConversationSummary } from '../types/durable-types';
 import { SidebarActions, type SidebarAction } from './SidebarActions';
 import { SessionRecency } from './SessionRecency';
 import { focusNeighborIndices, sessionWindowSegments, SIDEBAR_VIRTUAL_THRESHOLD, sidebarGroupsEqual, visibleSessionIndices } from './sidebar-virtualization.ts';
+import { workspaceRowTitle, type SidebarProject } from './sidebar-projects';
+import { SidebarWorkspaceLabel } from './SidebarWorkspaceLabel';
+import type { PiWorkspace } from '../types/workspace';
 import './styles/sidebar-workspace-list.css';
 
-export type SidebarWorkspace = { cwd: string; name: string; sessions: ConversationSummary[]; sessionCount?: number; archivedCount?: number };
+const WorktreesDialog = lazy(() => import('../features/git/WorktreesDialog'));
+
 export type SidebarWorkspaceActions = {
-  onToggleWorkspace: (cwd: string, isOpen: boolean) => void;
+  onToggleWorkspace: (cwd: string, isOpen: boolean, filtering?: boolean) => void;
+  onInspectSession: (id: string) => void;
   onOpenSession: (session: ConversationSummary) => void;
+  onOpenWorktree: (cwd: string) => void;
   onPrefetchSession: (id: string) => void;
   onStartSession: (cwd: string) => void;
   onAction: (kind: 'workspace' | 'session', id: string, action: SidebarAction, name?: string) => Promise<void>;
   onReorderWorkspaces: (from: string, to: string) => void;
   onReorderSessions: (cwd: string, from: string, to: string) => void;
   onClearFilters: () => void;
-  onMakeDragPreview: (event: DragEvent<HTMLButtonElement>, label: string, kind: '工作区' | '会话' | '标签') => void;
+  onMakeDragPreview: (event: DragEvent<HTMLButtonElement>, label: string, kind: '工作区' | '会话') => void;
   onClearDragPreview: () => void;
 };
 export type SidebarWorkspaceListProps = {
-  workspaces: SidebarWorkspace[]; loading: boolean; hasWorkspaces: boolean;
+  onOpenRoom: (cwd: string, roomId: string) => void;
+  projects: SidebarProject<PiWorkspace>[]; loading: boolean; hasWorkspaces: boolean;
   activeWorkspace: string; activeSessionId?: string; expanded: Set<string>;
   filtering: boolean; searchCollapsed: Set<string>; filterKey: string; visible: boolean;
   actions: SidebarWorkspaceActions;
   actionsDisabled?: boolean;
 };
 type DragItem = { kind: 'workspace' | 'session'; cwd: string; sessionId?: string };
-type LogicalRow = { key: string; cwd: string; kind: 'workspace' | 'session' | 'empty'; sessionId?: string; index?: number };
+type LogicalRow = { key: string; cwd: string; kind: 'workspace' | 'session' | 'room'; sessionId?: string; index?: number };
+const INITIAL_SESSION_ROW_HEIGHT = 28;
 const workspaceKey = (cwd: string) => `w:${cwd}`;
 const sessionKey = (id: string) => `s:${id}`;
 
 /** Owns sidebar scrolling/keyboard/drag state; application data and writes stay in App. */
-export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspaces, loading, hasWorkspaces, activeWorkspace, activeSessionId, expanded, filtering, searchCollapsed, filterKey, visible, actions, actionsDisabled = false }: SidebarWorkspaceListProps) {
+export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ projects, onOpenRoom, loading, hasWorkspaces, activeWorkspace, activeSessionId, expanded, filtering, searchCollapsed, filterKey, visible, actions, actionsDisabled = false }: SidebarWorkspaceListProps) {
   const root = useRef<HTMLDivElement>(null);
-  const [viewport, setViewport] = useState({ top: 0, height: 600, rowHeight: 36, groups: {} as Record<string, number> });
+  const [managed, setManaged] = useState<{ projectKey: string; cwd: string; name: string } | null>(null);
+  const [viewport, setViewport] = useState({ top: 0, height: 600, rowHeight: INITIAL_SESSION_ROW_HEIGHT, groups: {} as Record<string, number> });
   const [focusedKey, setFocusedKey] = useState<string | null>(null);
   const [interactionKeys, setInteractionKeys] = useState<Set<string>>(() => new Set());
   const [pendingFocus, setPendingFocus] = useState<{ key: string; edge: 'first' | 'last' | number } | null>(null);
@@ -50,11 +61,25 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
   const dragFrame = useRef<number>(0);
   const scrollFrame = useRef<number>(0);
   const isOpen = (cwd: string) => filtering ? !searchCollapsed.has(cwd) : expanded.has(cwd);
-  const logicalRows = useMemo(() => workspaces.flatMap((item): LogicalRow[] => {
-    const rows: LogicalRow[] = [{ key: workspaceKey(item.cwd), cwd: item.cwd, kind: 'workspace' }];
-    if (!item.sessions.length || !(filtering ? !searchCollapsed.has(item.cwd) : expanded.has(item.cwd))) return rows;
-    return [...rows, ...item.sessions.map((session, index): LogicalRow => ({ key: sessionKey(session.id), cwd: item.cwd, kind: 'session', sessionId: session.id, index }))];
-  }), [workspaces, filtering, searchCollapsed, expanded]);
+  const logicalRows = useMemo(() => {
+    const rows: LogicalRow[] = [];
+    const shown = (key: string) => filtering ? !searchCollapsed.has(key) : expanded.has(key);
+    for (const project of projects) {
+      if (project.nested) {
+        rows.push({ key: project.key, cwd: project.key, kind: 'workspace' });
+        if (!shown(project.key)) continue;
+      }
+      for (const item of project.workspaces) {
+        rows.push({ key: workspaceKey(item.cwd), cwd: item.cwd, kind: 'workspace' });
+        if (!shown(item.cwd)) continue;
+        item.rooms?.forEach(room => rows.push({ key: 'room:' + room.id, cwd: item.cwd, kind: 'room' }));
+        item.sessions.forEach((session, index) => {
+          rows.push({ key: sessionKey(session.id), cwd: item.cwd, kind: 'session', sessionId: session.id, index });
+        });
+      }
+    }
+    return rows;
+  }, [projects, filtering, searchCollapsed, expanded]);
   const rowsRef = useRef(logicalRows);
   rowsRef.current = logicalRows;
 
@@ -64,7 +89,9 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
     const top = element.getBoundingClientRect().top + element.clientTop;
     const groups: Record<string, number> = {};
     element.querySelectorAll<HTMLElement>('[data-session-group]').forEach((group) => { groups[group.dataset.sessionGroup!] = group.getBoundingClientRect().top - top + element.scrollTop; });
-    const rowHeight = element.querySelector<HTMLElement>('.session-row')?.getBoundingClientRect().height || Number.parseFloat(getComputedStyle(element).getPropertyValue('--control')) || 36;
+    const rowHeight = element.querySelector<HTMLElement>('.session-row')?.getBoundingClientRect().height
+      || Number.parseFloat(getComputedStyle(element).getPropertyValue('--sidebar-session-height'))
+      || INITIAL_SESSION_ROW_HEIGHT;
     setViewport((previous) => {
       const next = { top: element.scrollTop, height: element.clientHeight, rowHeight, groups };
       return previous.top === next.top
@@ -87,7 +114,7 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
         : { ...previous, top, height }
     ));
   }, [visible]);
-  useLayoutEffect(measure, [measure, workspaces, expanded, searchCollapsed, filtering, viewport.rowHeight]);
+  useLayoutEffect(measure, [measure, projects, expanded, searchCollapsed, filtering, viewport.rowHeight]);
   useEffect(() => {
     if (!visible || !root.current) return;
     const observer = new ResizeObserver(measure);
@@ -110,8 +137,14 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
   const requestFocus = useCallback((key: string, edge: 'first' | 'last' | number = 'first') => {
     setFocusedKey(key); setPendingFocus({ key, edge });
   }, []);
+  function closeWorktrees() {
+    setManaged(null);
+    if (managed) requestFocus(managed.projectKey, 1);
+  }
   const rowElement = (key: string) => [...(root.current?.querySelectorAll<HTMLElement>('[data-sidebar-key]') || [])].find((node) => node.dataset.sidebarKey === key);
-  const rowButtons = (node: HTMLElement) => [...node.querySelectorAll<HTMLButtonElement>(':scope > button:not(:disabled), :scope > .sidebar-row-actions > button:not(:disabled)')];
+  const rowButtons = (node: HTMLElement) =>
+    [...node.querySelectorAll<HTMLButtonElement>(':scope > button:not(:disabled), :scope > .sidebar-row-actions > button:not(:disabled)')]
+      .filter(button => button.offsetWidth > 0);
   useLayoutEffect(() => {
     if (!pendingFocus || !visible) return;
     const node = rowElement(pendingFocus.key);
@@ -199,6 +232,49 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', item.sessionId || item.cwd);
   }
+  function projectDrag(cwd: string, key: string, name: string) {
+    return {
+      draggable: true,
+      onDragStart: (event: DragEvent<HTMLButtonElement>) => startDrag(event, { kind: 'workspace', cwd }, name),
+      onDragOver(event: DragEvent<HTMLButtonElement>) {
+        const source = dragRef.current;
+        if (source?.kind !== 'workspace' || source.cwd === cwd) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        setDropHint(key);
+      },
+      onDragLeave(event: DragEvent<HTMLButtonElement>) {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropHint(null);
+      },
+      onDrop(event: DragEvent<HTMLButtonElement>) {
+        const source = dragRef.current;
+        if (source?.kind !== 'workspace') return;
+        event.preventDefault();
+        actions.onReorderWorkspaces(source.cwd, cwd);
+        markDropped(key);
+        clearDrag();
+      },
+    };
+  }
+
+  function projectHeading(project: SidebarProject<PiWorkspace>) {
+    const open = isOpen(project.key);
+    const available = project.workspaces.find(item => item.cwd === activeWorkspace && !item.missing)
+      ?? project.workspaces.find(item => !item.missing);
+    return <div className="sidebar-row-shell workspace-row-shell" data-sidebar-key={project.key}>
+      <button type="button" className={`workspace-row${dropHint === project.key ? ' drop-before' : ''}`}
+        {...projectDrag(project.workspaces[0].cwd, project.key, project.name)} title={project.name}
+        aria-expanded={open} onClick={() => actions.onToggleWorkspace(project.key, open)}>
+        <SidebarWorkspaceLabel name={project.name} open={open} />
+        <span className="workspace-meta"><ChevronDown className={open ? 'chevron open' : 'chevron'} /></span>
+      </button>
+      {available && <div className="sidebar-row-actions">
+        <button type="button" aria-label={`管理${project.name}的工作树`} title="管理工作树"
+          onClick={() => setManaged({ projectKey: project.key, cwd: available.cwd, name: project.name })}><BranchIcon aria-hidden="true" /></button>
+      </div>}
+    </div>;
+  }
+
   function trackDrag(event: DragEvent<HTMLDivElement>) {
     if (!dragRef.current) return;
     event.preventDefault(); dragPointer.current = event.clientY;
@@ -269,56 +345,76 @@ export const SidebarWorkspaceList = memo(function SidebarWorkspaceList({ workspa
         </div>
       </div>)}
     </div>}
-    {!(loading && !hasWorkspaces) && workspaces.map((item) => {
-      const hasSessions = item.sessions.length > 0;
-      const open = hasSessions && isOpen(item.cwd);
-      const active = activeWorkspace === item.cwd && (open || !hasSessions);
-      const hasRunning = !open && item.sessions.some((session) => session.running);
-      const sessionTotal = item.sessionCount ?? item.sessions.length;
-      const key = workspaceKey(item.cwd);
-      const focused = logicalRows.find((row) => row.key === focusedKey && row.cwd === item.cwd);
-      const retained = focused?.index !== undefined ? focusNeighborIndices(focused.index, item.sessions.length) : [];
-      for (const pinnedKey of interactionKeys) { const index = item.sessions.findIndex((session) => sessionKey(session.id) === pinnedKey); if (index >= 0) retained.push(index); }
-      if (dragging?.kind === 'session' && dragging.cwd === item.cwd) { const index = item.sessions.findIndex((session) => session.id === dragging.sessionId); if (index >= 0) retained.push(index); }
-      const indices = visibleSessionIndices(item.sessions.length, viewport.top, viewport.height, viewport.groups[item.cwd] ?? 0, viewport.rowHeight, retained);
-      const virtual = item.sessions.length > SIDEBAR_VIRTUAL_THRESHOLD;
-      return <div className="workspace" key={item.cwd} data-workspace-cwd={item.cwd}>
-        <div className="sidebar-row-shell workspace-row-shell" data-sidebar-key={key}>
-          <button className={`workspace-row ${active ? 'is-active' : ''} ${dropHint === key ? 'drop-before' : ''} ${dragging?.kind === 'workspace' && dragging.cwd === item.cwd ? 'is-dragging' : ''} ${justDropped === key ? 'just-dropped' : ''}`} title={item.name && item.name !== item.cwd ? `${item.name}\n${item.cwd}` : item.cwd} aria-expanded={hasSessions ? open : undefined} draggable
-            onDragStart={(event) => startDrag(event, { kind: 'workspace', cwd: item.cwd }, item.name)}
-            onDragOver={(event) => { if (dragRef.current?.kind !== 'workspace' || dragRef.current.cwd === item.cwd) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropHint(key); }}
-            onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropHint(null); }}
-            onDrop={(event) => { event.preventDefault(); if (dragRef.current?.kind === 'workspace') { actions.onReorderWorkspaces(dragRef.current.cwd, item.cwd); markDropped(key); } clearDrag(); }}
-            onClick={() => hasSessions ? actions.onToggleWorkspace(item.cwd, open) : actions.onStartSession(item.cwd)}>
-            {open ? <FolderOpen size={15} /> : <Folder size={15} />}
-            <span className="workspace-label">{item.name}</span>
-            {hasRunning && <span className="workspace-running-dot" aria-label="包含运行中的会话" title="包含运行中的会话" />}
-            {!open && sessionTotal > 0 && <span className="workspace-count" aria-hidden="true">{sessionTotal}</span>}
-            {hasSessions && <ChevronDown size={13} className={open ? 'chevron open' : 'chevron'} />}
-          </button>
-          <SidebarActions disabled={actionsDisabled} kind="workspace" id={item.cwd} name={item.name} sessionCount={item.sessionCount} archivedCount={item.archivedCount} onNew={() => actions.onStartSession(item.cwd)} onAction={(action, name) => actions.onAction('workspace', item.cwd, action, name)} onInteractionChange={(active) => retainInteraction(key, active)} onRestoreFocusFallback={() => restoreRemovedRow({ key, kind: 'workspace', cwd: item.cwd })} />
-        </div>
-        {open && <div className={`sessions ${virtual ? 'is-virtualized' : ''}`} style={virtual ? { height: item.sessions.length * viewport.rowHeight } : undefined} data-session-group={item.cwd} role="list" aria-label={`${item.name}的会话`}>
-          {sessionWindowSegments(indices, item.sessions.length).map((segment) => {
-            if (segment.kind === 'gap') return <div key={`gap:${segment.from}`} className="sidebar-session-gap" style={{ height: segment.count * viewport.rowHeight }} aria-hidden="true" />;
-            const index = segment.index; const session = item.sessions[index]; const sessionRowKey = sessionKey(session.id);
-            const logicalRow: LogicalRow = { key: sessionRowKey, kind: 'session', cwd: item.cwd, sessionId: session.id, index };
-            const inViewport = (viewport.groups[item.cwd] ?? 0) + (index + 1) * viewport.rowHeight > viewport.top && (viewport.groups[item.cwd] ?? 0) + index * viewport.rowHeight < viewport.top + viewport.height;
-            return <div className={`sidebar-row-shell session-row-shell ${session.pinned ? 'is-pinned' : ''}`} key={session.id} data-sidebar-key={sessionRowKey} data-session-id={session.id} data-session-index={index} role="listitem" aria-posinset={index + 1} aria-setsize={item.sessions.length}>
-              <button className={`session-row ${activeSessionId === session.id ? 'is-active' : ''} ${dropHint === sessionRowKey ? 'drop-before' : ''} ${dragging?.sessionId === session.id ? 'is-dragging' : ''} ${justDropped === sessionRowKey ? 'just-dropped' : ''}`} title={`${session.title}${session.pinned ? ' · 已置顶' : ''}`} aria-current={activeSessionId === session.id ? 'page' : undefined} draggable
-                onDragStart={(event) => startDrag(event, { kind: 'session', cwd: item.cwd, sessionId: session.id }, session.title)}
-                onDragOver={(event) => { const drag = dragRef.current; if (drag?.kind !== 'session' || drag.cwd !== item.cwd || drag.sessionId === session.id) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropHint(sessionRowKey); }}
-                onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropHint(null); }}
-                onDrop={(event) => { const drag = dragRef.current; event.preventDefault(); event.stopPropagation(); if (drag?.kind === 'session' && drag.cwd === item.cwd && drag.sessionId) { actions.onReorderSessions(item.cwd, drag.sessionId, session.id); markDropped(sessionRowKey); } clearDrag(); }}
-                onClick={() => actions.onOpenSession(session)} onMouseEnter={() => actions.onPrefetchSession(session.id)} onFocus={() => actions.onPrefetchSession(session.id)}>
-                <span className="session-title">{session.title}</span><span className="session-meta">{session.running ? <span className="session-running" role="status" aria-label="会话正在运行" title="会话正在运行"><LoadingIndicator /></span> : session.pinned ? <span className="session-pin-mark" title="已置顶">置顶</span> : <SessionRecency timestamp={session.updatedAt} durationMs={session.lastDurationMs} visible={visible && inViewport} />}</span>
+    {!(loading && !hasWorkspaces) && projects.map(project => <div className="sidebar-project" key={project.key}>
+      {project.nested && projectHeading(project)}
+      {(!project.nested || isOpen(project.key)) && project.workspaces.map(item => {
+        const name = item.name;
+        const hasSessions = item.sessions.length > 0 || Boolean(item.rooms?.length);
+        const open = hasSessions && isOpen(item.cwd);
+        const active = activeWorkspace === item.cwd && (open || !hasSessions);
+        const hasRunning = !open && item.sessions.some((session) => session.running);
+        const sessionTotal = (item.sessionCount ?? item.sessions.length) + (item.rooms?.length ?? 0);
+        const key = workspaceKey(item.cwd);
+        const focused = logicalRows.find((row) => row.key === focusedKey && row.cwd === item.cwd);
+        const retained = focused?.index !== undefined ? focusNeighborIndices(focused.index, item.sessions.length) : [];
+        for (const pinnedKey of interactionKeys) { const index = item.sessions.findIndex((session) => sessionKey(session.id) === pinnedKey); if (index >= 0) retained.push(index); }
+        if (dragging?.kind === 'session' && dragging.cwd === item.cwd) { const index = item.sessions.findIndex((session) => session.id === dragging.sessionId); if (index >= 0) retained.push(index); }
+        const indices = visibleSessionIndices(item.sessions.length, viewport.top, viewport.height, viewport.groups[item.cwd] ?? 0, viewport.rowHeight, retained);
+        const virtual = item.sessions.length > SIDEBAR_VIRTUAL_THRESHOLD;
+        return <div className={`workspace${project.nested ? ' sidebar-worktree' : ''}${active ? ' is-current' : ''}`} key={item.cwd} data-workspace-cwd={item.cwd}>
+          <div className="sidebar-row-shell workspace-row-shell" data-sidebar-key={key}>
+            <HintButton className={`workspace-row ${active ? 'is-active' : ''} ${dropHint === key ? 'drop-before' : ''} ${dragging?.kind === 'workspace' && dragging.cwd === item.cwd ? 'is-dragging' : ''} ${justDropped === key ? 'just-dropped' : ''}`} hint={workspaceRowTitle(item)} placement="right" aria-expanded={hasSessions ? open : undefined}
+              {...(!project.nested && projectDrag(item.cwd, key, name))}
+              disabled={item.missing && !hasSessions}
+              onClick={event => {
+                if (!item.missing && item.cwd !== activeWorkspace && !(event.target as Element).closest('.workspace-meta')) {
+                  if (!open && hasSessions) actions.onToggleWorkspace(item.cwd, false);
+                  actions.onOpenWorktree(item.cwd);
+                } else if (hasSessions) actions.onToggleWorkspace(item.cwd, open);
+                else actions.onStartSession(item.cwd);
+              }}>
+              <SidebarWorkspaceLabel name={name} worktree={item.worktree} open={open} />
+              {item.missing && <small className="workspace-missing-label">目录已移除</small>}
+              {(hasSessions || sessionTotal > 0) && <span className="workspace-meta">
+                {hasRunning && <span className="workspace-running-dot" aria-label="包含运行中的会话" title="包含运行中的会话" />}
+                {!open && sessionTotal > 0 && <span className="workspace-count" aria-hidden="true">{sessionTotal}</span>}
+                {hasSessions && <ChevronDown className={open ? 'chevron open' : 'chevron'} />}
+              </span>}
+            </HintButton>
+            <SidebarActions disabled={actionsDisabled} kind="workspace" id={item.cwd} name={name} sessionCount={item.sessionCount} archivedCount={item.archivedCount}
+              onNew={item.missing ? undefined : () => actions.onStartSession(item.cwd)} onAction={(action, name) => actions.onAction('workspace', item.cwd, action, name)} onInteractionChange={(active) => retainInteraction(key, active)} onRestoreFocusFallback={() => restoreRemovedRow({ key, kind: 'workspace', cwd: item.cwd })} />
+          </div>
+          {open && Boolean(item.rooms?.length) && <div className="sessions" aria-label="团队群聊">
+            {item.rooms!.map(room => <div key={room.id} className="session-row-shell sidebar-row-shell" data-sidebar-key={'room:' + room.id}>
+              <button type="button" className="session-row" title={'团队群聊 · ' + room.name} onClick={() => onOpenRoom(item.cwd, room.id)}>
+                <UsersRound size={14} /><span className="session-title">{room.name}</span>
               </button>
-              <SidebarActions disabled={actionsDisabled} kind="session" id={session.id} name={session.title} pinned={session.pinned} archived={session.archived} onAction={(action, name) => actions.onAction('session', session.id, action, name)} onInteractionChange={(active) => retainInteraction(sessionRowKey, active)} onRestoreFocusFallback={() => restoreRemovedRow(logicalRow)} />
-            </div>;
-          })}
-        </div>}
-      </div>;
-    })}
-    {!loading && !workspaces.length && <div className="sidebar-empty" role="status" aria-live="polite"><span>{filtering ? '没有匹配的会话' : '还没有工作区'}</span>{filtering && <button type="button" className="sidebar-empty-reset" onClick={actions.onClearFilters}>清除筛选</button>}</div>}
+            </div>)}
+          </div>}
+          {open && item.sessions.length > 0 && <div className={`sessions ${virtual ? 'is-virtualized' : ''}`} style={virtual ? { height: item.sessions.length * viewport.rowHeight } : undefined} data-session-group={item.cwd} role="list" aria-label={`${item.name}的会话`}>
+            {sessionWindowSegments(indices, item.sessions.length).map((segment) => {
+              if (segment.kind === 'gap') return <div key={`gap:${segment.from}`} className="sidebar-session-gap" style={{ height: segment.count * viewport.rowHeight }} aria-hidden="true" />;
+              const index = segment.index; const session = item.sessions[index]; const sessionRowKey = sessionKey(session.id);
+              const logicalRow: LogicalRow = { key: sessionRowKey, kind: 'session', cwd: item.cwd, sessionId: session.id, index };
+              const inViewport = (viewport.groups[item.cwd] ?? 0) + (index + 1) * viewport.rowHeight > viewport.top && (viewport.groups[item.cwd] ?? 0) + index * viewport.rowHeight < viewport.top + viewport.height;
+              return <div className={`sidebar-row-shell session-row-shell ${session.pinned ? 'is-pinned' : ''}`} key={session.id} data-sidebar-key={sessionRowKey} data-session-id={session.id} data-session-index={index} role="listitem" aria-posinset={index + 1} aria-setsize={item.sessions.length}>
+                <button className={`session-row ${activeSessionId === session.id ? 'is-active' : ''} ${dropHint === sessionRowKey ? 'drop-before' : ''} ${dragging?.sessionId === session.id ? 'is-dragging' : ''} ${justDropped === sessionRowKey ? 'just-dropped' : ''}`} title={`${session.title}${session.pinned ? ' · 已置顶' : ''}`} aria-current={activeSessionId === session.id ? 'page' : undefined} draggable
+                  onDragStart={(event) => startDrag(event, { kind: 'session', cwd: item.cwd, sessionId: session.id }, session.title)}
+                  onDragOver={(event) => { const drag = dragRef.current; if (drag?.kind !== 'session' || drag.cwd !== item.cwd || drag.sessionId === session.id) return; event.preventDefault(); event.dataTransfer.dropEffect = 'move'; setDropHint(sessionRowKey); }}
+                  onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropHint(null); }}
+                  onDrop={(event) => { const drag = dragRef.current; event.preventDefault(); event.stopPropagation(); if (drag?.kind === 'session' && drag.cwd === item.cwd && drag.sessionId) { actions.onReorderSessions(item.cwd, drag.sessionId, session.id); markDropped(sessionRowKey); } clearDrag(); }}
+                  onClick={() => actions.onOpenSession(session)} onMouseEnter={() => actions.onPrefetchSession(session.id)} onFocus={() => actions.onPrefetchSession(session.id)}>
+                  <span className="session-title">{session.title}</span><span className="session-meta">{session.running ? <span className="session-running" role="status" aria-label="会话正在运行" title="会话正在运行"><LoadingIndicator /></span> : session.pinned ? <span className="session-pin-mark" title="已置顶">置顶</span> : <SessionRecency timestamp={session.updatedAt} durationMs={session.lastDurationMs} visible={visible && inViewport} />}</span>
+                </button>
+                <SidebarActions disabled={actionsDisabled} kind="session" onInspect={() => actions.onInspectSession(session.id)} id={session.id} name={session.title} pinned={session.pinned} archived={session.archived} onAction={(action, name) => actions.onAction('session', session.id, action, name)} onInteractionChange={(active) => retainInteraction(sessionRowKey, active)} onRestoreFocusFallback={() => restoreRemovedRow(logicalRow)} />
+              </div>;
+            })}
+          </div>}
+        </div>;
+      })}
+    </div>)}
+    {managed && <Suspense fallback={null}><WorktreesDialog cwd={managed.cwd} activeCwd={activeWorkspace}
+      title={managed.name} onClose={closeWorktrees} onOpen={path => { setManaged(null); actions.onOpenWorktree(path); }} /></Suspense>}
+    {!loading && !projects.length && <div className="sidebar-empty" role="status" aria-live="polite"><span>{filtering ? '没有匹配的会话' : '还没有工作区'}</span>{filtering && <button type="button" className="sidebar-empty-reset" onClick={actions.onClearFilters}>清除筛选</button>}</div>}
   </div>;
 });

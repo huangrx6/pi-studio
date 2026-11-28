@@ -336,6 +336,18 @@ test('tool-selection saves and migrations commit their value and version togethe
       'browser_viewport',
       'browser_console',
       'browser_network',
+      'desktop_status',
+      'desktop_apps',
+      'desktop_windows',
+      'desktop_launch',
+      'desktop_act',
+      'desktop_snapshot',
+      'desktop_screenshot',
+      'desktop_click',
+      'desktop_type',
+      'desktop_scroll',
+      'desktop_drag',
+      'desktop_hotkey',
     ]);
     assert.deepEqual(readSetting(AGENT_TOOLS_KEY).value, {
       enabled: ['read', 'write'],
@@ -393,13 +405,25 @@ test('agent tool recovery repairs the latest payload and keeps explicit empty se
     'browser_viewport',
     'browser_console',
     'browser_network',
+    'desktop_status',
+    'desktop_apps',
+    'desktop_windows',
+    'desktop_launch',
+    'desktop_act',
+    'desktop_snapshot',
+    'desktop_screenshot',
+    'desktop_click',
+    'desktop_type',
+    'desktop_scroll',
+    'desktop_drag',
+    'desktop_hotkey',
   ]);
   assert.deepEqual(Object.keys(migrated.sources), ['read']);
   assert.deepEqual(readSetting(AGENT_TOOLS_KEY).value, migrated);
-  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 8);
+  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 13);
 
   db.setSetting(AGENT_TOOLS_KEY, { enabled: [], sources: {} });
-  db.setSetting(AGENT_TOOLS_VERSION_KEY, 8);
+  db.setSetting(AGENT_TOOLS_VERSION_KEY, 12);
   assert.deepEqual(readAgentToolSelection(db), { enabled: [], sources: {} });
   assert.deepEqual(readSetting(AGENT_TOOLS_KEY).value, { enabled: [], sources: {} });
 
@@ -429,8 +453,20 @@ test('agent tool recovery repairs the latest payload and keeps explicit empty se
     'browser_viewport',
     'browser_console',
     'browser_network',
+    'desktop_status',
+    'desktop_apps',
+    'desktop_windows',
+    'desktop_launch',
+    'desktop_act',
+    'desktop_snapshot',
+    'desktop_screenshot',
+    'desktop_click',
+    'desktop_type',
+    'desktop_scroll',
+    'desktop_drag',
+    'desktop_hotkey',
   ]);
-  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 8);
+  assert.equal(readSetting(AGENT_TOOLS_VERSION_KEY).value, 13);
   const updatedAt = readRawSetting(AGENT_TOOLS_KEY).updated_at;
   readAgentToolSelection(db);
   assert.equal(readRawSetting(AGENT_TOOLS_KEY).updated_at, updatedAt);

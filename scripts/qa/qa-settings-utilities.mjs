@@ -18,8 +18,8 @@ async function settle() { await page.evaluate(() => new Promise(resolve => reque
 async function qa(method, ...args) { await page.evaluate(({ method, args }) => window.__settingsUtilitiesQa[method](...args), { method, args }); await settle(); }
 async function pending(method) { await page.waitForFunction(method => window.__settingsUtilitiesQa.pending(method) > 0, method); }
 async function count(method) { return page.evaluate(method => window.__settingsUtilitiesQa.calls.filter(item => item.method === method).length, method); }
-async function settings(route) { if (!await nav().count()) await page.locator('.sidebar-bottom button[title="设置"]').click(); await nav().getByRole('button', { name: route, exact: true }).click(); }
-async function closeSettings() { await page.getByRole('button', { name: '返回对话', exact: true }).click(); await nav().waitFor({ state: 'detached' }); }
+async function settings(route) { if (!await nav().count()) await page.locator('.sidebar-bottom button[aria-label="设置"]').click(); await nav().getByRole('button', { name: route, exact: true }).click(); }
+async function closeSettings() { await page.locator('[data-sidebar-section="conversations"]').click(); await nav().waitFor({ state: 'detached' }); }
 async function capture(name, theme) { await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme); await settle(); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false); await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' }); result.screenshots.push(name); }
 try {
   browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true });

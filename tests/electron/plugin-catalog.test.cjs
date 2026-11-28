@@ -116,7 +116,7 @@ test('official registry installs workbench plugins and loads their declared UI a
   assert.equal(notesRow.manifest.name, '知识库');
   assert.equal(notesRow.manifest.contributes.panels[0].title, '知识库');
   assert.equal(notesRow.manifest.contributes.panels[0].view.scope, 'global');
-  assert.equal(notesRow.manifest.contributes.panels[0].view.fullscreen, true);
+  assert.equal(notesRow.manifest.contributes.panels[0].slot, 'tool.view');
   const notesRuntime = await loadRuntimeExtension(notesRow, directory);
   try {
     assert.equal(notesRuntime.dataSources.get('library-data').read().viewData.library, null);

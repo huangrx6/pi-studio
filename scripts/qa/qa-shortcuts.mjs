@@ -25,7 +25,7 @@ try {
   const key = id => content.locator(`[data-shortcut-id="${id}"]`);
   const sidebar = key('toggleSidebar'), panel = key('togglePanel');
   const resetOne = label => content.getByRole('button', { name: `将「${label}」恢复为默认`, exact: true });
-  const openSettings = () => page.locator('.sidebar-bottom button[title="设置"]').click();
+  const openSettings = () => page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   const shortcuts = () => nav.getByRole('button', { name: '快捷键', exact: true }).click();
   const toast = page.locator('.settings-toast-stack .settings-toast');
   const capture = async (name, waitForToast = true) => {
@@ -123,7 +123,7 @@ try {
   assert.deepEqual((await layout()).rowTops, wide.rowTops, 'successful recording keeps all ten actions in place');
   await capture('04-saved');
 
-  await page.locator('.settings-back-button').click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await press('Alt+9'); await page.locator('.app.is-sidebar-collapsed').waitFor();
   await press('Alt+9'); await page.locator('.app.is-sidebar-collapsed').waitFor({ state: 'detached' });
   await openSettings(); await shortcuts();

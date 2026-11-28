@@ -56,6 +56,8 @@ const LANGUAGE_BY_EXTENSION = new Map([
   ['cjs', 'javascript'],
   ['ts', 'typescript'],
   ['tsx', 'typescript'],
+  ['mts', 'typescript'],
+  ['cts', 'typescript'],
   ['py', 'python'],
   ['rb', 'ruby'],
   ['go', 'go'],

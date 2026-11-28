@@ -8,6 +8,13 @@ export function popoverPortalTarget(anchor: Element | null) {
     anchor?.closest('[aria-modal="true"]')?.parentElement ?? document.body;
 }
 
+/** Focus can scroll a trigger into view before opening, then dispatch the scroll event afterwards. */
+export function scrollMovedAnchor(event: Event, anchor: HTMLElement, openingRect: DOMRect) {
+  if (!(event.target instanceof Node && event.target.contains(anchor))) return false;
+  const rect = anchor.getBoundingClientRect();
+  return rect.top !== openingRect.top || rect.left !== openingRect.left;
+}
+
 /** Shared surface for anchored menus and compact detail panels. Positioning stays with the caller. */
 export const PopoverSurface = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement> & {
   heading?: ReactNode;

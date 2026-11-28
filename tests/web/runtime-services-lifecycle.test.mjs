@@ -11,7 +11,7 @@ const snapshot = (...services) => ({ services, scannedAt: Date.now(), supported:
 // Drive the real keyed component and effect lifetimes with deferred IPC. No
 // discovery command or stop API ever reaches a real process.
 function harness(initial = { cwd: '/A', workspace: '/A' }, hidden = false) {
-  let slots = [], cursor = 0, deps, effect, cleanup, scopeKey, tree, dirty = false, nextTimer = 0;
+  let slots = [], cursor = 0, effects = [], scopeKey, tree, dirty = false, nextTimer = 0;
   const scans = [], stops = [], confirmations = [], copies = [], intervals = new Map(), timeouts = new Map(), listeners = new Set();
   const changed = (before, after) => !before || after.some((value, i) => value !== before[i]);
   const react = {
@@ -19,7 +19,14 @@ function harness(initial = { cwd: '/A', workspace: '/A' }, hidden = false) {
     useRef(initial) { return slots[cursor++] ??= { current: initial }; },
     useMemo(factory, deps) { const i = cursor++; if (!slots[i] || changed(slots[i].deps, deps)) slots[i] = { deps, value: factory() }; return slots[i].value; },
     useCallback(fn, deps) { return react.useMemo(() => fn, deps); },
-    useEffect(fn, nextDeps) { if (changed(deps, nextDeps)) { deps = nextDeps; effect = fn; } },
+    useEffect(fn, deps) {
+      const i = cursor++;
+      if (!slots[i] || changed(slots[i].deps, deps)) {
+        const previous = slots[i];
+        slots[i] = { deps };
+        effects.push(() => { previous?.cleanup?.(); slots[i].cleanup = fn(); });
+      }
+    },
   };
   const confirmation = { confirm(options) { const pending = deferred(); confirmations.push({ ...pending, options }); return pending.promise; }, dialog: null };
   const document = { hidden, addEventListener(type, fn) { assert.equal(type, 'visibilitychange'); listeners.add(fn); }, removeEventListener(type, fn) { listeners.delete(fn); } };
@@ -29,7 +36,7 @@ function harness(initial = { cwd: '/A', workspace: '/A' }, hidden = false) {
   };
   const jsx = (type, props, key) => ({ type, props, key });
   const module = { exports: {} };
-  const source = fs.readFileSync(new URL('../../web/src/features/runtime-services/RuntimeServicesPanel.tsx', import.meta.url), 'utf8');
+  const source = fs.readFileSync(new URL('../../web/src/features/runtime-services/RuntimeServicesStatus.tsx', import.meta.url), 'utf8');
   vm.runInNewContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText, {
     module, exports: module.exports, document,
     navigator: { clipboard: { writeText(text) { const pending = deferred(); copies.push({ ...pending, text }); return pending.promise; } } },
@@ -39,20 +46,23 @@ function harness(initial = { cwd: '/A', workspace: '/A' }, hidden = false) {
   let props = initial;
   function render(next) {
     props = { ...props, ...next };
-    const scope = module.exports.RuntimeServicesPanel(props);
-    if (scope.key !== scopeKey) { cleanup?.(); cleanup = undefined; deps = undefined; slots = []; scopeKey = scope.key; }
-    do { dirty = false; cursor = 0; tree = scope.type(scope.props); if (effect) { cleanup?.(); cleanup = effect(); effect = undefined; } } while (dirty);
+    const scope = module.exports.RuntimeServicesStatus(props);
+    if (scope.key !== scopeKey) { slots.forEach(slot => slot?.cleanup?.()); slots = []; scopeKey = scope.key; }
+    do { dirty = false; cursor = 0; tree = scope.type(scope.props); effects.splice(0).forEach(effect => effect()); } while (dirty);
   }
   const nodes = node => !node || typeof node !== 'object' ? [] : [node, ...[node.props?.children].flat(Infinity).flatMap(nodes)];
+  const toggle = open => { nodes(tree).find(node => node.props?.onOpenChange).props.onOpenChange(open); render(); };
   render();
+  toggle(true);
+  const renderOpen = next => { render(next); toggle(true); };
   return {
-    scans, stops, confirmations, copies, intervals, timeouts, render,
+    scans, stops, confirmations, copies, intervals, timeouts, render: renderOpen, toggle,
     rows() { return nodes(tree).filter(node => node.props?.service); },
     button(label) { return nodes(tree).find(node => node.type === 'button' && (node.props['aria-label'] === label || node.props.children === label || (Array.isArray(node.props.children) && node.props.children[0] === label))); },
     text() { return JSON.stringify(tree); },
     poll() { for (const timer of [...intervals.values()]) if (timer.ms === 2500) timer.fn(); render(); },
     visible(value) { document.hidden = !value; for (const fn of listeners) fn(); render(); },
-    unmount() { cleanup?.(); },
+    unmount() { slots.forEach(slot => slot?.cleanup?.()); },
     listenerCount() { return listeners.size; },
   };
 }
@@ -67,9 +77,9 @@ test('scope switches immediately discard old rows and busy locks; late old succe
   assert.equal(h.scans[3].input.cwd, '/C');
 });
 
-test('hidden panels stop polling and clock timers, resume immediately, and never overlap same-scope scans', async () => {
+test('hidden panels stop polling, resume immediately, and never overlap same-scope scans', async () => {
   const h = harness(undefined, true); assert.equal(h.scans.length, 0); assert.equal(h.intervals.size, 0);
-  h.visible(true); assert.equal(h.scans.length, 1); assert.equal(h.intervals.size, 2);
+  h.visible(true); assert.equal(h.scans.length, 1); assert.equal(h.intervals.size, 1);
   h.poll(); h.poll(); assert.equal(h.scans.length, 1);
   h.visible(false); assert.equal(h.intervals.size, 0);
   h.scans[0].resolve(snapshot(service())); await flush(); h.render();
@@ -79,12 +89,12 @@ test('hidden panels stop polling and clock timers, resume immediately, and never
 
 test('failed first scan never claims empty services; failed refresh explicitly retains previous results and retry recovers', async () => {
   const h = harness(); h.scans[0].reject(new Error('scan offline')); await flush(); h.render();
-  assert.match(h.text(), /scan offline/); assert.doesNotMatch(h.text(), /当前任务还没有监听服务|没有发现监听端口/);
+  assert.match(h.text(), /scan offline/); assert.doesNotMatch(h.text(), /暂无相关服务|没有发现监听端口/);
   h.button('重试').props.onClick(); h.scans[1].resolve(snapshot(service())); await flush(); h.render(); assert.equal(h.rows().length, 1);
   h.poll(); h.scans[2].reject(new Error('refresh offline')); await flush(); h.render();
   assert.equal(h.rows().length, 1); assert.match(h.text(), /以下显示上次扫描结果/);
   h.button('重试').props.onClick(); h.scans[3].resolve(snapshot()); await flush(); h.render();
-  assert.match(h.text(), /当前任务还没有监听服务/); assert.doesNotMatch(h.text(), /refresh offline/);
+  assert.match(h.text(), /暂无相关服务/); assert.doesNotMatch(h.text(), /refresh offline/);
 });
 
 test('late confirmation after scope change never invokes stop; already-issued stop cannot refresh or error in another scope', async () => {
@@ -101,7 +111,7 @@ test('late confirmation after scope change never invokes stop; already-issued st
 
 test('confirmed stop refresh supersedes pre-stop scan, preserves multiport/external risk and persistent stop errors', async () => {
   const h = harness(); h.scans[0].resolve(snapshot(service('A', { ownership: 'other' }), service('A2', { ownership: 'other', port: 5174 }))); await flush(); h.render();
-  h.button('全部').props.onClick(); h.render();
+  h.button('本机全部').props.onClick(); h.render();
   h.poll(); const preStop = h.scans[1];
   h.rows()[0].props.onStop(); h.rows()[0].props.onStop(); assert.equal(h.confirmations.length, 1);
   assert.match(h.confirmations[0].options.description, /当前工作区以外/);
@@ -132,4 +142,36 @@ test('stop completing while hidden invalidates older scan and resumes a fresh vi
   h.visible(true); assert.equal(h.scans.length, 3, 'old pre-stop read cannot block visible refresh');
   h.scans[2].resolve(snapshot()); await flush(); h.render();
   stale.resolve(snapshot(service())); await flush(); h.render(); assert.equal(h.rows().length, 0);
+});
+
+test('a collapsed service counter uses a single slower poll and shares an in-flight read when opened', async () => {
+  const h = harness(); h.toggle(false);
+  assert.equal(h.scans.length, 1);
+  assert.deepEqual([...h.intervals.values()].map(timer => timer.ms), [15_000]);
+  h.toggle(true);
+  assert.equal(h.scans.length, 1);
+  assert.deepEqual([...h.intervals.values()].map(timer => timer.ms), [2500]);
+  h.unmount();
+});
+
+test('reopening and polling retain the service list and only manual refresh signals activity', async () => {
+  const h = harness();
+  const refresh = () => h.button('刷新运行服务').props;
+  const stable = () => {
+    assert.match(h.text(), /自动刷新/);
+    assert.doesNotMatch(h.text(), /正在读取运行服务|正在扫描|刚刚|秒前/);
+    assert.equal(h.rows()[0].props.service.id, 'A');
+  };
+  h.scans[0].resolve(snapshot(service())); await flush(); h.render();
+  h.toggle(false); assert.equal(h.scans.length, 1);
+  h.toggle(true); assert.equal(h.scans.length, 2);
+  stable(); assert.equal(refresh()['aria-busy'], false);
+  h.scans[1].resolve(snapshot(service())); await flush(); h.render();
+  h.poll(); stable(); assert.equal(refresh()['aria-busy'], false);
+  refresh().onClick(); h.render(); stable();
+  assert.equal(h.scans.length, 3, 'manual refresh joins an in-flight poll');
+  assert.equal(refresh()['aria-busy'], true);
+  h.scans[2].resolve(snapshot(service())); await flush(); h.render();
+  stable(); assert.equal(refresh()['aria-busy'], false);
+  h.unmount();
 });

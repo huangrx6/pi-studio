@@ -26,14 +26,14 @@ delete env.PI_STUDIO_DEV;
 const routes = [
   { label: '通用', title: '通用' },
   { label: '快捷键', title: '快捷键', modules: ['ShortcutSettings'] },
-  { label: 'Git 工作流', title: 'Git 工作流', modules: ['GitSettings'] },
+  { label: 'Git', title: 'Git', modules: ['GitSettings'] },
   { label: '模型配置', title: '模型配置', modules: ['ModelSettings'] },
   { label: '使用量', title: 'Token 使用量', modules: ['UsageSettings'] },
   { label: '智能体工具', title: '智能体工具', modules: ['AgentToolsSettings'] },
   { label: '权限策略', title: '权限策略', modules: ['PermissionPolicySettings'] },
   { label: '测试凭据', title: '测试凭据', modules: ['SecretVaultSettings'] },
   { label: 'Harness 配置', title: 'Harness 配置', modules: ['HarnessSettings'], glassControls: true },
-  { label: '子智能体', title: '子智能体', modules: ['SubagentSettings'] },
+  { label: '智能体配置', title: '智能体配置', modules: ['AgentsSettings'] },
   { label: '插件', title: '插件', hubTab: '插件', modules: ['PluginSettings'] },
   { label: 'MCP 服务器', title: 'MCP 服务器', hubTab: 'MCP', modules: ['McpSettings'] },
   { label: '技能', title: '技能', hubTab: '技能', modules: ['SkillHub', 'InstalledSkills'] },
@@ -49,7 +49,6 @@ const assets = await readdir(path.join(root, 'dist/renderer', 'assets'));
 const routeModules = [...new Set(routes.flatMap((route) => route.modules || []))];
 const deferredModules = [
   ...routeModules,
-  'RuntimeServicesPanel',
   'SubagentViews',
   'ConversationImagePreview',
   'FilePreview',
@@ -83,33 +82,32 @@ async function assertShellAlignment(label) {
   const geometry = await page.evaluate(async () => {
     await Promise.all([...document.querySelectorAll('.shell-sidebar')].flatMap(sidebar =>
       sidebar.getAnimations().map(animation => animation.finished.catch(() => {}))));
-    // Settings now removes the retained workspace from layout. Measure its
-    // restored geometry synchronously, without painting it over settings.
-    const retained = [...document.querySelectorAll('.app > :is(.sidebar, .content-region)')];
-    const styles = retained.map(node => node.getAttribute('style'));
-    for (const node of retained) {
-      node.style.setProperty('display', node.classList.contains('sidebar') ? 'flex' : 'grid', 'important');
-      node.style.setProperty('visibility', 'hidden', 'important');
-    }
+    // Measure the mounted workbench without painting it over the settings page.
+    const workbench = document.querySelector('.app > .content-region');
+    const originalStyle = workbench.getAttribute('style');
+    workbench.style.setProperty('display', 'grid', 'important');
+    workbench.style.setProperty('visibility', 'hidden', 'important');
     try {
       const rect = selector => document.querySelector(selector).getBoundingClientRect();
       const chat = rect('.main');
       const settings = rect('.settings-content');
+      const composer = rect('.composer-wrap');
+      const settingsPage = rect('.settings-page-frame');
       const notice = rect('.settings-toast-stack');
       return {
-        sidebarWidth: [rect('.sidebar').width, rect('.settings-nav').width],
+        secondColumnStart: [rect('.sidebar-rail').right, rect('.settings-nav').left],
         headerTop: [rect('.chat-header').top, rect('.settings-header').top],
         headerBottom: [rect('.chat-header').bottom, rect('.settings-header').bottom],
         canvasLeft: [chat.left, settings.left],
         canvasRight: [chat.right, settings.right],
         canvasTop: [chat.top, settings.top],
         canvasBottom: [chat.bottom, settings.bottom],
-        columnLeft: [rect('.composer-wrap').left, rect('.settings-page-frame').left],
-        columnRight: [rect('.composer-wrap').right, rect('.settings-page-frame').right],
+        columnCenter: [composer.left + composer.width / 2, settingsPage.left + settingsPage.width / 2],
         noticeCenter: [settings.left + settings.width / 2, notice.left + notice.width / 2],
       };
     } finally {
-      retained.forEach((node, index) => styles[index] === null ? node.removeAttribute('style') : node.setAttribute('style', styles[index]));
+      if (originalStyle === null) workbench.removeAttribute('style');
+      else workbench.setAttribute('style', originalStyle);
     }
   });
   for (const [edge, [chat, settings]] of Object.entries(geometry)) {
@@ -143,14 +141,12 @@ async function capture(name) {
     overflow: document.documentElement.scrollWidth > innerWidth + 1,
     contentOverflow: document.querySelector('.settings-content').scrollWidth - document.querySelector('.settings-content').clientWidth,
     heading: document.querySelector('.settings-content h1')?.textContent,
-    back: (() => {
-      const box = document.querySelector('.settings-back-button')?.getBoundingClientRect();
-      return Boolean(box && box.top >= 0 && box.bottom <= innerHeight + 1);
-    })(),
+    navigationBottom: document.querySelector('.settings-navigation').getBoundingClientRect().bottom,
+    categoriesBottom: document.querySelector('.settings-navigation-pages').getBoundingClientRect().bottom,
   }));
   assert.equal(geometry.overflow, false, `${name}: no horizontal document overflow`);
   assert.ok(geometry.contentOverflow <= 1, `${name}: controls fit the settings canvas (${geometry.contentOverflow}px overflow)`);
-  assert.equal(geometry.back, true, `${name}: return-to-conversation stays visible`);
+  assert.ok(Math.abs(geometry.navigationBottom - geometry.categoriesBottom) <= 1, `${name}: categories use the full navigation height`);
   await page.screenshot({ path: path.join(output, `${name}.png`), animations: 'disabled' });
   result.screenshots.push({ name, ...geometry });
 }
@@ -226,8 +222,13 @@ try {
   cdp.on('Debugger.scriptParsed', ({ url }) => { if (url) loadedScripts.add(decodeURIComponent(url).split('/').at(-1)); });
   await cdp.send('Debugger.enable');
   result.coldResources = [...loadedScripts];
-  assert.ok(result.coldResources.some((file) => /^index-.*\.js$/.test(file)), 'CDP observes the production entry script');
-  for (const file of Object.values(chunks)) assert.equal(result.coldResources.includes(file), false, `${file} is not loaded on the cold conversation screen`);
+  const entry = await page.locator('script[type="module"][src]').first().getAttribute('src');
+  assert.ok(result.coldResources.includes(path.basename(entry)), 'CDP observes the production entry script');
+  // The workbench warms its file preview and plugin hub when idle.
+  for (const [module, file] of Object.entries(chunks)) {
+    if (module === 'FilePreview' || module === 'PluginSettings') continue;
+    assert.equal(result.coldResources.includes(file), false, `${file} is not loaded on the cold conversation screen`);
+  }
 
   await app.evaluate(({ dialog }, directory) => {
     dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] });
@@ -239,9 +240,10 @@ try {
   const draft = '保留这段草稿：检查设置时不发送给模型。';
   await composer.fill(draft);
   assert.equal(await composerValue(composer), draft, 'draft is entered before opening settings');
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   assert.equal(await composerValue(composer), draft, 'opening settings preserves the hidden editor');
   const nav = page.locator('.settings-navigation');
+  const sidebar = page.getByRole('complementary', { name: '导航侧边栏' });
   const content = page.locator('.settings-content');
   async function openRoute(route) {
     await nav.getByRole('button', { name: route.hubTab ? '插件' : route.label, exact: true }).click();
@@ -276,7 +278,7 @@ try {
   assert.match(await focusedModelPage.evaluate((element) => getComputedStyle(element).boxShadow), /inset/, 'navigation focus uses a single inset ring');
   assert.equal(await nav.locator('.settings-nav-row[tabindex="0"]').count(), 1, 'filtering keeps one settings page Tab stop');
   await focusedModelPage.press('Tab');
-  assert.equal(await nav.getByRole('button', { name: '返回对话', exact: true }).evaluate((element) => element === document.activeElement), true, 'Tab from a settings result reaches the back action');
+  assert.equal(await content.evaluate(element => element.contains(document.activeElement)), true, 'Tab from a settings result reaches the settings content');
   await settingsSearch.focus();
   await settingsSearch.fill('');
   await settingsSearch.press('ArrowUp');
@@ -301,7 +303,7 @@ try {
   await capture('00-navigation-keyboard-focus');
   await generalPage.press('Escape');
   await composer.waitFor();
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await content.getByRole('heading', { name: '通用', exact: true }).waitFor();
   assert.equal(await nav.locator('[aria-current="page"]').count(), 1, 'reopening settings keeps exactly one selected page');
   assert.equal(await nav.locator('.settings-nav-row:focus-visible').count(), 0, 'Escape and reopening leave no stale navigation focus ring');
@@ -309,20 +311,21 @@ try {
   assert.equal(await content.getByRole('slider').count(), 0, 'background controls appear only after media selection');
   await resize(1440, 920);
   await assertShellAlignment('default');
-  const originalWidth = (await nav.boundingBox()).width;
+  const originalWidth = (await sidebar.boundingBox()).width;
   await dragSidebar(40);
   await assertShellAlignment('drag from settings');
-  assert.equal((await nav.boundingBox()).width, originalWidth + 40);
-  await nav.getByRole('button', { name: '返回对话' }).click();
+  assert.equal((await sidebar.boundingBox()).width, originalWidth + 40);
+  await page.locator('[data-sidebar-section="conversations"]').click();
   assert.equal((await page.locator('.sidebar').boundingBox()).width, originalWidth + 40);
   await dragSidebar(-16);
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await content.getByRole('heading', { name: '通用', exact: true }).waitFor();
   const chosenWidth = originalWidth + 24;
-  assert.equal((await nav.boundingBox()).width, chosenWidth);
-  await nav.getByRole('button', { name: '收起侧边栏' }).click();
+  assert.equal((await sidebar.boundingBox()).width, chosenWidth);
+  await sidebar.getByRole('button', { name: '收起侧边栏' }).click();
   await assertShellAlignment('collapsed');
-  await page.locator('.settings-header-back').click();
+  assert.equal(await page.getByRole('button', { name: '返回对话', exact: true }).count(), 0);
+  await page.keyboard.press('Escape');
   await page.locator('.settings-overlay').waitFor({ state: 'detached' });
   const expand = page.getByRole('button', { name: '展开侧边栏' });
   assert.equal(await expand.evaluate(button => button === document.activeElement), true, 'return focus survives a folded sidebar');
@@ -334,10 +337,10 @@ try {
   // Exercise the narrow renderer breakpoint independently of native window minimums.
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 700, height: 760, deviceScaleFactor: 0, mobile: false });
   await assertShellAlignment('narrow viewport');
-  assert.ok((await nav.boundingBox()).width < chosenWidth);
+  assert.ok((await sidebar.boundingBox()).width < chosenWidth);
   await cdp.send('Emulation.clearDeviceMetricsOverride');
   await assertShellAlignment('restored viewport');
-  assert.equal((await nav.boundingBox()).width, chosenWidth);
+  assert.equal((await sidebar.boundingBox()).width, chosenWidth);
   await capture('01-general-wide-light');
   const group = name => content.getByRole('region', { name, exact: true });
   const disclosure = name => group(name).locator('summary').first();
@@ -350,7 +353,7 @@ try {
     const rect = node => node.getBoundingClientRect();
     const first = groups[0], choices = [...first.querySelectorAll('.theme-choice')].map(rect);
     const card = rect(first);
-    const art = element.querySelector('.general-tuning-mark');
+    const art = element.querySelector('.general-page-header .settings-page-header-icon');
     const innerLeft = choices[0].left;
     const insets = [innerLeft - card.left, card.right - choices.at(-1).right];
     const colors = [...first.querySelectorAll('.general-palette-option')].map(rect);
@@ -380,8 +383,7 @@ try {
       && layout.equalChoices && Math.abs(layout.insets[0] - layout.insets[1]) < 1, JSON.stringify(layout));
     return layout;
   };
-  result.generalLayout = await assertGeneralLayout(32);
-  assert.equal(await content.locator('.settings-section-navigation').count(), 0);
+  result.generalLayout = await assertGeneralLayout(40);
 
   const palette = group('外观').getByRole('radiogroup', { name: '强调色' });
   assert.deepEqual(await palette.getByRole('radio').evaluateAll(radios => radios.map(radio => radio.value)), ['ocean', 'amber', 'berry']);
@@ -393,8 +395,9 @@ try {
     assert.ok(await palette.locator(`input[value="${id}"]`).isChecked());
     assert.equal(await page.locator('html').getAttribute('data-palette'), id);
     const thumbStroke = await content.locator('.general-tuning-accent').evaluate(thumb => getComputedStyle(thumb).stroke);
-    const navAccent = await nav.locator('[aria-current="page"] > svg').evaluate(icon => getComputedStyle(icon).color);
-    assert.equal(thumbStroke, navAccent, `the tuning mark uses the selected ${name} accent`);
+    const selectedAccent = await content.locator('.theme-choice[aria-pressed="true"] .theme-choice-check')
+      .evaluate(check => getComputedStyle(check).backgroundColor);
+    assert.equal(thumbStroke, selectedAccent, `the tuning mark uses the selected ${name} accent`);
   }
   const corners = group('外观').getByRole('group', { name: '圆角风格' });
   for (const [label, id] of [['柔和', 'soft'], ['直角', 'square'], ['紧凑', 'compact'], ['标准', 'standard']]) {
@@ -426,25 +429,25 @@ try {
   await settingsSearch.focus();
   await capture('01b-search-focus-dark');
   const increaseFontSize = content.getByRole('button', { name: '增加字号', exact: true });
+  const initialSize = await page.evaluate(() => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--text-body')));
   await increaseFontSize.click();
   await increaseFontSize.click();
-  await preference('fontSize', 16);
-  assert.match(await content.getByRole('button', { name: /^字号：/ }).innerText(), /16/);
-  assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue('--chat-font-size')), '16px');
-  // 步进器：点击数值直接输入，回车确认并夹到上界 18；方向键步进。
+  await preference('fontSize', initialSize + 2);
+  assert.equal(await page.evaluate(() => document.documentElement.style.getPropertyValue('--chat-font-size')), `${initialSize + 2}px`);
+  // 直接输入超出范围的字号后，从上界用方向键逐步调回。
   const fontSizeValue = content.getByRole('button', { name: /^字号：/ });
   await fontSizeValue.click();
   const fontSizeInput = content.getByRole('textbox', { name: '字号数值', exact: true });
   await fontSizeInput.fill('40');
   await fontSizeInput.press('Enter');
-  await preference('fontSize', 18);
-  assert.match(await fontSizeValue.innerText(), /18/);
+  await preference('fontSize', 20);
+  assert.match(await fontSizeValue.innerText(), /20/);
   assert.equal(await increaseFontSize.isDisabled(), true, '上界禁用增加');
   await fontSizeValue.focus();
-  await fontSizeValue.press('ArrowDown');
-  await preference('fontSize', 17);
-  await fontSizeValue.press('ArrowDown');
-  await preference('fontSize', 16);
+  for (let size = 19; size >= 16; size -= 1) {
+    await fontSizeValue.press('ArrowDown');
+    await preference('fontSize', size);
+  }
   assert.match(await fontSizeValue.innerText(), /16/);
   await group('对话').getByRole('button', { name: '详细', exact: true }).click();
   await preference('stepDisplay', 'detailed');
@@ -587,7 +590,7 @@ try {
     return layout;
   };
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 720, height: 760, deviceScaleFactor: 0, mobile: false });
-  result.generalLayoutNarrow = await assertGeneralLayout(28);
+  result.generalLayoutNarrow = await assertGeneralLayout(36);
   result.rangeLayoutNarrow = await assertRangeLayout(1);
   await backgroundSummary.click();
   await assertCollapsedBackgroundHover(group('背景'), backgroundSummary, 'narrow');
@@ -664,7 +667,7 @@ try {
       const select = await surface(policy.locator('.pi-select-trigger'));
       await policy.getByRole('button', { name: '取消', exact: true }).click();
       await policy.waitFor({ state: 'detached' });
-      await content.locator('.settings-profile-card').first().click();
+      await content.getByRole('button', { name: /^编辑/ }).first().click();
       const profile = content.getByRole('dialog', { name: '编辑 Harness 配置' });
       await profile.locator('.harness-extra-instructions > summary').click();
       const textarea = await surface(profile.getByLabel('Harness 附加指令'));
@@ -736,7 +739,7 @@ try {
     await content.getByRole('button', { name: '深色', exact: true }).click();
     await resize(980, 640);
   }
-  await nav.getByRole('button', { name: '返回对话', exact: true }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await composer.waitFor();
   assert.equal(await composerValue(composer), draft, 'settings edits and lazy navigation preserve the conversation draft');
   assert.equal(await page.locator('.session-row:not(.empty)').count(), 0, 'settings do not submit a conversation');
@@ -747,7 +750,7 @@ try {
   await preference('theme', 'dark');
   await preference('fontSize', 16);
   await preference('palette', 'ocean');
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   await nav.getByRole('button', { name: '通用', exact: true }).click();
   await content.getByRole('heading', { name: '通用', exact: true }).waitFor();
   assert.match(await disclosure('对话').innerText(), /16 px · 详细步骤/);

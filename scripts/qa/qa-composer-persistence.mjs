@@ -61,7 +61,6 @@ try {
     localStorage.clear();
     // Simulate upgrading with both the old selection and real saved drafts present.
     localStorage.setItem('pi-studio:active-session', JSON.stringify({ id: 'persist-session-a', cwd: '/workspace' }));
-    localStorage.setItem('pi-studio:expanded-workspaces', JSON.stringify(['/workspace']));
     localStorage.setItem('pi-studio:preferences', JSON.stringify({ busySend: 'queue' }));
     const model = {
       modelRef: 'demo/model',
@@ -137,6 +136,7 @@ try {
 
     window.piApi = new Proxy({
       state: async () => ({
+        expandedProjects: ['/workspace'],
         workspaces: [{
           cwd: '/workspace',
           name: 'Composer persistence fixture',

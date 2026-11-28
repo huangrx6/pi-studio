@@ -1,17 +1,10 @@
-/* Transcript surfaces share the shell's reading/control/inset roles. Scope these
- * rules to the conversation so file editors and floating dialogs remain legible. */
-.app :is(.chat-scroll, .temporary-scroll) :is(.user-bubble, .message-edit) {
-  background: var(--conversation-control-surface);
-  border-color: var(--transparent);
-  box-shadow: none;
-}
-
+/* Transcript cards use the same surface and edge as the workbench cards. */
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
-  .attachment-card, .conversation-image-tile, .file-change-summary,
+  .attachment-card, .conversation-image-tile,
   .activity-code-block:not(.is-error), .request-inspector pre, .composer-model-hint
 ) {
-  background: var(--conversation-reading-surface);
-  border-color: var(--divider);
+  background: var(--surface-raised);
+  border-color: var(--border);
 }
 
 .app :is(.chat-scroll, .temporary-scroll) .assistant-orb {
@@ -19,7 +12,7 @@
   border-color: var(--transparent);
 }
 
-/* Nested elements tint the existing surface instead of adding another solid card. */
+/* Nested controls and notes share the surrounding card surface. */
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
   .ref-skill-body,
   .assistant-interrupted, .assistant-turn-meta > span,
@@ -27,11 +20,11 @@
   .composer-feedback.is-info, .code-work-view code,
   .activity-tool.is-running .activity-tool-status, .compaction-banner
 ) {
-  background: var(--conversation-inset-surface);
+  background: var(--surface-soft);
 }
 
 .app :is(.chat-scroll, .temporary-scroll) .markdown blockquote {
-  background: var(--conversation-inset-surface);
+  background: var(--surface-soft);
   color: var(--text-2);
 }
 
@@ -45,31 +38,31 @@
   .queued-actions button:not(:disabled), .ref-skill-body > summary,
   .composer-model-hint-action, .composer-model-hint-close
 ):hover {
-  background: var(--conversation-hover-surface);
+  background: var(--surface-hover);
 }
 
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
   .request-inspector-tabs button[aria-pressed="true"]
 ) {
-  background: var(--conversation-selected-surface);
+  background: var(--tint-neutral);
 }
 
-/* Preserve semantic foregrounds and borders; only soften their tinted panels. */
+/* Status panels follow the same semantic colors as their workbench counterparts. */
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
   .conversation-error, .message-error, .activity-code-block.is-error,
   .activity-tool.is-error .activity-tool-status, .message-edit-error
 ) {
-  background: color-mix(in srgb, var(--error) 9%, var(--conversation-reading-surface));
+  background: var(--error-soft);
 }
 
 .app :is(.chat-scroll, .temporary-scroll, .composer-dock) :is(
   .file-change-incomplete-note, .composer-feedback:not(.is-info)
 ) {
-  background: color-mix(in srgb, var(--warning) 9%, var(--conversation-reading-surface));
+  background: var(--warning-soft);
 }
 
 /* Inline composer controls remain part of the editor rather than opaque pills. */
 .app .composer :is(.composer-mode, .context-usage-trigger, .model-label, .workspace-chip):is(:hover, .is-open, .is-active),
 .app .composer .composer-mode:has(.pi-select-trigger.is-open) {
-  background: var(--conversation-hover-surface);
+  background: var(--surface-hover);
 }

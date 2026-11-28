@@ -270,12 +270,8 @@ function sendHarness({
       return undefined;
     },
     async loadState() {},
-    window: {
-      piApi: {
-        async createConversation() {
-          throw new Error('not used');
-        },
-      },
+    async createFromDraft() {
+      throw new Error('not used');
     },
   };
   vm.runInNewContext(sendCode, context);

@@ -1,4 +1,17 @@
+import type { ModelSelection } from './model-types';
+import type { SettingsSnapshot } from './global.d';
+
 export const QUOTA_EXTENSION_ID = 'user:pi-quota-status';
+
+export function modelQuotaSource(selection: ModelSelection | undefined, providers?: SettingsSnapshot['providers']) {
+  if (!selection?.modelRef) return undefined;
+  const providerId = selection.modelRef.split('/')[0];
+  if (providers) {
+    const provider = providers.find(item => item.id === providerId);
+    return provider?.enabled && provider.quotaEnabled ? { id: provider.id, name: provider.name } : undefined;
+  }
+  return selection.quotaProvider?.id === providerId ? selection.quotaProvider : undefined;
+}
 
 export function quotaExtensionAvailable(extensions?: Array<{ id: string; available: boolean }>) {
   return extensions?.some(extension => extension.id === QUOTA_EXTENSION_ID && extension.available) === true;

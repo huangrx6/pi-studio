@@ -7,29 +7,83 @@
   scroll-padding-block: var(--space-3);
 }
 
-.settings-dialog .dialog-header { padding: var(--space-4) var(--settings-group-gap); }
+.settings-dialog .dialog-header {
+  padding: var(--space-4) var(--settings-group-gap);
+  border-bottom: 1px solid var(--divider);
+}
 .settings-dialog .dialog-header > div { min-width: 0; }
-.settings-dialog .dialog-title-row { min-width: 0; min-height: var(--settings-control-height); align-items: center; }
+.settings-dialog .dialog-title-row { min-width: 0; min-height: var(--control-sm); align-items: center; }
 .settings-dialog .dialog-header h2 {
   min-width: 0; margin: 0; overflow-wrap: anywhere;
-  font: var(--weight-semibold) var(--text-lg)/var(--leading-tight) var(--font);
+  font: var(--font-heading);
 }
-.settings-dialog .dialog-header p { margin: var(--space-1) 0 0; font: var(--settings-description-font); }
+.settings-dialog .dialog-header p { margin: var(--space-1) 0 0; font: var(--font-description); }
 .settings-dialog .dialog-header > .icon-button {
   flex: none; width: var(--settings-icon-hit); height: var(--settings-icon-hit); margin: 0;
 }
-.settings-dialog .dialog-footer { flex-wrap: wrap; padding: var(--space-3) var(--settings-group-gap); }
-.settings-dialog .dialog-footer > button {
-  flex-shrink: 0; min-height: var(--settings-control-height); height: auto;
-  padding: var(--space-1) var(--space-4); font: var(--settings-label-font);
+.settings-dialog .dialog-footer {
+  flex-wrap: wrap;
+  padding: var(--space-3) var(--settings-group-gap);
+  border-top: 1px solid var(--divider);
 }
-.settings-dialog .dialog-footer-hint { flex: 1 1 200px; font: var(--settings-description-font); overflow-wrap: anywhere; }
+.settings-dialog .dialog-footer > button {
+  flex-shrink: 0;
+  min-height: var(--control-sm);
+  height: auto;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-control);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+}
+.settings-dialog .dialog-footer > .settings-outline {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+}
+.settings-dialog .dialog-footer > .settings-outline:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.settings-dialog .dialog-footer > .settings-save {
+  border: 1px solid var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+.settings-dialog .dialog-footer > .settings-save:hover:not(:disabled) {
+  border-color: var(--text);
+  background: var(--text);
+  color: var(--bg);
+  opacity: 0.88;
+}
+.settings-dialog .dialog-footer > .settings-save:disabled {
+  border-color: var(--divider);
+  background: var(--surface-raised);
+  color: var(--disabled-text);
+  opacity: 1;
+}
+.settings-dialog .dialog-footer-hint .settings-outline {
+  min-height: var(--control-sm);
+  height: auto;
+  padding: 0 var(--space-3);
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+}
+.settings-dialog .dialog-footer-hint .settings-outline:hover:not(:disabled) {
+  border-color: var(--divider);
+  background: var(--surface-hover);
+  color: var(--text);
+}
+.settings-dialog .dialog-footer-hint { flex: 1 1 200px; font: var(--font-description); overflow-wrap: anywhere; }
 .settings-dialog .dialog-error {
   margin-inline: var(--settings-group-gap);
   max-height: 20dvh;
   overflow: auto;
   overscroll-behavior: contain;
-  font: var(--settings-description-font);
+  font: var(--font-description);
 }
 .settings-dialog .dialog-body textarea:disabled {
   background: var(--surface-soft);

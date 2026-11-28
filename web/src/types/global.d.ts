@@ -10,6 +10,7 @@
  */
 
 export {};
+import type { FileContentResults, FileSearchOptions, PiWorkspace } from './workspace';
 import type { ProviderQuotaConfig, ProviderQuotaSnapshot, QuotaFieldSuggestion, QuotaMetric, QuotaPreviewInput } from './provider-quota';
 import type { CommittedProjection, MutationProjection } from './mutation-types';
 import type { ExtensionInstallResult, ExtensionMutationResult } from './extension-types';
@@ -50,7 +51,7 @@ import type { BackgroundMedia } from '../shared/preferences';
 import type { FilePreviewResult } from './file-preview-types';
 import type { UpdateSnapshot } from './update-types';
 import type { RuntimeRefreshSnapshot, StudioRuntimeVersions } from './runtime-types';
-import type { GitAction, GitHead, GitReadParams, GitReadResult, GitRepository, GitWorkspaceStatus, WorktreeInputs, WorktreeResults } from './git-types';
+import type { GitAction, GitBranches, GitCheckout, GitHead, GitReadParams, GitReadResult, GitRepository, GitWorkspaceStatus, WorktreeInputs, WorktreeResults } from './git-types';
 import type {
   RuntimeServiceSnapshot,
   RuntimeServiceStopResult,
@@ -187,20 +188,6 @@ interface PiSessionSummary {
   running?: boolean;
 }
 
-/** 一个工作区及其会话列表。 */
-interface PiWorkspace {
-  /** 工作区绝对路径。 */
-  cwd: string;
-  /** 文件夹名（展示用）。 */
-  name: string;
-  /** 该工作区下的会话。 */
-  sessions: ConversationSummary[];
-  /** 当前工作区中的会话总数，包含归档会话。 */
-  sessionCount?: number;
-  /** 当前工作区中的归档会话数。 */
-  archivedCount?: number;
-}
-
 /** 打开会话时返回的完整详情。 */
 interface PiDetail {
   /** 会话 id。 */
@@ -260,9 +247,18 @@ export type StudioPluginSummary = {
   installPath: string;
   provides: {
     mcp?: Array<{ name: string; transport?: string; description?: string }>;
-    skills?: Array<{ path: string; name?: string }>;
+    skills?: Array<{ path: string; name?: string; description?: string }>;
     cli?: Array<{ id: string; name: string; kind?: string; description?: string; pathEnv?: boolean; commands?: Array<{ summary?: string; example?: string }> }>;
-    extension?: { path: string; tools?: string[] } | null;
+    extension?: {
+      path: string;
+      id?: string;
+      name?: string;
+      description?: string;
+      tools?: string[];
+      toolDetails?: Array<{ name: string; description?: string }>;
+      panels?: Array<{ id: string; title: string; description?: string; slot?: string; scope?: string }>;
+      commands?: Array<{ id: string; title: string; description?: string; placement?: string }>;
+    } | null;
   };
   enabled: boolean;
   contentHash: string;
@@ -299,6 +295,19 @@ export type PluginMarketItem = {
     mcpNames?: string[];
     skillNames?: string[];
     cliNames?: string[];
+    mcpDetails?: Array<{ name: string; description?: string }>;
+    skillDetails?: Array<{ path: string; name?: string; description?: string }>;
+    cliDetails?: Array<{ id: string; name: string; description?: string; commands?: Array<{ summary?: string; example?: string }> }>;
+    extensionDetails?: {
+      path: string;
+      id?: string;
+      name?: string;
+      description?: string;
+      tools?: string[];
+      toolDetails?: Array<{ name: string; description?: string }>;
+      panels?: Array<{ id: string; title: string; description?: string; slot?: string; scope?: string }>;
+      commands?: Array<{ id: string; title: string; description?: string; placement?: string }>;
+    } | null;
   };
   versions: Array<{
     version: string;
@@ -518,6 +527,7 @@ type DesktopPermissionStatus = {
   supported: boolean;
   screenRecording: string;
   accessibility: boolean;
+  keyboardInput?: 'unverified' | 'available' | 'denied';
   ready: boolean;
   message?: string;
 };
@@ -544,7 +554,21 @@ declare global {
      * 预加载脚本注入的主进程 API。
      * 所有 invoke 方法都是异步的；事件订阅方法返回取消订阅函数。
      */
+    toolWindowApi: {
+      drag(gesture: import('./tool-window').ToolWindowDrag): Promise<void>;
+      state(): Promise<import('./tool-window').ToolWindowState>;
+      onState(listener: (state: import('./tool-window').ToolWindowState) => void): () => void;
+      command(owner: string, command: import('./tool-window').ToolWindowCommand): Promise<void>;
+    };
     piApi: {
+      setToolWindowAnchor(rect: { x: number; y: number; width: number; height: number }): Promise<void>;
+      hideToolWindow(): Promise<void>;
+      toggleToolWindow(): Promise<void>;
+      toolWindowVisible(): Promise<boolean>;
+      onToolWindowVisibility(listener: (visible: boolean) => void): () => void;
+      setToolWindowContext(context: import('./tool-window').ToolWindowContext): Promise<void>;
+      openToolWindow(request?: import('./tool-window').ToolWindowRequest): Promise<void>;
+      onToolWindowAction(listener: (action: import('./tool-window').ToolWindowAction & { ownerKey: string }) => void): () => void;
       networkSettings(): Promise<NetworkSettings>;
       saveNetworkSettings(settings: NetworkSettings): Promise<NetworkSettings>;
       detectNetworkProxy(settings: NetworkSettings): Promise<NetworkRoute>;
@@ -641,21 +665,26 @@ declare global {
       }): Promise<PermissionEvaluation>;
       /** 扩展请求确认工具操作时触发；需要调用 confirmResponse 回传结果。 */
       onConfirmRequest(listener: (payload: PermissionConfirmRequest) => void): () => void;
+      onConfirmDismissed(listener: (id: string) => void): () => void;
       /** 回传确认结果；超时或窗口关闭视为拒绝。 */
       confirmResponse(payload: PermissionConfirmResponse): void;
       /** 读取侧边栏工作区/会话列表、当前模型与工作目录。 */
       waitForStartup(): Promise<void>;
       workspaceReady(): void;
-      state(cwd?: string): Promise<{ workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
+      saveExpandedProjects(keys: string[]): Promise<void>;
+      state(cwd?: string): Promise<{ expandedProjects: string[]; workspaces: PiWorkspace[]; model: ModelSelection; cwd: string }>;
       /** 当前会话目录的 Git 分支、提交、改动和 worktree 状态。 */
       gitRepositories(cwd: string): Promise<GitRepository[]>;
       gitWorkspaceStatus(cwd?: string, repository?: string): Promise<GitWorkspaceStatus>;
       gitWorkspaceChanges(cwd: string, repository: string): Promise<import('./git-types').GitFile[]>;
       gitWorktree<K extends keyof WorktreeInputs>(cwd: string, input: { kind: K; repository?: string } & WorktreeInputs[K]): Promise<WorktreeResults[K]>;
+      gitBranches(cwd: string, repository: string): Promise<GitBranches>;
+      gitCheckout(cwd: string, input: GitCheckout): Promise<void>;
       gitRead<K extends keyof GitReadResult>(id: string, input: { kind: K; repository?: string } & GitReadParams[K]): Promise<GitReadResult[K]>;
       gitWrite(id: string, input: GitAction & GitHead & { repository?: string }): Promise<void>;
       /** 新建一条 Durable 会话；持久目标由 /goal 在同一会话中按需启用。 */
       createConversation(payload: {
+        adoptDraftTools?: boolean;
         cwd: string;
         title?: string;
         goal?: string;
@@ -747,6 +776,9 @@ declare global {
       file(cwd: string, path: string): Promise<{ path: string; size: number; binary: boolean; text: string }>;
       /** 读取有大小上限、可直接交给统一预览组件的数据。 */
       filePreview(cwd: string, path: string): Promise<FilePreviewResult>;
+      workspaceCode(request: import('./workspace').CodeQuery): Promise<import('./workspace').CodeQueryResult>;
+      readLayout(owner: string, surface: 'center' | 'navigation' | 'inspector'): Promise<unknown>;
+      writeLayout(owner: string, surface: 'center' | 'navigation' | 'inspector', value: object): Promise<void>;
       onFilesChanged(listener: (keys: string[]) => void): () => void;
       onWorkbenchRefresh?(listener: (event: {
         scope: 'all' | 'extensions' | 'files' | 'git' | 'sessions';
@@ -754,7 +786,19 @@ declare global {
         sourceId?: string;
       }) => void): () => void;
       writeFile(payload: { cwd: string; path: string; text: string; expectedText: string }): Promise<{ ok: boolean; path: string; size: number }>;
-      /** 只读打开当前会话已记录的轮次变更文件。 */
+      teamProject(cwd?: string): Promise<import('./team').TeamProjectState>;
+      planList(): Promise<import('./plans').StudioPlan[]>;
+      planWeek(boundaries: number[]): Promise<import('./plans').PlanWeek>;
+      planHistory(cursor?: import('./plans').PlanCursor, planId?: string): Promise<import('./plans').PlanHistory>;
+      planPreview(rule: import('./plans').PlanSchedule, id?: string): Promise<number | null>;
+      planSave(input: import('./plans').PlanInput): Promise<string>;
+      planAction(action: import('./plans').PlanAction, id: string): Promise<void>;
+      onPlansChanged(listener: () => void): () => void;
+      teamCreateBot(name: string): Promise<import('./team').TeamBot>;
+      teamCreateRoom(cwd: string, name: string): Promise<import('./team').TeamRoom>;
+      teamSetRoomBots(cwd: string, roomId: string, botIds: string[]): Promise<import('./team').TeamRoom>;
+      temporaryHistory(): Promise<import('./chat-types').TemporaryChatSummary[]>;
+      temporaryRead(id: string): Promise<import('./chat-types').TemporaryChatDetail | null>;
       temporaryModel(payload?: { modelRef?: string; thinkingLevel?: import('./model-types').ThinkingLevel }): Promise<import('./model-types').ModelSelection>;
       temporaryPrompt(payload: { id: string; text: string; images: { data: string; mimeType: string }[]; modelRef: string; thinkingLevel: string }): Promise<{ ok: boolean }>;
       temporaryStop(id: string): Promise<void>;
@@ -830,19 +874,6 @@ declare global {
         active?: boolean;
       }): Promise<{ ok: boolean; tab?: unknown }>;
       browserTabUnregister(id: string): Promise<{ ok: boolean }>;
-      browserTabActivate(id: string): Promise<{ ok: boolean; tab?: unknown }>;
-      browserCommandAck(payload: {
-        requestId: string;
-        tabId?: string;
-        tab?: {
-          id?: string;
-          webContentsId?: number;
-          url?: string;
-          title?: string;
-          loading?: boolean;
-        };
-        error?: string;
-      }): Promise<{ ok: boolean; tab?: unknown }>;
       browserControlState(): Promise<{
         paused: boolean;
         pausedTabs: string[];
@@ -904,13 +935,79 @@ declare global {
       desktopControlStatus(): Promise<DesktopControlStatus>;
       desktopControlPreferences(): Promise<DesktopControlPreferences>;
       desktopControlSetPreferences(payload: Partial<DesktopControlPreferences>): Promise<{ ok: boolean; preferences: DesktopControlPreferences; status?: DesktopControlStatus }>;
-      desktopControlPermissions(): Promise<DesktopPermissionStatus>;
-      desktopControlOpenPermissionSettings(payload?: { kind?: 'screen' | 'accessibility' | string } | string): Promise<{ ok: boolean; kind?: string; url?: string }>;
+      desktopControlPermissions(options?: { refresh?: boolean }): Promise<DesktopPermissionStatus>;
+      desktopControlOpenPermissionSettings(payload?: { kind?: 'screen' | 'accessibility' | string } | string): Promise<{ ok: boolean; kind?: string; url?: string; prompted?: boolean }>;
+      desktopControlAppMappings(options?: { refresh?: boolean }): Promise<{
+        ok: boolean;
+        mappings: Array<{
+          id: string;
+          name: string;
+          displayName: string;
+          bundleId: string;
+          executableName: string;
+          path: string;
+          blocked: boolean;
+          allowed: boolean;
+          decision: string;
+        }>;
+        error?: string;
+        code?: string;
+      }>;
       desktopControlInstalledApps(): Promise<{ ok: boolean; apps: DesktopAllowApp[]; error?: string; code?: string }>;
       desktopControlAlwaysAllowAdd(payload: Partial<DesktopAllowApp>): Promise<{ ok: boolean; preferences: DesktopControlPreferences; status?: DesktopControlStatus }>;
       desktopControlAlwaysAllowRemove(payload: { id?: string } | string): Promise<{ ok: boolean; preferences: DesktopControlPreferences; status?: DesktopControlStatus }>;
       desktopControlActivity(payload?: { limit?: number } | number): Promise<{ ok: boolean; activity: DesktopActivityEntry[] }>;
       desktopControlActivityClear(): Promise<{ ok: boolean; activity: DesktopActivityEntry[]; status?: DesktopControlStatus }>;
+      desktopControlPreviewCapture(payload: {
+        appName?: string;
+        bundleId?: string;
+        windowId: number;
+        sessionId?: string;
+        maxEdge?: number;
+      }): Promise<{
+        ok: boolean;
+        sessionId?: string;
+        appName?: string;
+        bundleId?: string;
+        windowId?: number;
+        title?: string;
+        bounds?: { x: number; y: number; width: number; height: number } | null;
+        overlayCount?: number;
+        imageDataUrl?: string;
+        panels?: Array<{ windowId: number; imageDataUrl: string; imageWidth?: number | null; imageHeight?: number | null }>;
+        imageWidth?: number | null;
+        imageHeight?: number | null;
+        updatedAt?: number;
+        error?: string;
+        code?: string;
+      }>;
+      desktopControlFocusWindow(payload: {
+        appName?: string;
+        bundleId?: string;
+        windowId?: number;
+        sessionId?: string;
+        focus?: boolean;
+      }): Promise<{ ok: boolean; released?: boolean; appName?: string; bundleId?: string; error?: string; code?: string }>;
+      onDesktopControlPreview(listener: (event: {
+        sessionId: string;
+        appName: string;
+        bundleId: string;
+        windowId: number;
+        title: string;
+        action: string;
+        runId?: string;
+        status: 'active' | 'idle' | 'error' | 'closed';
+        staged?: boolean;
+        errorMessage?: string;
+        overlayCount?: number;
+        bounds?: { x: number; y: number; width: number; height: number } | null;
+        cursor?: { normX: number; normY: number; kind: 'click' | 'type' | 'scroll' | 'drag' } | null;
+        imageDataUrl?: string;
+        panels?: Array<{ windowId: number; imageDataUrl: string; imageWidth?: number | null; imageHeight?: number | null }>;
+        imageWidth?: number | null;
+        imageHeight?: number | null;
+        updatedAt: number;
+      }) => void): () => void;
       onBrowserEvent(listener: (event: {
         type: string;
         preferences?: BrowserPreferences;
@@ -983,6 +1080,8 @@ declare global {
         capabilities?: ComposerCapability[];
       }>;
       /** 按关键字搜索工作区文件，供 @ 提及补全。 */
+      searchFileContents(payload: { cwd: string; query: string; options: FileSearchOptions; requestId: string }): Promise<FileContentResults>;
+      cancelFileContentSearch(requestId: string): void;
       searchFiles(payload: { cwd: string; query: string }): Promise<{ files: ComposerFile[] }>;
 
       // ---- 附件 ----
@@ -1323,7 +1422,7 @@ declare global {
         method: string;
         params?: unknown;
       }): Promise<unknown>;
-      onExtensionPanelRequested(listener: (event: { sessionId: string; panelId: string }) => void): () => void;
+      onExtensionPanelRequested(listener: (event: { sessionId?: string; ownerKey?: string; panelId: string }) => void): () => void;
       /** 执行扩展命令；命令内声明的 UI 动作仍由白名单校验。 */
       runExtensionCommand(payload: {
         commandId: string;

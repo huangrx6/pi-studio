@@ -1,5 +1,11 @@
 /**
- * Serial per-tab action queue with user takeover pause and live activity broadcast.
+ * Serial per-tab action queue with user takeover pause, continuous session
+ * lifecycle tracking, and live activity broadcast.
+ *
+ * A browser session spans from the first browser_* tool call in a conversation
+ * run until the run completes (`afterRun`), is aborted, or the user clicks Stop.
+ * That keeps the live frame, Stop button, and virtual cursor steady across LLM
+ * thinking gaps instead of flickering disconnect/reconnect between tool calls.
  */
 /** @type {Map<string, Promise<unknown>>} */
 const tails = new Map();
@@ -10,10 +16,14 @@ let globalPaused = false;
 const listeners = new Set();
 /** @type {Map<number, { tabId: string, action: string, label: string, startedAt: number }>} */
 const activeOps = new Map();
+/** @type {Map<string, { tabId: string, startedAt: number, timer: NodeJS.Timeout | null }>} */
+const activeSessions = new Map();
+const SESSION_SAFETY_TTL_MS = 120_000;
 let opSequence = 0;
 let idleTimer = null;
 let lastActivity = {
   active: false,
+  thinking: false,
   tabId: '',
   action: '',
   label: '',
@@ -47,19 +57,88 @@ function getBrowserActivityState() {
   if (current) {
     return {
       active: true,
+      thinking: false,
       tabId: current.tabId,
       action: current.action,
       label: current.label,
       startedAt: current.startedAt,
     };
   }
-  return { ...lastActivity, active: false };
+  if (!globalPaused && activeSessions.size > 0) {
+    const session = [...activeSessions.values()].at(-1);
+    return {
+      active: true,
+      thinking: true,
+      tabId: lastActivity.tabId || session?.tabId || '',
+      action: 'thinking',
+      label: 'AI 思考下一步…',
+      startedAt: session?.startedAt || lastActivity.startedAt || Date.now(),
+    };
+  }
+  return { ...lastActivity, active: false, thinking: false };
+}
+
+function hasActiveBrowserSession() {
+  return !globalPaused && (activeOps.size > 0 || activeSessions.size > 0);
+}
+
+function beginBrowserSession(sessionId, { tabId = '' } = {}) {
+  const key = String(sessionId || '__default__');
+  const existing = activeSessions.get(key);
+  if (existing?.timer) clearTimeout(existing.timer);
+  const timer = setTimeout(() => {
+    endBrowserSession(key);
+  }, SESSION_SAFETY_TTL_MS);
+  timer.unref?.();
+  const entry = {
+    tabId: String(tabId || existing?.tabId || lastActivity.tabId || ''),
+    startedAt: existing?.startedAt || Date.now(),
+    timer,
+  };
+  activeSessions.set(key, entry);
+  if (idleTimer) {
+    clearTimeout(idleTimer);
+    idleTimer = null;
+  }
+  emitActivity();
+  return key;
+}
+
+function endBrowserSession(sessionId) {
+  if (sessionId === undefined || sessionId === null) {
+    for (const entry of activeSessions.values()) {
+      if (entry.timer) clearTimeout(entry.timer);
+    }
+    activeSessions.clear();
+  } else {
+    const key = String(sessionId);
+    const existing = activeSessions.get(key);
+    if (!existing) return;
+    if (existing.timer) clearTimeout(existing.timer);
+    activeSessions.delete(key);
+  }
+  if (activeOps.size === 0 && activeSessions.size === 0) {
+    if (idleTimer) {
+      clearTimeout(idleTimer);
+      idleTimer = null;
+    }
+    lastActivity = { ...lastActivity, active: false, thinking: false };
+  }
+  emitActivity();
 }
 
 function beginBrowserActivity({ tabId = '', action = 'act', label = '' } = {}) {
   if (idleTimer) {
     clearTimeout(idleTimer);
     idleTimer = null;
+  }
+  // Refresh active session safety timers while browser actions keep arriving.
+  for (const [key, session] of activeSessions.entries()) {
+    if (tabId) session.tabId = String(tabId);
+    if (session.timer) clearTimeout(session.timer);
+    const timer = setTimeout(() => endBrowserSession(key), SESSION_SAFETY_TTL_MS);
+    timer.unref?.();
+    session.timer = timer;
   }
   opSequence += 1;
   const token = opSequence;
@@ -70,7 +149,7 @@ function beginBrowserActivity({ tabId = '', action = 'act', label = '' } = {}) {
     startedAt: Date.now(),
   };
   activeOps.set(token, entry);
-  lastActivity = { ...entry, active: true };
+  lastActivity = { ...entry, active: true, thinking: false };
   emitActivity();
   return token;
 }
@@ -82,12 +161,17 @@ function endBrowserActivity(token) {
     emitActivity();
     return;
   }
+  if (activeSessions.size > 0 && !globalPaused) {
+    // Stay active in "thinking" state until the conversation run finishes.
+    emitActivity();
+    return;
+  }
   if (idleTimer) clearTimeout(idleTimer);
   // Keep the Stop pill steady across rapid consecutive tool calls without flickering.
   idleTimer = setTimeout(() => {
     idleTimer = null;
-    if (activeOps.size === 0) {
-      lastActivity = { ...lastActivity, active: false };
+    if (activeOps.size === 0 && activeSessions.size === 0) {
+      lastActivity = { ...lastActivity, active: false, thinking: false };
       emitActivity();
     }
   }, 650);
@@ -113,7 +197,7 @@ function setBrowserControlPaused(paused, tabId) {
       clearTimeout(idleTimer);
       idleTimer = null;
     }
-    lastActivity = { ...lastActivity, active: false };
+    lastActivity = { ...lastActivity, active: false, thinking: false };
   }
   emit();
   return getBrowserControlState();
@@ -160,10 +244,13 @@ function enqueueBrowserAction(tabId, work) {
 
 module.exports = {
   beginBrowserActivity,
+  beginBrowserSession,
   endBrowserActivity,
+  endBrowserSession,
   enqueueBrowserAction,
   getBrowserActivityState,
   getBrowserControlState,
+  hasActiveBrowserSession,
   isBrowserControlPaused,
   setBrowserControlPaused,
   subscribeBrowserControl,

@@ -1,4 +1,4 @@
-.network-settings { font: var(--settings-preference-body-font); }
+.network-settings { font: var(--font-body); }
 .network-mode-fieldset, .network-manual { min-width: 0; margin: 0; padding: 0; border: 0; }
 
 /* 3-column interactive mode deck. */
@@ -23,8 +23,18 @@
 }
 .network-mode:hover { border-color: var(--border-hover); background: var(--surface-hover); }
 .network-mode.is-selected {
-  border-color: var(--settings-accent-border);
-  background: var(--settings-accent-soft);
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
+}
+.network-mode.is-selected::after {
+  content: '';
+  position: absolute;
+  top: var(--space-3);
+  inset-inline-end: var(--space-3);
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-round);
+  background: var(--text);
 }
 .network-mode:has(input:focus-visible) { outline: 2px solid var(--focus-color); outline-offset: 2px; }
 .network-mode input {
@@ -54,12 +64,12 @@
   color: var(--muted);
 }
 .network-mode.is-selected .network-mode-icon {
-  border-color: var(--settings-accent-border);
-  color: var(--accent-foreground);
+  border-color: var(--border-hover);
+  color: var(--text);
 }
 .network-mode-icon svg { width: var(--icon-sm); height: var(--icon-sm); }
-.network-mode-head strong { font: var(--settings-label-font); color: var(--text); overflow-wrap: anywhere; }
-.network-mode small { color: var(--muted); font: var(--settings-description-font); overflow-wrap: anywhere; }
+.network-mode-head strong { font: var(--font-label); color: var(--text); overflow-wrap: anywhere; }
+.network-mode small { color: var(--muted); font: var(--font-description); overflow-wrap: anywhere; }
 .network-mode-fieldset:disabled .network-mode,
 .network-mode-fieldset:disabled .network-mode input { cursor: wait; }
 
@@ -80,18 +90,24 @@
   gap: var(--space-2);
 }
 .network-field > span,
-.network-field-head > span { font: var(--settings-label-font); color: var(--text); }
-.network-field small, .network-help { color: var(--muted); font: var(--settings-description-font); }
+.network-field-head > span { font: var(--font-label); color: var(--text); }
+.network-field small, .network-help { color: var(--muted); font: var(--font-description); }
 .network-field input { width: 100%; min-width: 0; }
 .network-detect-fill {
   padding: 2px var(--space-2);
+  border: 1px solid var(--divider);
   border-radius: var(--radius-tag);
-  background: var(--settings-accent-soft);
-  color: var(--accent-foreground);
-  font: var(--settings-description-font);
+  background: transparent;
+  color: var(--text-2);
+  font: var(--font-description);
   font-weight: var(--weight-medium);
+  transition: background-color var(--transition-fast), color var(--transition-fast), border-color var(--transition-fast);
 }
-.network-detect-fill:hover { background: var(--surface-active); }
+.network-detect-fill:hover {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+  color: var(--text);
+}
 
 .network-actions {
   display: flex;
@@ -125,8 +141,8 @@
   background: var(--settings-page-bg);
 }
 .network-diagnostic-copy { display: grid; gap: var(--space-1); min-width: 0; width: 100%; }
-.network-diagnostic-copy h3 { margin: 0; font: var(--settings-label-font); color: var(--text); }
-.network-diagnostic-copy p { margin: 0; color: var(--muted); font: var(--settings-description-font); overflow-wrap: anywhere; }
+.network-diagnostic-copy h3 { margin: 0; font: var(--font-label); color: var(--text); }
+.network-diagnostic-copy p { margin: 0; color: var(--muted); font: var(--font-description); overflow-wrap: anywhere; }
 .network-diagnostic-tile .settings-outline { display: inline-flex; align-items: center; gap: var(--space-2); }
 .network-diagnostic-tile .settings-outline svg { width: var(--icon-sm); height: var(--icon-sm); flex: none; }
 
@@ -138,11 +154,11 @@
   border-radius: var(--radius-tag);
   background: var(--surface);
   color: var(--text);
-  font: var(--settings-mono-font);
+  font: var(--font-code);
   overflow-wrap: anywhere;
   user-select: all;
 }
-.network-field .network-field-error, .network-field-error { margin: 0; font: var(--settings-description-font); overflow-wrap: anywhere; }
+.network-field .network-field-error, .network-field-error { margin: 0; font: var(--font-description); overflow-wrap: anywhere; }
 .network-field-error, .network-load-error p { color: var(--error); }
 .settings-content .network-field [aria-invalid='true'] { border-color: var(--error); }
 

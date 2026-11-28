@@ -43,7 +43,7 @@ import type {
   PiWorkspace,
   SkillInfo,
 } from './app-types';
-import type { ChatMessage, ComposerAttachment } from '../types/chat-types';
+import type { ComposerAttachment } from '../types/chat-types';
 import type { ContextPolicy } from '../features/conversation/ContextUsageChip';
 import { contextUsage } from '../features/conversation/context-usage';
 import { errorText } from '../shared/error-text';
@@ -167,7 +167,6 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     setDefaultModelSelection,
     models,
     setModels,
-    enabledModels,
     setEnabledModels,
     modelRevisionRef,
     modelWritesRef,
@@ -187,13 +186,11 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     settingsData,
     setSettingsData,
     setSettingsError,
-    settingsBusy,
     settingsDraftGuard,
     settingsLeaveConfirmation,
     settingsReturnFocusRef,
     actionConfirmation,
     setExtensionDetail,
-    officialExtensions,
     setOfficialExtensions,
     setOfficialExtensionsBusy,
     setOfficialExtensionsError,
@@ -530,7 +527,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
   }
 
   async function runEditorWrite(write: (owner: ReturnType<typeof editorOwner>) => Promise<(() => Promise<void>) | null>, dismiss?: ModalDismiss) {
-    if (!editor || editorLoading || editorSaveRef.current || editorRecoveryRef.current || resourceWriteRef.current || resourceCommitRef.current || settingsBusy) return;
+    if (!editor || editorLoading || editorSaveRef.current || editorRecoveryRef.current || resourceWriteRef.current || resourceCommitRef.current) return;
     const owner = editorOwner();
     if (!owner.current()) return;
     editorSaveRef.current = true;
@@ -803,7 +800,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     apply: (value: T, owner: ReturnType<typeof modelProjectionOwner>) => void;
     onCommitted?: (projection: MutationProjection<T>) => void;
   }) {
-    if (resourceWriteRef.current || resourceCommitRef.current || editorSaveRef.current || settingsBusy || resourcePendingRef.current[domain]) return;
+    if (resourceWriteRef.current || resourceCommitRef.current || editorSaveRef.current || resourcePendingRef.current[domain]) return;
     const owner = { cwd: workspaceRef.current };
     resourceWriteRef.current = owner;
     setResourceWriteBusy(true);
@@ -1072,7 +1069,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
     write: (cwd: string) => Promise<ExtensionMutationResult>;
     onCommitted?: () => void;
   }) {
-    if (resourceWriteRef.current || resourceCommitRef.current || editorSaveRef.current || settingsBusy
+    if (resourceWriteRef.current || resourceCommitRef.current || editorSaveRef.current
       || extensionRefreshLockRef.current || extensionMutationReceiptsRef.current.size) return;
     const owner = { cwd: workspaceRef.current };
     resourceWriteRef.current = owner;
@@ -1110,7 +1107,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
   }
 
   async function refreshSavedExtensionConfiguration() {
-    if (extensionRefreshLockRef.current || resourceWriteRef.current || resourceCommitRef.current || editorSaveRef.current || settingsBusy) return;
+    if (extensionRefreshLockRef.current || resourceWriteRef.current || resourceCommitRef.current || editorSaveRef.current) return;
     extensionRefreshLockRef.current = true;
     const request = ++extensionRefreshRequestRef.current;
     const cwd = workspaceRef.current;
@@ -1180,7 +1177,7 @@ export function useAppSettingsController(deps: AppSettingsDependencies) {
 
   async function reloadExtensions() {
     if (extensionMutationReceiptsRef.current.size) return refreshSavedExtensionConfiguration();
-    if (resourceWriteRef.current || resourceCommitRef.current || extensionRefreshLockRef.current || settingsBusy) return;
+    if (resourceWriteRef.current || resourceCommitRef.current || extensionRefreshLockRef.current) return;
     const cwd = workspaceRef.current;
     const request = ++extensionRefreshRequestRef.current;
     extensionRefreshLockRef.current = true;

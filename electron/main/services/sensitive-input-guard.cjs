@@ -76,7 +76,7 @@ function rememberSessionExemptions(sessionId, fingerprints) {
   return next;
 }
 
-async function guardSensitiveInput({ sessionId, text }) {
+async function guardSensitiveInput({ sessionId, text, signal }) {
   if (!sessionId) throw new Error('发送敏感信息前需要有效会话');
   const exempt = new Set(sessionExemptions(sessionId));
   const findings = scanSensitiveInput(text).filter(finding => !exempt.has(finding.fingerprint));
@@ -95,7 +95,7 @@ async function guardSensitiveInput({ sessionId, text }) {
       detail: '确认这是一段用于测试且允许发送的凭据。',
     },
     rememberScopes: ['session'],
-  });
+  }, signal);
   if (!result.accepted) throw new Error('已取消发送包含敏感信息的消息');
   const remember = result.remember === 'session' && Boolean(getStudioDatabase().getConversation(sessionId));
   if (remember) {

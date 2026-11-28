@@ -30,19 +30,19 @@ const {
   METRICS_SOURCE_ID,
   createMetricsRuntime,
 } = require('../capabilities/metrics/index.cjs');
+const { createKeepAwake, createMacLidControl, viewDirectories: keepAwakeViews } = require('../capabilities/keep-awake/index.cjs');
 const {
   closeAllExtensionDataViewServices,
 } = require('../services/extension-data-view.cjs');
 const {
   closeMcpRuntime,
-  mcpSnapshot,
   reloadMcpServers,
 } = require('../integrations/mcp/index.cjs');
 const {
   autoUpdateOfficialExtensions,
-  extensionHostSnapshot,
   ensureStudioExtensionIntegrity,
   installBuiltinExtension,
+  onStudioExtensionEnabled,
   reloadStudioExtensions,
   uninstallStudioExtensions,
 } = require('../services/studio-extensions.cjs');
@@ -53,7 +53,6 @@ const { createSecretAwareRegistry } = require('../services/secret-tool-runtime.c
 const { publishFileChanges } = require('../services/file-change-events.cjs');
 
 const DURABLE_PREFIX = 'durable_';
-const DEFAULT_PAGE_SIZE = 500;
 
 let state;
 let initialization;
@@ -155,6 +154,7 @@ async function createRuntime() {
   const registry = createSecretAwareRegistry(durable.createRegistry());
   const builtinExtensions = createStudioBuiltins({
     durable,
+    observeDesktopRun: (conversationId, observer) => harness.observeDoc(durable.LiveDoc, conversationId, observer, context),
     piAi,
     codingTools: durableTools.CodingTools,
     toolSearch: durableToolSearch.createToolSearchExtension(),
@@ -218,6 +218,12 @@ async function createRuntime() {
     throw error;
   });
   const stopAssetArchive = require('../services/conversation-asset-archive.cjs').startAssetArchive(db);
+  const { powerSaveBlocker, powerMonitor } = require('electron');
+  const keepAwake = createKeepAwake({
+    db, blocker: powerSaveBlocker, powerMonitor, onEnabled: onStudioExtensionEnabled,
+    createLidControl: process.platform === 'darwin' ? createMacLidControl : undefined,
+  });
+  keepAwake.addHarness(harness, context);
   harness.resume();
   const runtime = {
     durable,
@@ -228,8 +234,11 @@ async function createRuntime() {
     context,
     registry,
     builtinExtensions,
+    builtinViewDirectories: keepAwakeViews,
+    keepAwake,
     metricsRuntime,
     extensionDataSources: Object.freeze({
+      ...keepAwake.dataSources,
       [METRICS_SOURCE_ID]: metricsRuntime.provider,
       [METRICS_FOOTER_SOURCE_ID]: metricsRuntime.provider,
     }),
@@ -239,6 +248,7 @@ async function createRuntime() {
     await installRuntimeResources(runtime, db);
     return runtime;
   } catch (error) {
+    keepAwake.close();
     await stopAssetArchive();
     metricsRuntime.close();
     await harness.close(context).catch(() => {});
@@ -322,6 +332,7 @@ async function closeDurableRuntime() {
   state = undefined;
   try {
     if (!current) return;
+    current.keepAwake.close();
     try {
       await closeAllExtensionDataViewServices();
     } finally {
@@ -355,13 +366,6 @@ async function refreshExtensionRuntime(cwd) {
   };
 }
 
-function extensionRuntimeSnapshot() {
-  return {
-    studio: extensionHostSnapshot(),
-    mcp: mcpSnapshot(),
-  };
-}
-
 async function reconcileRuntimeForWorkspace(cwd, options = {}) {
   const runtime = await getDurableRuntime();
   if (state?.workspace !== cwd) {
@@ -372,30 +376,6 @@ async function reconcileRuntimeForWorkspace(cwd, options = {}) {
     await ensureStudioExtensionIntegrity(runtime, cwd);
   }
   return runtime;
-}
-
-async function conversationById(id) {
-  const runtime = await getDurableRuntime();
-  const parsed = Number(id);
-  if (!Number.isSafeInteger(parsed) || parsed <= 0) return undefined;
-  return runtime.harness.conversation(parsed, runtime.context);
-}
-
-async function readAllEntries(conversation) {
-  const runtime = await getDurableRuntime();
-  const items = [];
-  let cursor;
-  do {
-    const page = await conversation.entries(
-      { order: 'ascending' },
-      DEFAULT_PAGE_SIZE,
-      cursor,
-      runtime.context,
-    );
-    items.push(...page.items);
-    cursor = page.next;
-  } while (cursor);
-  return items;
 }
 
 async function latestEntry(conversation) {
@@ -412,13 +392,10 @@ async function latestEntry(conversation) {
 module.exports = {
   DURABLE_PREFIX,
   closeDurableRuntime,
-  conversationById,
   durableHarnessSettings,
-  extensionRuntimeSnapshot,
   getDurableRuntime,
   initializeDurableRuntime,
   latestEntry,
-  readAllEntries,
   reconcileRuntimeForWorkspace,
   refreshExtensionRuntime,
   sanitizedShellEnv,

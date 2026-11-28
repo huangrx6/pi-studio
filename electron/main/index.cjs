@@ -27,8 +27,10 @@ const { closeConversationWatches } = require('./runtime/conversations.cjs');
 const { cleanupOrphanedAttachmentDirectories } = require('./services/attachments.cjs');
 const { flushConversationFileCleanup } = require('./services/conversation-file-cleanup.cjs');
 const { shutdownTemporaryChats } = require('./services/temporary-chat.cjs');
+const { startPlanScheduler, stopPlanScheduler } = require('./services/plan-scheduler.cjs');
 const { registerIpc } = require('./ipc/index.cjs');
 const { shutdownTerminalSessions } = require('./ipc/terminal.cjs');
+const { stopDesktopControlHelper } = require('./services/desktop-control/index.cjs');
 const { createWindow, showMainWindow, installMenu, watchSystemTheme } = require('./window.cjs');
 const { BACKGROUND_SCHEME } = require('./background-media.cjs');
 const { EXTENSION_VIEW_SCHEME } = require('./core/extension-view.cjs');
@@ -95,6 +97,7 @@ if (primaryInstance) {
     if (startupGate.status !== 'ready' || app.isQuitting) throw new Error('Pi Studio 未能完成启动');
   });
   registerMenuBarIpc();
+  require('./services/tool-window.cjs').registerToolWindowIpc();
 
   // Must be registered before app.ready so <img>/<video> can treat these URLs
   // as secure, streamable resources in development and packaged builds.
@@ -117,10 +120,12 @@ if (primaryInstance) {
       shutdownUpdater();
     },
     steps: [
+      [{ label: 'scheduled plans', run: stopPlanScheduler, timeoutMs: 8_000 }],
       [
         { label: 'conversation watches', run: closeConversationWatches, timeoutMs: 3_000 },
         { label: 'temporary chats', run: shutdownTemporaryChats, timeoutMs: 3_000 },
         { label: 'terminal sessions', run: shutdownTerminalSessions, timeoutMs: 2_000 },
+        { label: 'computer use helper', run: stopDesktopControlHelper, timeoutMs: 2_000 },
       ],
       [{ label: 'Durable runtime', run: closeDurableRuntime, timeoutMs: 8_000 }],
     ],
@@ -137,7 +142,7 @@ if (primaryInstance) {
     if (startupGate?.requestReveal()) showMainWindow();
   });
 
-  // The right-panel browser embeds untrusted pages: deny popups, block
+  // The tool panel browser embeds untrusted pages: deny popups, block
   // unsupported navigation and keep those pages out of the app's session.
   app.on('web-contents-created', (_event, contents) => {
     if (contents.getType() !== 'webview') return;
@@ -202,6 +207,7 @@ if (primaryInstance) {
         console.warn('[pi-studio] 会话文件清理将在下次启动时重试', error.code || error.name);
       }
       await initializeDurableRuntime();
+      if (!app.isQuitting) startPlanScheduler(require('electron').powerMonitor);
     },
     ready: ({ requestedBeforeReady }) => {
       if (app.isQuitting) return;

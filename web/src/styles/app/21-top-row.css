@@ -1,4 +1,4 @@
-/* The brand, conversation and workbench share one title row. */
+/* Project navigation and conversation tabs share the title row. */
 .brand {
   height: var(--header-height);
   margin: 0;
@@ -7,14 +7,9 @@
   -webkit-app-region: drag;
 }
 
-.brand .brand-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-13); font-weight: var(--weight-semibold); letter-spacing: 0; }
+.brand .brand-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: var(--text-label); font-weight: var(--weight-semibold); letter-spacing: 0; }
 
-/* 按钮在窗口拖拽区旁边：显式声明 no-drag 并把热区向外扩 4px，
- * 28px 的图标旁边那点空白也应该能点中。 */
-/* 按钮在窗口拖拽区里：显式 no-drag，并把点击目标做成 36×32 的实体块。
- * 之前只有 28×28 且没有任何视觉边界，点在图标边缘会落到拖拽区上，看起来「点不动」。 */
-/* 标题行：拖拽区与收起按钮并排，互不重叠。按钮不再压在 drag 区域上，
- * 图标中心的点击不会被窗口拖拽吞掉。 */
+/* The drag region and the sidebar toggle have separate hit targets. */
 .sidebar-top-row {
   display: flex;
   align-items: center;
@@ -25,22 +20,15 @@
   flex: none;
 }
 .sidebar-top-row > .brand { flex: 1; min-width: 0; height: 100%; border-bottom: 0; }
-.chat-header,
-.panel-tabbar { background: var(--surface-chrome); border-bottom: 0; }
+.chat-header { background: var(--surface-chrome); border-bottom: 0; }
 .file-toolbar {
-  background: color-mix(in srgb, var(--surface-chrome) 88%, transparent);
+  background: var(--surface-chrome);
   border-bottom-color: var(--divider);
 }
 .file-toolbar { border-top-color: var(--transparent); }
 .sidebar-top-toggle {
-  position: static;
-  flex: none;
-  width: 36px;
-  height: 32px;
-  -webkit-app-region: no-drag;
   transition: opacity 120ms ease;
 }
-.sidebar-top-toggle > svg { pointer-events: none; }
 /* 收起动画期间侧栏还在变窄，这个按钮会一路左滑；主区右端同时出现「展开侧边栏」，
  * 两个一模一样的图标并排看着很乱。收起一开始就把它淡出。 */
 .is-sidebar-collapsed .sidebar-top-toggle { opacity: 0; pointer-events: none; transition: none; }

@@ -244,6 +244,22 @@ test('creation waits before resizing, then synchronizes latest dimensions withou
   h.observers[0].callback(); h.tick(); assert.equal(h.resizes.length, 1);
 });
 
+test('large bracketed pastes reach the PTY in order with complete Unicode characters in every write', async () => {
+  const h = harness();
+  h.resolve(); await settle();
+  const limit = 64 * 1024;
+  const start = '\x1b[200~';
+  const data = start + 'a'.repeat(limit - start.length - 1) + '🙂' + 'b'.repeat(limit) + '\x1b[201~';
+  h.terms[0].input(data);
+  const chunks = h.writes.map(([id, chunk]) => {
+    assert.equal(id, 'a');
+    assert.ok(chunk.length <= limit && chunk.isWellFormed());
+    return chunk;
+  });
+  assert.equal(chunks.join(''), data);
+  h.unmount();
+});
+
 test('a newly created terminal restores its initial PTY dimensions before draining in-flight output', async () => {
   const h = harness(); const initial = h.creates[0].payload;
   h.host.clientWidth = 1000; h.observers[0].callback(); h.tick();

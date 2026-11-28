@@ -6,7 +6,6 @@ import { useActionConfirmation } from '../../shared/ConfirmDialog';
 import { InfoHint } from '../../shared/InfoHint';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
-import { automaticProfileIcon, SettingsProfileIdentity } from '../../shared/SettingsProfileIcon';
 import type { ModalDismiss } from '../../shared/useModalDialog';
 import type { HarnessProfile, HarnessSectionId, HarnessSettingsSnapshot } from '../../types/harness-types';
 import { cloneHarnessProfile, guidanceDraft, type CommitHarnessChange, type GuidanceRow } from './harness-state';
@@ -55,13 +54,6 @@ export function HarnessProfileEditor({ source, creating, snapshot, cwd, enabledT
   const applied = scopeId === initial.id;
   const boundId = scopeId || snapshot.globalProfileId;
   const boundName = snapshot.profiles.find(item => item.id === boundId)?.name || boundId;
-  const scopeHelp = scope === 'global'
-    ? `未指定方案的工作区使用「${boundName}」。`
-    : scope === 'temporary'
-      ? `新发起或切换配置后的临时对话使用「${boundName}」。`
-      : scopeId
-        ? `当前工作区使用「${boundName}」。`
-        : `当前工作区继承全局方案「${boundName}」。`;
 
   function updateSection(section: HarnessSectionId, enabled: boolean) {
     setDraft(current => ({ ...current, sections: { ...current.sections, [section]: enabled } }));
@@ -91,7 +83,6 @@ export function HarnessProfileEditor({ source, creating, snapshot, cwd, enabledT
   }
 
   return <><SettingsDialog wide className="harness-profile-dialog" title={creating ? '新建 Harness 配置' : '编辑 Harness 配置'}
-    description={creating && source.name ? `以「${source.name}」为起点，保存后可按工作区或全局应用。` : undefined}
     action={creating ? '创建配置' : '保存配置'} busy={busy} loading={false} unavailable={!canSave}
     error={idIssue || guidance.error} onClose={onClose} onSubmit={save}
     onRequestClose={async dismiss => {
@@ -113,8 +104,7 @@ export function HarnessProfileEditor({ source, creating, snapshot, cwd, enabledT
     <div className="settings-form-sections harness-editor">
       <section className="settings-form-section">
         <h3>基本信息</h3>
-        <SettingsProfileIdentity group="harness" value={draft.icon} automatic={automaticProfileIcon('harness', id || fallbackId)}
-          onChange={icon => setDraft(current => ({ ...current, icon }))}>
+        <div className="profile-identity-grid">
           <label className="profile-identity-field"><span>方案名称</span><input required maxLength={80}
             value={draft.name} placeholder="例如，代码审查" onChange={event => setDraft(current => ({ ...current, name: event.target.value }))} /></label>
           <div className="profile-identity-field profile-identity-id"><span className="settings-field-heading">{creating ? <label htmlFor="harness-profile-id">配置 ID</label> : <span>配置 ID</span>}
@@ -122,9 +112,9 @@ export function HarnessProfileEditor({ source, creating, snapshot, cwd, enabledT
             {creating ? <input id="harness-profile-id" maxLength={64} required value={manualId ?? suggestedId} aria-invalid={Boolean(idIssue)}
               onChange={event => setManualId(event.target.value)} placeholder="review-first" />
               : <code className="harness-stored-id">{id}</code>}</div>
-        </SettingsProfileIdentity>
+        </div>
         {!creating && <div className="harness-setting-row harness-editor-context">
-          <div><span>应用范围</span><p>{scopeHelp}</p></div>
+          <div><span>应用范围</span><p>当前：{boundName}{scope === 'workspace' && !scopeId ? '（继承全局）' : ''}</p></div>
           <div className="harness-binding-controls"><div className="settings-segments" role="group" aria-label="Harness 应用范围">
             {(['workspace', 'global', 'temporary'] as const).map(item => <button key={item} type="button" aria-pressed={scope === item}
               disabled={item === 'workspace' && !cwd} onClick={() => setScope(item)}>
@@ -156,7 +146,6 @@ export function HarnessProfileEditor({ source, creating, snapshot, cwd, enabledT
         </Accordion>
         <Accordion className="harness-disclosure harness-global-instructions" summary="全局指令文件" badge={instructionStatus}>
           <div className="harness-disclosure-body">
-            <p>「项目指令」段落默认从此文件读取全局指令。</p>
             <code>{snapshot.globalInstructionsPath}</code>
           </div>
         </Accordion>

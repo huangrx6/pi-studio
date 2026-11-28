@@ -5,7 +5,6 @@ import { useActionConfirmation } from '../../shared/ConfirmDialog';
 import { InfoHint } from '../../shared/InfoHint';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
-import { automaticProfileIcon, SettingsProfileIdentity } from '../../shared/SettingsProfileIcon';
 import { useSettingsToast } from '../../shared/SettingsToast';
 import type { ModalDismiss } from '../../shared/useModalDialog';
 import type {
@@ -95,13 +94,6 @@ export function PermissionProfileEditor({
   const applied = scopeId === initial.id;
   const boundId = scopeId || snapshot.mainProfileId;
   const boundName = snapshot.profiles.find(item => item.id === boundId)?.name || boundId;
-  const scopeHelp = scope === 'global'
-    ? `未单独指定方案的工作区默认使用「${boundName}」。`
-    : scope === 'temporary'
-      ? `临时对话工具调用使用「${boundName}」权限策略。`
-      : scopeId
-        ? `当前工作区使用「${boundName}」。`
-        : `当前工作区继承全局主对话方案「${boundName}」。`;
 
   function handleSave(dismiss: ModalDismiss) {
     if (!canSave) return;
@@ -147,7 +139,6 @@ export function PermissionProfileEditor({
       wide
       className="permission-profile-dialog"
       title={creating ? '新建权限方案' : `编辑权限方案 · ${initial.name}`}
-      description={creating && source.name ? `基于「${source.name}」创建可复用的权限策略模板。` : undefined}
       action={creating ? '创建方案' : '保存方案'}
       busy={busy}
       loading={false}
@@ -194,8 +185,7 @@ export function PermissionProfileEditor({
       <div className="settings-form-sections permission-profile-editor">
         <section className="settings-form-section">
           <h3>基本信息与绑定</h3>
-          <SettingsProfileIdentity group="permissions" value={draft.icon} automatic={automaticProfileIcon('permissions', id || fallbackId)}
-            onChange={icon => setDraft(current => ({ ...current, icon }))}>
+          <div className="profile-identity-grid">
             <label className="profile-identity-field">
               <span>方案名称</span>
               <input
@@ -230,12 +220,12 @@ export function PermissionProfileEditor({
                 onChange={event => setDraft(current => ({ ...current, description: event.target.value }))}
               />
             </label>
-          </SettingsProfileIdentity>
+          </div>
 
           {!creating && <div className="harness-setting-row harness-editor-context">
             <div>
               <span>应用范围</span>
-              <p>{scopeHelp}</p>
+              <p>当前：{boundName}{scope === 'workspace' && !scopeId ? '（继承全局）' : ''}</p>
             </div>
             <div className="harness-binding-controls">
               <div className="settings-segments" role="group" aria-label="权限方案应用范围">

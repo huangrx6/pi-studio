@@ -29,55 +29,52 @@ function compile(path, stubs) {
 
 const icons = new Proxy({}, { get: () => () => null });
 const shellLayout = compile('../../web/src/shell/ShellLayout.tsx', {
+  './ToolPanelLauncher': { ToolPanelAnchor: () => null },
   'lucide-react': icons,
+  '../shared/HintButton': compile('../../web/src/shared/HintButton.tsx', {}),
   './app-shell-config': { BrandMark: () => null },
   '../shared/surface-visibility': compile('../../web/src/shared/surface-visibility.ts', {}),
 });
-function renderHeader(showTrace, isNewConversation = false, panelExpanded = false) {
+function renderHeader({ isNewConversation = false, tabs } = {}) {
   const { ConversationHeader } = compile('../../web/src/shell/ConversationHeader.tsx', {
     react: React,
     'lucide-react': icons,
     '../shared/LoadingState': { LoadingIndicator: () => null },
     './ShellLayout': shellLayout,
-    '../features/git/GitBranchPicker': { GitBranchPicker: () => null },
-    '../features/git/GitRepositoryPicker': { GitRepositoryPicker: () => null },
   });
   return renderToStaticMarkup(React.createElement(ConversationHeader, {
     sidebarCollapsed: false,
     onExpandSidebar() {},
     isNewConversation,
     title: '会话',
-    extensionMenu: React.createElement('button', { 'aria-label': '扩展' }),
-    panelExpanded,
-    onOpenPanel() {},
-    onOpenProgress() {},
-    onOpenTrace() {},
-    onOpenGit() {},
-    showTrace,
+    tabs,
   }));
 }
 
-test('the trace entry follows the code work view setting independently of extensions', () => {
-  assert.doesNotMatch(renderHeader(false), /aria-label="轨迹"/);
-  assert.match(renderHeader(true), /aria-label="轨迹"/);
-  assert.match(renderHeader(false), /aria-label="扩展"/);
-  assert.doesNotMatch(renderHeader(true), /notification-trigger|aria-label="通知"/);
+test('conversation header keeps session tabs and leaves inspection to the conversation', () => {
+  const tabs = React.createElement('nav', { 'aria-label': '当前会话标签' });
+  const active = renderHeader({ tabs });
+  assert.doesNotMatch(active, /会话检视|会话详情/);
+  assert.match(active, /aria-label="当前会话标签"/);
+  assert.doesNotMatch(active, /aria-label="扩展"/);
+  assert.doesNotMatch(active, /notification-trigger|aria-label="通知"/);
 });
 
-test('drafts retain extensions while progress and trace require a conversation', () => {
-  const draft = renderHeader(true, true);
-  assert.match(draft, /aria-label="扩展"/);
-  assert.doesNotMatch(draft, /aria-label="(?:进展|轨迹)"/);
-  assert.match(renderHeader(true), /aria-label="进展"/);
+test('draft conversations omit the session inspector', () => {
+  const draft = renderHeader({ isNewConversation: true });
+  assert.doesNotMatch(draft, /aria-label="(?:会话检视|进展|轨迹|扩展)"/);
 });
 
-test('draft and existing conversations can both open the right sidebar', () => {
-  for (const isNewConversation of [true, false]) {
-    const closed = renderHeader(false, isNewConversation);
-    assert.match(closed, /panel-open-entry/);
-    assert.doesNotMatch(closed, /<button[^>]*panel-open-entry[^>]*disabled/);
-    assert.match(renderHeader(false, isNewConversation, true), /<button[^>]*panel-open-entry[^>]*aria-hidden="true"[^>]*disabled/);
-  }
+test('the workspace toggle targets the mounted sidebar in its expanded state', () => {
+  const render = expanded => renderToStaticMarkup(React.createElement(shellLayout.WorkspacePanelToggle, { expanded }));
+  const closed = render(false);
+  assert.match(closed, /aria-label="打开右侧面板"/);
+  assert.match(closed, /aria-expanded="false"/);
+  assert.doesNotMatch(closed, /aria-controls=/);
+  const open = render(true);
+  assert.match(open, /aria-label="收起右侧面板"/);
+  assert.match(open, /aria-expanded="true"/);
+  assert.match(open, /aria-controls="workspace-side-panel"/);
 });
 
 test('the trace search box owns the focus ring instead of nesting two frames', () => {

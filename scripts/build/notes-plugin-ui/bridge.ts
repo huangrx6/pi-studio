@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { applyStudioTheme } from '../../../sdk/extensions/view-theme.mjs';
 import type { Appearance, Scheme } from './appearance';
 
 export type Kind = 'folder' | 'markdown' | 'html' | 'image' | 'pdf';
@@ -44,12 +45,7 @@ export function useBridge() {
       const data = event.data;
       if (event.source !== window.parent || data?.protocol !== PROTOCOL) return;
       if (data.type === 'host:context') {
-        const root = document.documentElement;
-        const scheme = data.theme === 'dark' ? 'dark' : 'light';
-        root.dataset.theme = scheme;
-        for (const [key, value] of Object.entries(data.tokens ?? {})) {
-          if (key.startsWith('--') && typeof value === 'string') root.style.setProperty(key, value);
-        }
+        const scheme = applyStudioTheme(data);
         setHost(current => ({ scheme, revision: current.revision + 1 }));
       }
       if (data.type === 'host:snapshot') {

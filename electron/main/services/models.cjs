@@ -199,11 +199,6 @@ function persistDefaultThinkingLevel(runtime, level) {
   };
 }
 
-async function resolvedRuntimeModel(runtime, preferredRef) {
-  const models = runtime?.models || runtime;
-  return enabledRuntimeModel(models, preferredRef) || enabledRuntimeModel(models, defaultModelRef(models));
-}
-
 async function modelInfo(_cwd = DEFAULT_CWD) {
   const runtime = await getStudioModelsRuntime();
   const ref = defaultModelRef(runtime);
@@ -295,12 +290,6 @@ async function sessionModelInfo(agent) {
   };
 }
 
-function reasoningFor(model, _cwd = DEFAULT_CWD) {
-  const runtime = require('../core/studio-models.cjs').getStudioModelsRuntimeSync();
-  if (!runtime) throw new Error('模型运行时尚未初始化');
-  return thinkingOptions(model, undefined, runtime);
-}
-
 function validateThinkingLevel(model, level, runtime) {
   const levels = runtime.getSupportedThinkingLevels(model);
   if (level === 'default') return level;
@@ -325,9 +314,7 @@ module.exports = {
   persistDefaultModel,
   persistDefaultThinkingLevel,
   providerBaseUrl,
-  reasoningFor,
   resolveProviderApiKey,
-  resolvedRuntimeModel,
   runtimeModelFor,
   sessionModelInfo,
   splitModelRef,

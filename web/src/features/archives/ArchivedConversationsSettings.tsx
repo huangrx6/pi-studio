@@ -119,7 +119,7 @@ export function ArchivedConversationsSettings({ workspaces, onRestore, onDelete,
     <SettingsPageHeader title="归档会话" iconPosition="end" meta="按项目查找、恢复或永久删除已归档的会话。"
       icon={<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
         <rect x="3.5" y="5.5" width="25" height="6" rx="2" /><path d="M6 12v12.5a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V12" />
-        <path d="M13 16h6" stroke="var(--accent)" />
+        <path d="M13 16h6" />
       </svg>} />
     <div className="settings-preference-groups">
       {total > 0 && <div className="archive-search-row">

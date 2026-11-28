@@ -1,0 +1,32 @@
+.scrollable-tab-strip, .scrollable-tab-list {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.scrollable-tab-list {
+  gap: 2px;
+  overflow: auto hidden;
+  overscroll-behavior-x: contain;
+  overflow-anchor: none;
+  scrollbar-width: none;
+  -webkit-app-region: no-drag;
+}
+.scrollable-tab-strip > .tab-scroll-arrow {
+  flex: none;
+  width: 22px;
+  height: 24px;
+  -webkit-app-region: no-drag;
+}
+.icon-button.tab-actions-button {
+  flex: none;
+  width: 27px;
+  height: 25px;
+  -webkit-app-region: no-drag;
+}
+.tab-actions-button[aria-expanded='true'] { background: var(--nav-selected-bg); color: var(--text); }
+.action-menu.tab-close-menu { width: max-content; min-width: 148px; max-width: calc(100vw - 16px); }
+.tab-close-menu > button > span { flex: 1; }
+.tab-close-menu > button.is-danger > svg { order: 1; }
+@media (prefers-reduced-motion: no-preference) {
+  .scrollable-tab-list { scroll-behavior: smooth; }
+}

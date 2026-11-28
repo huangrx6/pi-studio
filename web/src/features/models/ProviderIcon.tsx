@@ -70,18 +70,16 @@ function CodeMark() {
  * @param provider 来源 id（用于查图标与色调）
  * @param name 来源展示名；用于 title 和无图标时的首字母
  * @param icon 可选自定义图标地址（优先于内置品牌图标）
- * @param size 边长（px），同时写入 CSS 变量供内部 svg/img 自适应
+ * @param size 边长，可传 CSS 长度或像素数
  * @param className 额外 class，调用方用来控制布局（如卡片头像）
  */
-export function ProviderIcon({ provider, name, icon, size = 22, className = '' }: { provider: string; name?: string; icon?: string; size?: number; className?: string }) {
+export function ProviderIcon({ provider, name, icon, size = 'calc(var(--icon-lg) + 2px)', className = '' }: { provider: string; name?: string; icon?: string; size?: number | string; className?: string }) {
   const spec = providerIcons[provider];
   const tone = tones[provider] ?? 'is-neutral';
   const opticalOffset = spec && 'path' in spec ? spec.opticalOffset : undefined;
   // --provider-icon-size 让 CSS 里的内边距/圆角随尺寸缩放。
   const style = {
-    width: size,
-    height: size,
-    '--provider-icon-size': `${size}px`,
+    '--provider-icon-size': typeof size === 'number' ? `${size}px` : size,
     '--provider-icon-optical-x': `${opticalOffset?.x ?? 0}%`,
     '--provider-icon-optical-y': `${opticalOffset?.y ?? 0}%`,
   } as React.CSSProperties;

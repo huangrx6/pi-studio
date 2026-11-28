@@ -38,7 +38,7 @@ type AppCommandPaletteDependencies = {
   openPanel: () => void;
   openBrowserTab: () => void;
   openTerminalTab: () => void;
-  stopGeneration: () => Promise<void>;
+  stopFocusedGeneration: () => void;
   focusConversation: () => void;
   openAgentOverview: () => void;
   openExtensions: () => void;
@@ -82,7 +82,7 @@ export function useAppCommandPalette({
   openPanel,
   openBrowserTab,
   openTerminalTab,
-  stopGeneration,
+  stopFocusedGeneration,
   focusConversation,
   openAgentOverview,
   openExtensions,
@@ -140,7 +140,7 @@ export function useAppCommandPalette({
             openTerminalTab();
             return;
           case 'stopGeneration':
-            if (turnActive) void stopGeneration();
+            stopFocusedGeneration();
             return;
           case 'nextSession':
           case 'prevSession': {
@@ -168,7 +168,7 @@ export function useAppCommandPalette({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [shortcuts, settingsOpen, filesOpen, turnActive, shortcutSessions, session?.id]);
+  }, [shortcuts, settingsOpen, filesOpen, closePanel, openPanel, stopFocusedGeneration, shortcutSessions, session?.id]);
 
   useEffect(() => { setActionPaletteOpen(false); }, [session?.id, workspace, settingsOpen]);
 
@@ -224,7 +224,7 @@ export function useAppCommandPalette({
       case 'trace': openTrace(); break;
       case 'git': openGit(); break;
       case 'temporary': openTemporaryChat(); break;
-      case 'files': openFilesTab(); openPanel(); break;
+      case 'files': openFilesTab(); break;
       case 'models': await openSettingsPage('models'); break;
       case 'mcp': await openSettingsPage('mcp'); break;
     }

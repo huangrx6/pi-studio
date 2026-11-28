@@ -20,8 +20,8 @@ test('standalone task-board plugin supports types, multi-project linking, activi
   let active = activate({ dataDirectory, now: () => currentTime });
   const service = new dataView.ExtensionDataViewService({ normalizeContentList: value => value });
   const unregister = dataView.registerExtensionDataViewService(service);
-  const firstRenderer = { id: 1 };
-  const secondRenderer = { id: 2 };
+  const firstRenderer = { id: 1, send() {} };
+  const secondRenderer = { id: 2, send() {} };
   const bugId = randomUUID();
   const featureId = randomUUID();
   const blockedId = randomUUID();

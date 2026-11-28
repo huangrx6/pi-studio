@@ -75,7 +75,6 @@ test('installed skills render one empty state and only populated groups', () => 
     react: React,
     'lucide-react': require('lucide-react'),
     '../../shared/DetailDialog': { DetailDialog: () => null },
-    '../../shared/EmptyStateArt': { EmptyStateArt: () => null },
     '../../shared/StatusGlyph': { StatusGlyph: () => null },
     '../../shared/plugin-ownership.ts': {
       isPluginOwnedResource: (skill) => skill?.origin === 'plugin' && Boolean(skill?.ownerPluginId),
@@ -138,7 +137,6 @@ test('MCP zero state relies on the primary add action without a redundant zero c
   const { McpSettings } = compile('mcp/McpSettings.tsx', {
     react: React,
     'lucide-react': { ChevronRight: () => null, Pencil: () => null, Plug: () => null, Plus: () => null, Trash2: () => null },
-    '../../shared/EmptyStateArt': { EmptyStateArt: () => null },
     '../../shared/StatusGlyph': { StatusGlyph: () => null },
 
     '../../shared/InfoHint': { InfoHint: ({ label }) => React.createElement('span', null, label) },

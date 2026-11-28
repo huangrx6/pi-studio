@@ -1,73 +1,51 @@
 /* 更新对话框：状态图标 + 版本号领衔；下载过程有阶段感；说明按小节阅读。 */
 
 .detail-dialog.update-dialog {
-  width: min(640px, 94vw);
-  max-height: min(780px, calc(100dvh - 48px));
-  border-color: color-mix(in srgb, var(--border-strong) 88%, var(--accent) 12%);
-  background:
-    radial-gradient(120% 80% at 0% -10%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 52%),
-    var(--surface);
-}
-
-.detail-dialog.update-dialog.is-downloaded {
-  background:
-    radial-gradient(120% 80% at 0% -10%, color-mix(in srgb, var(--success) 16%, transparent), transparent 55%),
-    var(--surface);
-}
-
-.detail-dialog.update-dialog.is-error,
-.detail-dialog.update-dialog.is-unsupported {
-  background:
-    radial-gradient(120% 80% at 0% -10%, color-mix(in srgb, var(--error) 12%, transparent), transparent 55%),
-    var(--surface);
+  width: min(560px, 94vw);
+  max-height: min(760px, calc(100dvh - 48px));
+  border-color: var(--border-strong);
+  background: var(--dialog-surface);
 }
 
 /* ---- 头部 ------------------------------------------------------------- */
 
 .update-header {
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr) auto;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: start;
-  gap: var(--space-4);
+  gap: var(--space-3);
   flex: none;
-  padding: var(--space-6) var(--space-6) var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-4);
 }
 
 .update-mark {
   display: grid;
   place-items: center;
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   border: 1px solid var(--border);
-  border-radius: var(--radius-card);
+  border-radius: var(--radius-control);
   background: var(--surface-raised);
-  color: var(--muted);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent);
+  color: var(--text-2);
 }
 
 .update-mark svg {
-  width: 22px;
-  height: 22px;
+  width: var(--icon-lg);
+  height: var(--icon-lg);
 }
 
 .update-mark.is-accent {
-  border-color: var(--accent-border);
-  background: color-mix(in srgb, var(--accent-soft) 88%, var(--surface));
-  color: var(--accent-foreground);
-  box-shadow:
-    0 0 0 4px color-mix(in srgb, var(--accent) 12%, transparent),
-    inset 0 1px 0 color-mix(in srgb, var(--text) 8%, transparent);
+  border-color: var(--border-hover);
+  color: var(--text);
 }
 
 .update-mark.is-busy {
-  border-color: color-mix(in srgb, var(--accent-border) 70%, var(--border));
-  background: color-mix(in srgb, var(--accent-soft) 55%, var(--surface-raised));
-  color: var(--accent-foreground);
+  border-color: var(--border-hover);
+  color: var(--text);
 }
 
 .update-mark.is-ok {
-  border-color: var(--success-border);
-  background: var(--success-soft);
+  border-color: var(--border);
   color: var(--success);
 }
 
@@ -78,7 +56,7 @@
 }
 
 .update-mark.is-quiet {
-  color: var(--text-2);
+  color: var(--muted);
 }
 
 .update-mark .is-spinning {
@@ -95,7 +73,7 @@
 .update-kicker {
   margin: 0;
   color: var(--muted);
-  font-size: var(--settings-description-size);
+  font-size: var(--text-description);
   font-weight: var(--weight-medium);
   letter-spacing: .04em;
 }
@@ -104,7 +82,7 @@
   min-width: 0;
   margin: 0;
   color: var(--text);
-  font-size: clamp(1.55rem, 2.4vw, 1.85rem);
+  font-size: var(--text-heading);
   font-weight: var(--weight-semibold);
   line-height: 1.2;
   letter-spacing: -0.03em;
@@ -115,14 +93,14 @@
 .update-subline {
   margin: 4px 0 0;
   color: var(--text);
-  font-size: var(--settings-label-size);
+  font-size: var(--text-label);
   font-variant-numeric: tabular-nums;
 }
 
 .update-meta {
   margin: 2px 0 0;
   color: var(--muted);
-  font-size: var(--settings-description-size);
+  font-size: var(--text-description);
   font-variant-numeric: tabular-nums;
 }
 
@@ -139,7 +117,7 @@
   min-height: 0;
   flex-direction: column;
   gap: var(--space-4);
-  padding: 0 var(--space-6) var(--space-5);
+  padding: 0 var(--space-5) var(--space-5);
   overflow-y: auto;
 }
 
@@ -150,7 +128,7 @@
 .update-description {
   margin: 0;
   color: var(--muted);
-  font: var(--settings-description-font);
+  font: var(--font-description);
 }
 
 .update-error {
@@ -160,7 +138,7 @@
   border-radius: var(--radius-control);
   background: var(--error-soft);
   color: var(--error);
-  font-size: var(--settings-label-size);
+  font-size: var(--text-label);
   line-height: var(--leading-relaxed);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -173,30 +151,23 @@
   display: grid;
   gap: 4px;
   overflow: hidden;
-  padding: 14px 16px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface-raised) 88%, var(--surface));
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
 }
 
-.update-panel.is-accent {
-  border-color: color-mix(in srgb, var(--accent-border) 75%, var(--border));
-  background: color-mix(in srgb, var(--accent-soft) 42%, var(--surface-raised));
-}
-
-.update-panel.is-ok {
-  border-color: color-mix(in srgb, var(--success-border) 80%, var(--border));
-  background: color-mix(in srgb, var(--success-soft) 55%, var(--surface-raised));
-}
-
+.update-panel.is-accent,
+.update-panel.is-ok,
 .update-panel.is-busy {
-  border-color: color-mix(in srgb, var(--accent-border) 55%, var(--border));
+  border-color: var(--border);
+  background: var(--settings-page-bg);
 }
 
 .update-panel-title {
   margin: 0;
   color: var(--text);
-  font-size: var(--settings-label-size);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
 }
 
@@ -204,11 +175,11 @@
   position: absolute;
   top: 14px;
   right: 14px;
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 45%, transparent);
+  background: var(--text-2);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--text) 35%, transparent);
   animation: update-pulse 1.6s ease-out infinite;
 }
 
@@ -217,13 +188,10 @@
 .update-download {
   display: grid;
   gap: var(--space-3);
-  padding: 14px 16px 12px;
-  border: 1px solid color-mix(in srgb, var(--accent-border) 55%, var(--border));
-  border-radius: var(--radius-card);
-  background:
-    linear-gradient(180deg, color-mix(in srgb, var(--accent-soft) 35%, transparent), transparent 48%),
-    var(--surface-raised);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
 }
 
 .update-download-head {
@@ -241,20 +209,20 @@
 }
 
 .update-phase-label {
-  color: var(--accent-foreground);
-  font-size: var(--settings-description-size);
+  color: var(--text);
+  font-size: var(--text-description);
   font-weight: var(--weight-semibold);
-  letter-spacing: .04em;
+  letter-spacing: .02em;
 }
 
 .update-download-size {
   color: var(--muted);
-  font-size: var(--settings-label-size);
+  font-size: var(--text-label);
 }
 
 .update-download-percent {
   color: var(--text);
-  font-size: var(--text-lg);
+  font-size: var(--text-metric);
   font-weight: var(--weight-semibold);
   letter-spacing: -0.02em;
   line-height: 1;
@@ -262,11 +230,10 @@
 
 .update-progress-track {
   position: relative;
-  height: 10px;
+  height: 6px;
   overflow: hidden;
   border-radius: var(--radius-round);
-  background: color-mix(in srgb, var(--surface-active) 88%, var(--accent) 12%);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 70%, transparent);
+  background: var(--surface-active);
 }
 
 .update-progress-track > span {
@@ -274,12 +241,7 @@
   display: block;
   height: 100%;
   border-radius: inherit;
-  background:
-    linear-gradient(90deg,
-      color-mix(in srgb, var(--accent) 82%, var(--surface-floating) 18%),
-      var(--accent) 48%,
-      color-mix(in srgb, var(--accent) 75%, var(--text) 8%));
-  box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 35%, transparent);
+  background: var(--text);
   transition: width 240ms ease;
 }
 
@@ -287,10 +249,10 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--surface-floating) 55%, transparent), transparent);
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--bg) 35%, transparent), transparent);
   background-size: 140% 100%;
   animation: update-sheen 1.6s ease-in-out infinite;
-  opacity: .55;
+  opacity: .5;
 }
 
 .update-download-foot {
@@ -299,7 +261,7 @@
   justify-content: space-between;
   gap: var(--space-3);
   color: var(--muted);
-  font-size: var(--settings-description-size);
+  font-size: var(--text-description);
   font-variant-numeric: tabular-nums;
 }
 
@@ -316,7 +278,7 @@
   position: relative;
   padding: 6px 0 0;
   color: var(--faint);
-  font-size: var(--settings-description-size);
+  font-size: var(--text-description);
   font-weight: var(--weight-medium);
   text-align: center;
 }
@@ -329,16 +291,15 @@
   right: 0;
   height: 2px;
   border-radius: var(--radius-round);
-  background: var(--border);
+  background: var(--divider);
 }
 
 .update-flow > li.is-current {
-  color: var(--accent-foreground);
+  color: var(--text);
 }
 
 .update-flow > li.is-current::before {
-  background: var(--accent);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--text);
 }
 
 .update-flow > li.is-done {
@@ -346,7 +307,7 @@
 }
 
 .update-flow > li.is-done::before {
-  background: color-mix(in srgb, var(--accent) 55%, var(--border));
+  background: var(--border-strong);
 }
 
 /* 校验阶段没有流量，靠斜纹滚动说明「还在处理」而不是卡住。 */
@@ -354,9 +315,9 @@
   width: 100% !important;
   background-image:
     repeating-linear-gradient(45deg,
-      color-mix(in srgb, var(--surface-floating) 42%, transparent) 0 4px,
+      color-mix(in srgb, var(--bg) 35%, transparent) 0 4px,
       transparent 4px 10px),
-    linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 70%, var(--surface-floating) 20%));
+    linear-gradient(90deg, var(--text), var(--text-2));
   background-size: 14px 14px, auto;
   animation: update-verify-stripes 700ms linear infinite;
 }
@@ -371,7 +332,7 @@
 }
 
 .update-download.is-connecting .update-progress-track > span::after {
-  opacity: .7;
+  opacity: .5;
 }
 
 /* ---- 已就绪 ----------------------------------------------------------- */
@@ -379,17 +340,15 @@
 .update-ready {
   display: grid;
   gap: var(--space-3);
-  padding: 14px 16px;
-  border: 1px solid color-mix(in srgb, var(--success-border) 80%, var(--border));
-  border-radius: var(--radius-card);
-  background:
-    linear-gradient(135deg, color-mix(in srgb, var(--success-soft) 70%, transparent), transparent 60%),
-    var(--surface-raised);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
 }
 
 .update-ready-body {
   display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
+  grid-template-columns: 36px minmax(0, 1fr);
   gap: var(--space-3);
   align-items: start;
 }
@@ -401,24 +360,23 @@
 .update-ready-icon {
   display: grid;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid var(--success-border);
-  border-radius: var(--radius-card);
-  background: var(--success-soft);
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
   color: var(--success);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--success) 12%, transparent);
 }
 
 .update-ready-icon svg {
-  width: 18px;
-  height: 18px;
+  width: calc(var(--icon-md) + 2px);
+  height: calc(var(--icon-md) + 2px);
 }
 
 .update-ready-title {
   margin: 0 0 4px;
   color: var(--text);
-  font-size: var(--settings-label-size);
+  font-size: var(--text-label);
   font-weight: var(--weight-semibold);
   overflow-wrap: anywhere;
 }
@@ -431,13 +389,13 @@
   padding: 12px 14px 10px;
   border: 1px solid var(--border);
   border-radius: var(--radius-card);
-  background: color-mix(in srgb, var(--surface-raised) 70%, transparent);
+  background: var(--surface-raised);
 }
 
 .update-notes-head h3 {
   margin: 0;
   color: var(--text);
-  font-size: var(--settings-label-size);
+  font-size: var(--text-label);
   font-weight: var(--weight-semibold);
 }
 
@@ -446,7 +404,7 @@
   display: grid;
   gap: 4px;
   color: var(--text);
-  font-size: var(--settings-label-size);
+  font-size: var(--text-label);
   line-height: 1.7;
 }
 
@@ -464,13 +422,13 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-tag);
   background: var(--inline-code-bg);
-  font: var(--text-xs)/1.5 var(--mono);
+  font: var(--text-code)/1.5 var(--mono);
 }
 
 .update-note-heading {
   margin-top: var(--space-3) !important;
   color: var(--muted);
-  font-size: var(--settings-description-size);
+  font-size: var(--text-description);
   font-weight: var(--weight-semibold);
   letter-spacing: .04em;
 }
@@ -515,14 +473,14 @@
   border: 0;
   background: none;
   color: var(--accent);
-  font-size: var(--settings-label-size);
+  font-size: var(--text-label);
   font-weight: var(--weight-medium);
   cursor: pointer;
 }
 
 .update-notes-toggle svg {
-  width: 14px;
-  height: 14px;
+  width: var(--icon-sm);
+  height: var(--icon-sm);
   transition: transform var(--transition);
 }
 
@@ -544,20 +502,52 @@
   flex-wrap: wrap;
   gap: var(--space-2);
   flex: none;
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-3) var(--space-5);
   border-top: 1px solid var(--divider);
-  background: color-mix(in srgb, var(--surface-chrome) 55%, transparent);
+  background: transparent;
 }
 
 .update-dialog button:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline: 2px solid var(--focus-color);
+  outline-offset: 2px;
 }
 
-.update-footer > button { min-height: var(--settings-control-height); font-size: var(--settings-label-size); }
+.update-footer > button {
+  min-height: var(--control-sm);
+  height: auto;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-control);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+}
+
+.update-dialog .settings-outline {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-2);
+}
+
+.update-dialog .settings-outline:hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+  color: var(--text);
+}
 
 .update-dialog .settings-save {
-  min-width: 8.5rem;
+  border: 1px solid var(--text);
+  background: var(--text);
+  color: var(--bg);
+}
+
+.update-dialog .settings-save:hover:not(:disabled) {
+  opacity: 0.88;
+}
+
+.update-dialog .settings-save:disabled {
+  border-color: var(--divider);
+  background: var(--surface-raised);
+  color: var(--disabled-text);
+  opacity: 1;
 }
 
 @keyframes update-verify-stripes {
@@ -600,8 +590,8 @@
   }
 
   .update-mark svg {
-    width: 18px;
-    height: 18px;
+    width: calc(var(--icon-md) + 2px);
+    height: calc(var(--icon-md) + 2px);
   }
 
   .update-body,
@@ -610,7 +600,7 @@
   }
 
   .update-title {
-    font-size: var(--text-xl);
+    font-size: var(--text-heading);
   }
 }
 

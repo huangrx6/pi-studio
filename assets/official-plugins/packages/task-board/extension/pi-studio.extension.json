@@ -2,7 +2,7 @@
   "format": 1,
   "id": "studio.task-board",
   "name": "任务看板",
-  "version": "2.0.0",
+  "version": "2.1.4",
   "author": "Pi Studio",
   "publisher": "Pi Studio",
   "license": "MIT",
@@ -24,7 +24,7 @@
       {
         "id": "board",
         "title": "任务看板",
-        "slot": "panel.side",
+        "slot": "tool.view",
         "description": "跨工作区与会话管理同一份全局任务。",
         "icon": "layers",
         "color": "info",
@@ -39,7 +39,7 @@
       {
         "id": "taskboard",
         "title": "打开任务看板",
-        "description": "在工作台打开全局任务看板。",
+        "description": "在工具面板打开全局任务看板。",
         "placement": "composer",
         "action": { "kind": "openPanel", "panelId": "board" }
       }

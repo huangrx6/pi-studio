@@ -1,0 +1,38 @@
+.hint-trigger { interest-delay: 120ms 80ms; }
+.hint-trigger:focus-visible { interest-delay-start: 0s; }
+
+.button-hint[popover] {
+  position: fixed;
+  pointer-events: none;
+  position-area: bottom;
+  position-try-fallbacks: flip-block, flip-inline;
+  inset: auto;
+  width: max-content;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+  max-width: min(260px, calc(100vw - var(--space-6)));
+  margin: 6px 0 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  padding: var(--space-1) var(--space-2);
+  background: var(--surface-raised);
+  color: var(--text);
+  box-shadow: var(--shadow-float);
+  font: var(--weight-medium) var(--text-description)/1.5 var(--font);
+  -webkit-app-region: no-drag;
+}
+
+.button-hint[data-placement="right"] {
+  position-area: right;
+  margin: 0 0 0 6px;
+}
+.button-hint[data-placement="left"] {
+  position-area: left;
+  margin: 0 6px 0 0;
+}
+.button-hint[data-placement="above"],
+.button-hint[data-placement="above-end"] { position-area: top; margin: 0 0 6px; }
+.button-hint[data-placement="above-end"] {
+  position-area: block-start span-inline-start;
+  justify-self: end;
+}

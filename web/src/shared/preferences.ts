@@ -27,13 +27,7 @@ export type StepDisplay = 'compact' | 'standard' | 'detailed';
 export type StepCollapse = 'after-answer' | 'keep-open' | 'manual';
 /** 对话内网页链接的打开方式：系统浏览器或应用内窗口。 */
 export type LinkPreference = 'external' | 'window';
-/**
- * 扩展在会话界面的落点偏好。
- *
- * 扩展自己声明可以落在哪些位置（`slots`），用户只决定最终出现在哪一处；
- * chip 是默认值（只显示顶栏）；both 表示按扩展声明的 chip+footer 两处都渲染。
- */
-export type ExtensionPlacement = 'header' | 'above' | 'below' | 'menu' | 'hidden';
+export type ExtensionPlacement = 'above' | 'below' | 'statusbar' | 'hidden';
 /** 全局圆角风格，映射到 RADIUS_PRESETS。 */
 export type RadiusStyle = 'square' | 'compact' | 'standard' | 'soft';
 /** 终端光标形状。 */
@@ -53,12 +47,13 @@ export type KeyValueStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
 /** 用户可调整的全部偏好。 */
 export type Preferences = {
+  schemaVersion: 1;
   /** 主题偏好。 */
   theme: ThemePreference;
   /** 全局配色方案；只改变品牌强调色，不改变中性背景与语义状态色。 */
   palette: PalettePreference;
-  /** 对话正文字号（px），仅影响聊天内容。 */
-  fontSize: number;
+  /** null 跟随全局正文字号，数字是用户选择的对话字号（px）。 */
+  fontSize: number | null;
   /** 终端字号（px），独立于对话正文；终端需要比正文更紧凑的等宽排版。 */
   terminalFontSize: number;
   /** 终端配色主题 id；studio 表示跟随界面明暗。 */
@@ -96,22 +91,23 @@ export type Preferences = {
   backgroundInsideVisibility: number;
   /** 可配置的快捷键：动作 id → 规范化的按键组合。 */
   shortcuts: Record<string, string>;
-  /** 扩展落点偏好：panel contribution id → 落点；缺省表示按扩展声明全部渲染。 */
+  /** 扩展落点偏好：panel contribution id → 落点；缺省时采用该摘要的默认位置。 */
   extensionPlacements: Record<string, ExtensionPlacement>;
   extensionAppearances: AppearanceOverrides;
-  workbenchLauncherOrder: string[];
 };
 
 export type GitDiffPreferences = Pick<Preferences, 'gitDiffLayout' | 'gitDiffWrap'>;
 
 /** localStorage 键名；改动会导致旧用户偏好失效，需谨慎。 */
 const STORAGE_KEY = 'pi-studio:preferences';
+export const CHAT_FONT_SIZE_RANGE = { min: 10, max: 20 } as const;
 
 /** 首次启动或存储损坏时使用的默认偏好。 */
 export const DEFAULT_PREFERENCES: Preferences = {
+  schemaVersion: 1,
   theme: 'light',
   palette: 'ocean',
-  fontSize: 15,
+  fontSize: null,
   terminalFontSize: 12,
   terminalTheme: 'studio',
   terminalFontFamily: '',
@@ -134,7 +130,6 @@ export const DEFAULT_PREFERENCES: Preferences = {
   shortcuts: { ...DEFAULT_SHORTCUTS },
   extensionPlacements: {},
   extensionAppearances: {},
-  workbenchLauncherOrder: [],
 };
 
 const THEMES = new Set<ThemePreference>(['light', 'dark', 'system']);
@@ -142,7 +137,7 @@ const STEP_DISPLAYS = new Set<StepDisplay>(['compact', 'standard', 'detailed']);
 const STEP_COLLAPSES = new Set<StepCollapse>(['after-answer', 'keep-open', 'manual']);
 const LINK_PREFERENCES = new Set<LinkPreference>(['external', 'window']);
 const RADIUS_STYLES = new Set<RadiusStyle>(['square', 'compact', 'standard', 'soft']);
-const EXTENSION_PLACEMENTS = new Set<ExtensionPlacement>(['header', 'above', 'below', 'menu', 'hidden']);
+const EXTENSION_PLACEMENTS = new Set<ExtensionPlacement>(['above', 'below', 'statusbar', 'hidden']);
 const TERMINAL_CURSOR_STYLES = new Set<TerminalCursorStyle>(['bar', 'block', 'underline']);
 const MAX_MEDIA_FIELD_LENGTH = 4_096;
 
@@ -153,12 +148,12 @@ function cloneDefaults(): Preferences {
   };
 }
 
-function clampNumber(
+function clampNumber<T extends number | null>(
   value: unknown,
-  fallback: number,
+  fallback: T,
   min: number,
   max: number,
-): number {
+): number | T {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
   return Math.min(max, Math.max(min, Math.round(value)));
 }
@@ -216,16 +211,14 @@ export function normalizePreferences(value: unknown): Preferences {
     ? value as Partial<Preferences>
     : {};
   return {
+    schemaVersion: 1,
     theme: THEMES.has(source.theme as ThemePreference)
       ? source.theme as ThemePreference
       : DEFAULT_PREFERENCES.theme,
     palette: normalizePalette(source.palette),
-    fontSize: clampNumber(
-      source.fontSize,
-      DEFAULT_PREFERENCES.fontSize,
-      12,
-      20,
-    ),
+    // 旧版启动时会把默认的 15 px 一并保存。迁移一次后，用户仍可显式选回 15。
+    fontSize: source.schemaVersion === undefined && source.fontSize === 15
+      ? null : clampNumber(source.fontSize, null, CHAT_FONT_SIZE_RANGE.min, CHAT_FONT_SIZE_RANGE.max),
     terminalFontSize: clampNumber(
       source.terminalFontSize,
       DEFAULT_PREFERENCES.terminalFontSize,
@@ -297,10 +290,6 @@ export function normalizePreferences(value: unknown): Preferences {
     shortcuts: normalizeShortcuts(source.shortcuts) as Record<string, string>,
     extensionPlacements: normalizeExtensionPlacements(source.extensionPlacements),
     extensionAppearances: normalizeAppearanceOverrides(source.extensionAppearances),
-    workbenchLauncherOrder: Array.isArray(source.workbenchLauncherOrder)
-      ? [...new Set<string>(source.workbenchLauncherOrder.filter(id => typeof id === 'string'
-        && /^(?:[a-z][a-z-]{0,32}|(?:builtin|user|project):[a-z0-9][a-z0-9._-]{1,63})$/.test(id)))]
-      : [],
   };
 }
 
@@ -410,4 +399,13 @@ export function getActivePreferences(): Preferences {
 export function resolveTheme(theme: ThemePreference): 'light' | 'dark' {
   if (theme === 'system') return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   return theme;
+}
+
+export function applyWindowAppearance(preferences: Preferences, root = document.documentElement) {
+  root.dataset.theme = resolveTheme(preferences.theme);
+  root.dataset.palette = preferences.palette;
+  const radii = RADIUS_PRESETS[preferences.radiusStyle] || RADIUS_PRESETS.standard;
+  for (const [role, radius] of Object.entries(radii)) {
+    root.style.setProperty(`--radius-${role}`, `${radius}px`);
+  }
 }

@@ -1,4 +1,5 @@
 import { LoadingState } from '../../shared/LoadingState';
+import './styles/welcome-art.css';
 import './styles/new-conversation-welcome.css';
 
 type NewConversationWelcomeProps = {
@@ -22,6 +23,7 @@ export function NewConversationWelcome({ loading, now }: NewConversationWelcomeP
   const greeting = resolveWelcomeGreeting(now);
   return (
     <section className="new-conversation-welcome" aria-label="开始新会话">
+      <span className="welcome-art" aria-hidden="true" />
       <h1>{greeting}</h1>
       {loading && <LoadingState>正在载入…</LoadingState>}
     </section>

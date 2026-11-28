@@ -28,7 +28,7 @@ export type ExtensionHealth =
   | 'missing';
 
 export type ExtensionSummarySlot = 'status.chip' | 'composer.above' | 'composer.below';
-export type ExtensionPanelSlot = ExtensionSummarySlot | 'panel.side';
+export type ExtensionPanelSlot = ExtensionSummarySlot | 'tool.view' | 'status.detail';
 export type ExtensionUiSlot = ExtensionPanelSlot | 'settings.panel';
 
 export interface ConversationExtensionUiPreferences {
@@ -272,7 +272,6 @@ export interface ExtensionViewContribution {
   entry: string;
   sourceId: ExtensionContributionId;
   scope: ExtensionViewScope;
-  fullscreen?: boolean;
 }
 
 export interface ExtensionViewUiDescriptor extends ExtensionViewContribution {
@@ -582,7 +581,7 @@ export interface ExtensionUiItem {
   /** Stable declaration order from extension scan and manifest order. */
   sourceOrder: number;
   content: ExtensionContent[];
-  /** 点击摘要后打开的同扩展工作台面板 id。 */
+  /** 点击摘要后打开的同扩展详情视图 id。 */
   details?: string;
   /** 只在回合进行中出现（默认常驻）。 */
   visibility?: 'always' | 'while-active';

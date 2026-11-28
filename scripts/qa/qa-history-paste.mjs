@@ -1,3 +1,4 @@
+import { copyPreviewText } from './fixtures/source-editor.mjs';
 import { composerValue, selectComposerRange } from './fixtures/composer-editor.mjs';
 /**
  * Focused browser QA for windowed transcript navigation and long-paste attachments.
@@ -244,16 +245,14 @@ try {
   assert.equal(await page.evaluate(() => window.__savedPastes[0].text), pasted);
 
   const rail = page.getByRole('group', { name: '待发送附件' });
-  const attachment = rail.getByRole('button', { name: '在右侧面板查看 long-paste.txt' });
+  const attachment = rail.getByRole('button', { name: '打开附件 long-paste.txt' });
   await attachment.waitFor();
   assert.ok(await rail.evaluate(node => {
     const input = node.closest('.composer-wrap')?.querySelector('.composer');
     return input && !input.contains(node) && node.getBoundingClientRect().bottom <= input.getBoundingClientRect().top;
   }), 'long-paste attachments sit above the composer');
   await attachment.click();
-  const fileText = page.locator('.panel-file-preview .file-preview-code pre code');
-  await fileText.waitFor();
-  assert.equal((await fileText.innerText()).trim(), pasted);
+  assert.equal(await copyPreviewText(page.locator('.session-document')), pasted);
   assert.deepEqual(await page.evaluate(() => window.__openedFiles), ['/var/tmp/pi-studio-long-paste.txt']);
 
   for (const theme of ['light', 'dark']) {

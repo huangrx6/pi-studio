@@ -14,7 +14,7 @@ const {
   optimizeImportedBackgroundImage,
   resolveBackgroundDisplayFile,
 } = require('./background-display.cjs');
-const { app, dialog, protocol } = require('electron');
+const { dialog, protocol } = require('electron');
 const { getWindow } = require('../core/state.cjs');
 const { studioDataDirectory } = require('../core/studio-paths.cjs');
 const {

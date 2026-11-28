@@ -47,9 +47,7 @@ function projectExtension(ext, entry = {}) {
 
 function listLoadedExtensions() {
   try {
-    const session = getBrowserSession();
-    const loaded = typeof session.getAllExtensions === 'function' ? session.getAllExtensions() : [];
-    return Array.isArray(loaded) ? loaded : Object.values(loaded || {});
+    return getBrowserSession().extensions?.getAllExtensions() ?? [];
   } catch {
     return [];
   }
@@ -76,7 +74,7 @@ function listBrowserExtensions() {
   }
   let supported = false;
   try {
-    supported = typeof getBrowserSession().loadExtension === 'function';
+    supported = typeof getBrowserSession().extensions?.loadExtension === 'function';
   } catch {
     supported = false;
   }
@@ -91,11 +89,11 @@ async function loadBrowserExtension(extensionPath) {
   }
   const manifestPath = path.join(target, 'manifest.json');
   if (!fs.existsSync(manifestPath)) throw new Error('目录中没有 manifest.json');
-  const session = getBrowserSession();
-  if (typeof session.loadExtension !== 'function') {
+  const extensions = getBrowserSession().extensions;
+  if (typeof extensions?.loadExtension !== 'function') {
     throw new Error('当前运行环境不支持加载浏览器扩展');
   }
-  const ext = await session.loadExtension(target, { allowFileAccess: false });
+  const ext = await extensions.loadExtension(target, { allowFileAccess: false });
   const entries = readExtensionEntries().filter((row) => row.path !== target && row.id !== ext.id);
   entries.unshift({
     id: ext.id,
@@ -111,13 +109,13 @@ async function loadBrowserExtension(extensionPath) {
 
 function removeBrowserExtension(idOrPath) {
   const key = String(idOrPath || '');
-  const session = getBrowserSession();
+  const extensions = getBrowserSession().extensions;
   const entries = readExtensionEntries();
   const match = entries.find((row) => row.id === key || row.path === key);
   const loaded = listLoadedExtensions().find((ext) => ext.id === key || ext.path === key || (match && (ext.id === match.id || ext.path === match.path)));
-  if (loaded && typeof session.removeExtension === 'function') {
+  if (loaded && typeof extensions?.removeExtension === 'function') {
     try {
-      session.removeExtension(loaded.id);
+      extensions.removeExtension(loaded.id);
     } catch {
       // Best effort.
     }
@@ -129,15 +127,15 @@ function removeBrowserExtension(idOrPath) {
 
 async function restoreBrowserExtensions() {
   const entries = readExtensionEntries().filter((row) => row.enabled !== false);
-  const session = getBrowserSession();
-  if (typeof session.loadExtension !== 'function') return { ok: true, restored: 0 };
+  const extensions = getBrowserSession().extensions;
+  if (typeof extensions?.loadExtension !== 'function') return { ok: true, restored: 0 };
   let restored = 0;
   for (const entry of entries) {
     if (!entry.path || !fs.existsSync(entry.path)) continue;
     try {
       const already = listLoadedExtensions().some((ext) => ext.path === entry.path || ext.id === entry.id);
       if (already) continue;
-      const ext = await session.loadExtension(entry.path, { allowFileAccess: false });
+      const ext = await extensions.loadExtension(entry.path, { allowFileAccess: false });
       entry.id = ext.id || entry.id;
       entry.name = ext.name || entry.name;
       entry.version = ext.version || entry.version;

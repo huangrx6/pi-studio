@@ -2,18 +2,20 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, AppWindow, Download, ExternalLink,
   FolderOpen, History, Link2, Plus,
-  Sparkles, TerminalSquare,
+  TerminalSquare,
 } from 'lucide-react';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
 import { PreferenceGroup, PreferenceRow } from '../../shared/PreferenceGroup';
 import { useSettingsToast } from '../../shared/SettingsToast';
 import { LoadingState } from '../../shared/LoadingState';
+import { useDeferredEnter } from '../../shared/useDeferredEnter';
 import { Select } from '../../shared/Select';
 import { SettingsDialog } from '../../shared/SettingsDialog';
 import type { ModalDismiss } from '../../shared/useModalDialog';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
 import { errorText } from '../../shared/error-text';
 import { BROWSER_CLEAR_DESCRIPTION, clearBrowserProfile, type BrowserLibraryView } from './browser-history';
+import { BrowserLibraryDialog } from './BrowserLibraryDialog';
 import './styles/browser-settings.css';
 
 const MANAGED_LIST_PAGE = 8;
@@ -108,10 +110,14 @@ const emptyPrefs = (): BrowserPreferences => ({
   externalChromeEndpoint: 'http://127.0.0.1:9222',
 });
 
-export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: BrowserLibraryView) => void } = {}) {
-  const [prefs, setPrefs] = useState<BrowserPreferences | null>(null);
-  const [policies, setPolicies] = useState<SitePolicy[]>([]);
-  const [busy, setBusy] = useState('');
+let cachedBrowserPrefs: BrowserPreferences | null = null;
+let cachedBrowserPolicies: SitePolicy[] = [];
+
+export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (url?: string) => void } = {}) {
+  const [prefs, setPrefs] = useState<BrowserPreferences | null>(cachedBrowserPrefs);
+  const [libraryView, setLibraryView] = useState<BrowserLibraryView | null>(null);
+  const [policies, setPolicies] = useState<SitePolicy[]>(cachedBrowserPolicies);
+  const [busy, setBusy] = useState(cachedBrowserPrefs ? '' : 'load');
   const [policyDraft, setPolicyDraft] = useState({ originPattern: '', actionClass: 'act', decision: 'allow' });
   const [externalTargets, setExternalTargets] = useState<ExternalTarget[]>([]);
   const [externalWarning, setExternalWarning] = useState('');
@@ -138,7 +144,7 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
 
   const load = useCallback(async () => {
     const id = ++generation.current;
-    setBusy('load');
+    if (!cachedBrowserPrefs) setBusy('load');
     try {
       const [settings, policyResult, passwordResult, contactResult, extensionResult] = await Promise.all([
         window.piApi.browserAdvancedSettings(),
@@ -148,8 +154,12 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
         window.piApi.browserExtensions().catch(() => ({ ok: false, extensions: [], supported: false })),
       ]);
       if (id !== generation.current) return;
-      setPrefs({ ...emptyPrefs(), ...settings });
-      setPolicies(Array.isArray(policyResult?.policies) ? policyResult.policies as SitePolicy[] : []);
+      const nextPrefs = { ...emptyPrefs(), ...settings };
+      const nextPolicies = Array.isArray(policyResult?.policies) ? policyResult.policies as SitePolicy[] : [];
+      cachedBrowserPrefs = nextPrefs;
+      cachedBrowserPolicies = nextPolicies;
+      setPrefs(nextPrefs);
+      setPolicies(nextPolicies);
       setPasswords(Array.isArray(passwordResult?.passwords) ? passwordResult.passwords as PasswordRow[] : []);
       setPasswordAvailable(passwordResult?.available !== false);
       setContacts(Array.isArray(contactResult?.contacts) ? contactResult.contacts as ContactRow[] : []);
@@ -161,6 +171,13 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
       if (id === generation.current) setBusy('');
     }
   }, [showToast]);
+
+  useEffect(() => {
+    if (prefs) cachedBrowserPrefs = prefs;
+  }, [prefs]);
+  useEffect(() => {
+    cachedBrowserPolicies = policies;
+  }, [policies]);
 
   useEffect(() => {
     void load();
@@ -624,41 +641,51 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
   }
 
   const disabled = Boolean(busy);
+  const groupsReveal = useDeferredEnter(Boolean(prefs));
 
   return (
     <div className="settings-preference-page browser-settings">
-      <SettingsPageHeader title="浏览器" iconPosition="end" meta="设置链接打开位置，管理浏览数据与网站权限。"
+      <SettingsPageHeader title="浏览器" iconPosition="end" meta="工作台浏览器行为、数据与站点策略。"
         icon={<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round">
           <rect x="3" y="5" width="26" height="22" rx="3.5" /><path d="M3 12h26" />
           <path d="M8 8.5h5" stroke="var(--accent)" />
         </svg>} />
 
-      {!prefs && busy && <LoadingState variant="section">正在读取浏览器设置…</LoadingState>}
+      {!prefs && busy && <div className="settings-loading-card"><LoadingState variant="section">正在读取浏览器设置…</LoadingState></div>}
       {!prefs && !busy && (
-        <button type="button" className="settings-outline" onClick={() => void load()}>重新加载</button>
+        <div className="settings-load-error">
+          <p role="alert">无法读取浏览器设置，请重试。</p>
+          <button type="button" className="settings-outline" onClick={() => void load()}>重新加载</button>
+        </div>
       )}
 
       {prefs && (
-        <div className="settings-preference-groups">
-          <div className="browser-quick-strip" role="region" aria-label="快捷操作">
-            {onOpenBrowser && <button type="button" className="settings-save" onClick={() => onOpenBrowser()}>
-              <AppWindow aria-hidden="true" />打开工作台浏览器
-            </button>}
-            <button type="button" className="settings-outline" disabled={!onOpenBrowser} aria-label="管理浏览历史" onClick={() => onOpenBrowser?.('history')}>
-              <History aria-hidden="true" />查看历史
-            </button>
-            <button type="button" className="settings-outline" disabled={!onOpenBrowser} aria-label="管理下载历史" onClick={() => onOpenBrowser?.('downloads')}>
-              <Download aria-hidden="true" />下载历史
-            </button>
-            <button type="button" className="settings-outline browser-clear-button" disabled={disabled} onClick={() => void clearData()}>
-              {busy === 'clear' ? '清除中…' : '清除浏览数据'}
-            </button>
+        <div className={`settings-preference-groups${groupsReveal ? ' settings-async-ready' : ''}`}>
+          <div className="settings-preference-card browser-command-bar" role="region" aria-label="快捷操作">
+            <div className="browser-command-lead">
+              <span className={`browser-live-dot${prefs.agentControlEnabled ? ' is-on' : ''}`} aria-hidden="true" />
+              <strong>工作台浏览器</strong>
+              <span>{prefs.agentControlEnabled ? '智能体可操控' : '仅手动浏览'}</span>
+            </div>
+            <div className="browser-command-actions">
+              <button type="button" className="browser-ghost-btn" aria-label="管理浏览历史" aria-haspopup="dialog" onClick={() => setLibraryView('history')}>
+                <History aria-hidden="true" />历史
+              </button>
+              <button type="button" className="browser-ghost-btn" aria-label="管理下载历史" aria-haspopup="dialog" onClick={() => setLibraryView('downloads')}>
+                <Download aria-hidden="true" />下载
+              </button>
+              <button type="button" className="browser-ghost-btn is-danger" disabled={disabled} onClick={() => void clearData()}>
+                {busy === 'clear' ? '清除中…' : '清除数据'}
+              </button>
+              {onOpenBrowser && <button type="button" className="settings-save" onClick={() => onOpenBrowser()}>
+                <AppWindow aria-hidden="true" />打开浏览器
+              </button>}
+            </div>
           </div>
 
           <PreferenceGroup title="常规">
             <PreferenceRow
               title="允许智能体控制浏览器"
-              description="同时遵循工具权限和网站策略。"
               control={(
                 <Toggle
                   checked={prefs.agentControlEnabled}
@@ -670,10 +697,7 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
             />
             <div className="browser-link-grid">
               <div className="browser-link-tile">
-                <div className="browser-link-copy">
-                  <h3>网页链接打开位置</h3>
-                  <p>用于对话和文档中的网页链接。</p>
-                </div>
+                <h3>网页链接打开位置</h3>
                 <Select
                   value={prefs.webLinkOpenTarget}
                   disabled={disabled}
@@ -686,10 +710,7 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
                 />
               </div>
               <div className="browser-link-tile">
-                <div className="browser-link-copy">
-                  <h3>本地链接打开位置</h3>
-                  <p>用于本地开发站点和 file:// 链接。</p>
-                </div>
+                <h3>本地链接打开位置</h3>
                 <Select
                   value={prefs.localLinkOpenTarget}
                   disabled={disabled}
@@ -703,8 +724,7 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
               </div>
             </div>
             <PreferenceRow
-              title="显示完整网址"
-              description="在地址栏中显示路径、查询参数和片段。"
+              title="地址栏显示完整网址"
               control={(
                 <Toggle
                   checked={prefs.showFullUrl}
@@ -716,21 +736,20 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
             />
           </PreferenceGroup>
 
-          <PreferenceGroup title="下载" description={prefs.askDownloadPath ? '每次下载前询问保存位置' : '自动保存到指定目录'}>
-            <div className="browser-download-path-row">
-              <div className="browser-download-path-copy">
-                <h3>默认保存位置</h3>
+          <PreferenceGroup title="下载">
+            <div className="browser-download-path-field">
+              <h3>默认保存位置</h3>
+              <div className="browser-download-path-row">
                 <code title={prefs.downloadDirectory || prefs.defaultDownloadDirectory || ''}>
                   {prefs.downloadDirectory || prefs.defaultDownloadDirectory || 'Studio 托管的下载目录'}
                 </code>
+                <button type="button" className="settings-outline" disabled={disabled} onClick={() => void pickDownloadDir()}>
+                  <Download aria-hidden="true" />更改
+                </button>
               </div>
-              <button type="button" className="settings-outline" disabled={disabled} onClick={() => void pickDownloadDir()}>
-                <Download aria-hidden="true" />更改
-              </button>
             </div>
             <PreferenceRow
               title="下载前询问保存位置"
-              description="开启后，每次下载都会弹出保存位置对话框。"
               control={(
                 <Toggle
                   checked={prefs.askDownloadPath}
@@ -743,18 +762,11 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
           </PreferenceGroup>
 
           <div className="settings-preference-card">
-            <PreferenceGroup grouped title="自动填充与密码" onCollapse={hideRevealedPassword} summary={passwordAvailable ? `${passwords.length} 个密码` : '安全存储不可用'}>
+            <PreferenceGroup grouped title="自动填充与密码" onCollapse={hideRevealedPassword} summary={passwordAvailable ? `${passwords.length} 项` : '不可用'}>
               <div className="browser-settings-manage-block">
                 <div className="browser-settings-manage-head">
-                  <div>
-
-                    <p>
-                      {passwordAvailable
-                        ? '密码由本机系统安全存储保护，仅在浏览器中使用。'
-                        : '当前环境无法使用安全存储，密码功能不可用。'}
-                    </p>
-                  </div>
-                  <button type="button" className="settings-add-button" disabled={disabled || !passwordAvailable} onClick={() => void openPasswordDialog()}>
+                  <p>{passwordAvailable ? '本机安全存储' : '当前环境不支持安全存储'}</p>
+                  <button type="button" className="settings-outline" disabled={disabled || !passwordAvailable} onClick={() => void openPasswordDialog()}>
                     <Plus aria-hidden="true" />添加
                   </button>
                 </div>
@@ -819,14 +831,11 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
               </div>
             </PreferenceGroup>
 
-            <PreferenceGroup grouped title="联系信息" summary={`${contacts.length} 位联系人`}>
+            <PreferenceGroup grouped title="联系信息" summary={`${contacts.length} 项`}>
               <div className="browser-settings-manage-block">
                 <div className="browser-settings-manage-head">
-                  <div>
-
-                    <p>联系人保存在本机，供工作台中查阅。</p>
-                  </div>
-                  <button type="button" className="settings-add-button" disabled={disabled} onClick={() => void openContactDialog()}>
+                  <p>本机存储</p>
+                  <button type="button" className="settings-outline" disabled={disabled} onClick={() => void openContactDialog()}>
                     <Plus aria-hidden="true" />添加
                   </button>
                 </div>
@@ -880,17 +889,10 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
               </div>
             </PreferenceGroup>
 
-            <PreferenceGroup grouped title="扩展程序" summary={extensionsSupported ? `${extensions.length} 个扩展` : '当前平台不可用'}>
+            <PreferenceGroup grouped title="扩展程序" summary={extensionsSupported ? `${extensions.length} 项` : '不可用'}>
               <div className="browser-settings-manage-block">
                 <div className="browser-settings-manage-head">
-                  <div>
-
-                    <p>
-                      {extensionsSupported
-                        ? '仅支持加载已解压的扩展目录（含 manifest.json），不会接入扩展商店。'
-                        : '当前运行环境不支持加载浏览器扩展。'}
-                    </p>
-                  </div>
+                  <p>{extensionsSupported ? '仅支持本地解压目录（manifest.json）' : '当前平台不支持'}</p>
                   <button type="button" className="settings-outline" disabled={disabled || !extensionsSupported} onClick={() => void loadExtension()}>
                     <FolderOpen aria-hidden="true" />{busy === 'extension' ? '加载中…' : '加载扩展'}
                   </button>
@@ -922,13 +924,10 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
             </PreferenceGroup>
           </div>
 
-          <PreferenceGroup title="浏览器权限" description={policies.length ? `已配置 ${policies.length} 条网站例外规则` : '控制历史访问、批注截图与站点例外'}>
+          <PreferenceGroup title="浏览器权限" description={policies.length ? `${policies.length} 条站点例外` : undefined}>
             <div className="browser-link-grid browser-permission-grid">
               <div className="browser-link-tile">
-                <div className="browser-link-copy">
-                  <h3>历史记录</h3>
-                  <p>选择智能体能否读取工作台浏览器的历史记录。</p>
-                </div>
+                <h3>历史记录访问</h3>
                 <Select
                   value={prefs.historyAccess}
                   disabled={disabled}
@@ -942,10 +941,7 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
                 />
               </div>
               <div className="browser-link-tile">
-                <div className="browser-link-copy">
-                  <h3>批注截图</h3>
-                  <p>在操作前的截图中标出智能体即将点击的位置。</p>
-                </div>
+                <h3>批注截图</h3>
                 <Select
                   value={prefs.annotatedScreenshots}
                   disabled={disabled}
@@ -960,10 +956,7 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
             </div>
             <div className="browser-settings-policy-block">
                 <div className="browser-settings-policy-head">
-                  <div>
-                    <h3>网站权限</h3>
-                    <p>设置默认之外的站点例外。localhost 默认允许读取与操作，脚本与 CDP 访问默认被拒绝。</p>
-                  </div>
+                  <h3>网站例外</h3>
                 </div>
                 <form className="browser-settings-policy-form" onSubmit={event => {
                   event.preventDefault();
@@ -1019,17 +1012,14 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
               </div>
           </PreferenceGroup>
 
-          <PreferenceGroup title="开发者模式" summary={prefs.evaluateEnabled || prefs.cdpEnabled || prefs.externalChromeEnabled ? '已开启调试能力' : '已关闭'}>
+          <PreferenceGroup title="开发者模式" summary={prefs.evaluateEnabled || prefs.cdpEnabled || prefs.externalChromeEnabled ? '已开启' : '已关闭'}>
               <div className="browser-settings-risk" role="status">
                 <AlertTriangle aria-hidden="true" />
-                <div>
-                  <strong>高风险能力，默认关闭</strong>
-                  <p>完整 CDP 与外接 Chrome 可触及敏感页面状态，开启后仍需按站点授权。</p>
-                </div>
+                <span>高风险调试能力，默认关闭；开启后仍按站点授权。</span>
               </div>
               <PreferenceRow
                 title="页面脚本求值"
-                description="允许智能体在已授权站点执行页内脚本（browser_evaluate）"
+                description="browser_evaluate"
                 control={(
                   <Toggle
                     checked={prefs.evaluateEnabled}
@@ -1048,8 +1038,8 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
                 )}
               />
               <PreferenceRow
-                title="启用完整 CDP 访问权限"
-                description="允许在已连接的浏览器会话中使用完整 Chrome DevTools Protocol。可能使你的数据面临风险。"
+                title="完整 CDP 访问"
+                description="Chrome DevTools Protocol"
                 control={(
                   <Toggle
                     checked={prefs.cdpEnabled}
@@ -1069,7 +1059,7 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
               />
               <PreferenceRow
                 title="外接本机 Chrome"
-                description="连接到你用远程调试端口启动的 Chrome（不会同步系统日常配置文件）。需同时开启 CDP。"
+                description="需同时开启完整 CDP"
                 control={(
                   <Toggle
                     checked={prefs.externalChromeEnabled}
@@ -1128,10 +1118,6 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
                   )}
                 </div>
               )}
-              <p className="browser-settings-help">
-                <Sparkles aria-hidden="true" />
-                CDP 是 Chrome 的底层调试协议；外接模式不会替代内置的独立浏览配置文件。
-              </p>
           </PreferenceGroup>
         </div>
       )}
@@ -1139,7 +1125,6 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
       {passwordDialogOpen && (
         <SettingsDialog
           title="添加保存的密码"
-          description="仅保存在本机安全存储，不会发送给模型。"
           action="保存密码"
           busyAction="正在保存…"
           busy={busy === 'password'}
@@ -1197,7 +1182,6 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
       {contactDialogOpen && (
         <SettingsDialog
           title="添加联系人"
-          description="保存在 Studio 本机，便于查阅；当前不会自动向网页填入。"
           action="保存联系人"
           busyAction="正在保存…"
           busy={busy === 'contact'}
@@ -1248,6 +1232,14 @@ export function BrowserSettings({ onOpenBrowser }: { onOpenBrowser?: (view?: Bro
             </label>
           </div>
         </SettingsDialog>
+      )}
+
+      {libraryView && (
+        <BrowserLibraryDialog
+          view={libraryView}
+          onClose={() => setLibraryView(null)}
+          onOpenUrl={onOpenBrowser}
+        />
       )}
 
       {confirmation.dialog}

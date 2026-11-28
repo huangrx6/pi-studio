@@ -1,0 +1,199 @@
+html.tool-panel-page, html.tool-panel-page body { background: transparent; }
+
+.tool-panel-page #root {
+  display: grid;
+  padding: var(--space-3);
+}
+.tool-window-frame {
+  position: relative;
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+}
+.tool-window {
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  background: var(--surface-floating);
+  box-shadow: 0 3px 9px var(--shadow-deep), 0 1px 3px var(--shadow-color);
+  color: var(--text);
+}
+.tool-group {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.tool-group[hidden], .tool-content[hidden] { display: none; }
+
+/* The grips straddle the panel border and its shadow gutter. */
+.tool-resize-handle {
+  position: absolute;
+  z-index: 1;
+  width: 16px;
+  height: 16px;
+  touch-action: none;
+  user-select: none;
+}
+.tool-resize-handle[data-tool-drag*='n'] { top: -5px; }
+.tool-resize-handle[data-tool-drag*='s'] { bottom: -5px; }
+.tool-resize-handle[data-tool-drag*='e'] { right: -5px; }
+.tool-resize-handle[data-tool-drag*='w'] { left: -5px; }
+.tool-resize-handle:is([data-tool-drag='n'], [data-tool-drag='s']) { left: 11px; right: 11px; width: auto; height: 10px; cursor: ns-resize; }
+.tool-resize-handle:is([data-tool-drag='e'], [data-tool-drag='w']) { top: 11px; bottom: 11px; width: 10px; height: auto; cursor: ew-resize; }
+.tool-resize-handle:is([data-tool-drag='nw'], [data-tool-drag='se']) { cursor: nwse-resize; }
+.tool-resize-handle:is([data-tool-drag='ne'], [data-tool-drag='sw']) { cursor: nesw-resize; }
+.tool-resize-handle[data-tool-drag='se']::after {
+  content: '';
+  position: absolute;
+  inset: 3px auto auto 1px;
+  width: 8px;
+  height: 3px;
+  border-block: 1px solid var(--faint);
+  transform: rotate(-45deg);
+  opacity: .55;
+}
+.tool-resize-handle[data-tool-drag='se']:hover::after { opacity: 1; }
+
+.tool-tabs {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 3px;
+  height: 35px;
+  padding: 0 7px;
+  border-bottom: 1px solid var(--divider);
+  user-select: none;
+}
+.tool-tab-list {
+  --tool-tab-width: clamp(88px, 16vw, 116px);
+  padding: 2px;
+}
+.tool-tab-slot { flex: none; width: var(--tool-tab-width); }
+@media (prefers-reduced-motion: no-preference) {
+  .tool-tab-list:has(.is-entering) { scroll-behavior: auto; }
+  .tool-tab-slot.is-entering { overflow: clip; animation: tool-tab-enter var(--motion-enter); }
+  .tool-tabs-menu { animation: pi-popover-in var(--motion-enter); transform-origin: top left; }
+}
+@keyframes tool-tab-enter {
+  from { width: 0; opacity: 0; }
+  to { width: var(--tool-tab-width); opacity: 1; }
+}
+.tool-tabs[data-tool-drag='move'] { cursor: grab; touch-action: none; }
+.tool-tabs[data-tool-drag='move']:active { cursor: grabbing; }
+.tool-tab {
+  display: flex;
+  width: var(--tool-tab-width);
+  align-items: center;
+  height: var(--icon-button);
+  padding-right: 3px;
+  border-radius: var(--radius-control);
+  color: var(--muted);
+  cursor: default;
+}
+.tool-tab:hover { background: var(--nav-hover-bg); }
+.tool-tab[data-active='true'] { background: var(--nav-selected-bg); color: var(--text); }
+.tool-tab button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 24px;
+  padding: 3px;
+  border-radius: var(--radius-tag);
+  color: inherit;
+  font-size: var(--text-label);
+}
+.tool-tab > button:first-child { flex: 1; height: 100%; padding-inline: var(--space-2) var(--space-1); }
+.tool-tab[data-active='true'] > button:first-child { font-weight: var(--weight-medium); }
+.tool-tab button span {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tool-tab .tool-tab-close { flex: none; justify-content: center; width: 18px; height: 18px; padding: 0; color: var(--muted); opacity: 0; }
+.tool-tab svg { width: var(--icon-sm); height: var(--icon-sm); }
+.tool-tab .tool-tab-close svg { width: var(--icon-xs); height: var(--icon-xs); }
+.tool-tab:is(:hover, :focus-within, [data-active='true']) .tool-tab-close { opacity: 1; }
+.tool-tab .tool-tab-close:hover { background: var(--nav-selected-bg); color: var(--text); }
+.tool-tabs > .icon-button[aria-expanded='true'] { background: var(--nav-selected-bg); color: var(--text); }
+.tool-tabs > .icon-button { flex: none; width: 27px; height: 25px; }
+.tool-window-controls { display: flex; flex: none; gap: 4px; margin-left: auto; }
+.tool-window-controls .icon-button {
+  width: 24px;
+  height: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-soft);
+  color: var(--muted);
+}
+.tool-tabs .icon-button svg { width: var(--icon-sm); height: var(--icon-sm); }
+.tool-tabs-menu { max-width: calc(100vw - 16px); overflow-y: auto; overscroll-behavior: contain; }
+.tool-tabs-menu > button { justify-content: flex-start; }
+.tool-tabs-menu > button > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tool-tabs-menu img { flex: none; width: var(--icon-sm); height: var(--icon-sm); object-fit: contain; }
+.tool-tabs-menu kbd { flex: none; color: var(--muted); font: var(--text-caption)/1 var(--font); }
+/* Embedded tools must not swallow menu dismissal or a drag that started on the frame. */
+:is(.tool-group[data-menu-open], .tool-window-frame[data-dragging]) :is(webview, iframe) { pointer-events: none; }
+.tool-content {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: auto;
+}
+.tool-picker {
+  flex: 1;
+  display: grid;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+.tool-picker-list {
+  display: grid;
+  align-self: safe center;
+  justify-self: center;
+  gap: 3px;
+  width: min(100%, 360px);
+}
+.tool-picker button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 35px;
+  padding: 4px 10px;
+  border-radius: var(--radius-control);
+  color: var(--text);
+  font-size: var(--text-label);
+  text-align: left;
+}
+.tool-picker button:is(:hover, :focus-visible) { background: var(--surface-hover); }
+.tool-picker button > :is(svg, img) {
+  flex: none;
+  width: calc(var(--icon-sm) + 1px);
+  height: calc(var(--icon-sm) + 1px);
+  object-fit: contain;
+}
+.tool-shortcut {
+  display: inline-flex;
+  gap: 4px;
+  margin-inline-start: auto;
+  color: var(--muted);
+}
+.tool-shortcut kbd {
+  display: grid;
+  place-items: center;
+  min-width: 23px;
+  height: 21px;
+  padding-inline: 4px;
+  font: var(--weight-medium) var(--text-caption)/1 var(--font);
+  border: 1px solid var(--divider);
+  border-radius: var(--radius-tag);
+  background: var(--surface-soft);
+}
+.tool-message { margin: auto; padding: 20px; color: var(--muted); }

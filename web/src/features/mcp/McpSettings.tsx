@@ -1,6 +1,5 @@
 import { Accordion } from '../../shared/Accordion';
-import { ChevronRight, Pencil, Plug, Plus, Trash2 } from 'lucide-react';
-import { StatusGlyph } from '../../shared/StatusGlyph';
+import { Pencil, Plug, Plus, Trash2 } from 'lucide-react';
 import { groupMcpServersByOwnership, type McpOwnershipFields } from './mcp-ownership';
 import { mcpConnectionStatus } from './mcp-status';
 import './styles/mcp-settings.css';
@@ -16,6 +15,12 @@ export type McpSettingsServer = McpOwnershipFields & {
   toolCount: number;
   error: string;
 };
+
+function exposureShortLabel(exposure: McpSettingsServer['exposure']): string {
+  if (exposure === 'deferred') return '按需';
+  if (exposure === 'direct') return '直接';
+  return '隐藏';
+}
 
 function McpServerRow<T extends McpSettingsServer>({
   server,
@@ -40,22 +45,26 @@ function McpServerRow<T extends McpSettingsServer>({
   return <li className="mcp-server-row" data-state={status.state} data-origin={server.origin || 'user'}>
     <div className="mcp-server-copy">
       <div className="mcp-server-headline">
+        <span className="mcp-status-dot" data-state={status.state} aria-hidden="true" />
         <button type="button" className="mcp-server-open settings-row-link" aria-label={`查看 MCP ${server.name} 详情`} onClick={() => onOpen(server)}>
-          <strong>{server.name}</strong><ChevronRight className="settings-row-link-indicator" aria-hidden="true" />
+          <strong>{server.name}</strong>
         </button>
         <span className="mcp-protocol-pill" title={server.transport === 'stdio' ? '本地进程' : 'HTTP 服务'}>{protocolLabel}</span>
-        {pluginOwned && <span className="mcp-server-origin">{server.managed ? '插件托管' : '插件附带'}{server.userOverride ? ' · 已改配置' : ''}</span>}
+        {pluginOwned && <span className="mcp-server-origin">{server.managed ? '插件托管' : '插件附带'}{server.userOverride ? ' · 已改' : ''}</span>}
+        <span className="mcp-server-telemetry">
+          <span className="mcp-server-state">{status.label}</span>
+          <span className="mcp-meta-sep" aria-hidden="true">·</span>
+          <span>{exposureShortLabel(server.exposure)}</span>
+        </span>
       </div>
-      {server.description && <p className="mcp-server-description">{server.description}</p>}
-      <code className="mcp-server-target" title={server.target}>{server.target}</code>
-      <div className="mcp-server-meta">
-        <span className="mcp-server-state"><StatusGlyph state={status.state === 'connected' ? 'on' : status.state === 'error' ? 'attention' : 'off'} />{status.label}</span>
-        <span className="mcp-meta-sep" aria-hidden="true">·</span>
-        <span>{server.transport === 'stdio' ? '本地进程' : 'HTTP 服务'}</span>
-        <span className="mcp-meta-sep" aria-hidden="true">·</span>
-        <span>{server.exposure === 'deferred' ? '按需搜索' : server.exposure === 'direct' ? '直接提供' : '隐藏工具'}</span>
+      <div className="mcp-server-subline">
+        <code className="mcp-server-target" title={server.target}>{server.target}</code>
+        {server.description && <>
+          <span className="mcp-meta-sep" aria-hidden="true">·</span>
+          <span className="mcp-server-description" title={server.description}>{server.description}</span>
+        </>}
       </div>
-      {server.error.trim() && <Accordion className="mcp-server-error" summary={<>{server.enabled ? '查看错误' : '查看上次连接错误'}</>}>
+      {server.error.trim() && <Accordion className="mcp-server-error" compact summary={server.enabled ? '查看连接错误' : '查看上次连接错误'}>
         <pre tabIndex={0}>{server.error}</pre>
       </Accordion>}
     </div>
@@ -98,7 +107,7 @@ export function McpSettings<T extends McpSettingsServer>({ servers, busy, recove
         return <section className="mcp-server-group" key={group.ownerPluginId || 'user'} aria-label={group.label}>
           {showGroupHeaders && <header className="mcp-server-group-header">
             <h3>{group.label}</h3>
-            <span>{group.servers.length} 个</span>
+            <span>{group.servers.length}</span>
           </header>}
           <ul className="mcp-server-list">
             {group.servers.map((server) => (
@@ -116,13 +125,27 @@ export function McpSettings<T extends McpSettingsServer>({ servers, busy, recove
           </ul>
         </section>;
       })}
-    </div> : <div className="plugin-hub-empty">
-      <span className="plugin-hub-empty-mark" aria-hidden="true"><Plug /></span>
-      <h3>还没有 MCP 服务器</h3>
-      <p>连接本地进程或远程 HTTP 服务后，可在对话中按需发现并调用外部工具。</p>
-      <div className="plugin-hub-empty-actions">
-        <button type="button" className="settings-save" disabled={busy || refreshBusy} aria-label="添加 MCP 服务器" onClick={onAdd}><Plus aria-hidden="true" />添加服务器</button>
-        {onBrowsePlugins && <button type="button" className="settings-outline" onClick={onBrowsePlugins}>浏览插件</button>}
+    </div> : <div className="mcp-empty-deck">
+      <div className="mcp-empty-head">
+        <span className="mcp-empty-mark" aria-hidden="true"><Plug /></span>
+        <div className="mcp-empty-copy">
+          <h3>还没有 MCP 服务器</h3>
+          <p>接入外部工具与数据源，支持本机进程或远程 HTTP 服务。</p>
+        </div>
+        <div className="mcp-empty-actions">
+          <button type="button" className="settings-save" disabled={busy || refreshBusy} aria-label="添加 MCP 服务器" onClick={onAdd}><Plus aria-hidden="true" />添加服务器</button>
+          {onBrowsePlugins && <button type="button" className="settings-outline" onClick={onBrowsePlugins}>浏览插件</button>}
+        </div>
+      </div>
+      <div className="mcp-empty-protocols" aria-hidden="true">
+        <div>
+          <code>STDIO</code>
+          <span>本地命令行进程（如 npx / uvx / node）</span>
+        </div>
+        <div>
+          <code>HTTP</code>
+          <span>远程 Streamable HTTP 与 OAuth 服务</span>
+        </div>
       </div>
     </div>}
   </div>;

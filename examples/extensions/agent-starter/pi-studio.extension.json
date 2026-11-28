@@ -45,7 +45,7 @@
         "id": "overview",
         "title": "Agent Extension Starter",
         "description": "This panel is declared as JSON and rendered by Pi Studio.",
-        "slot": "panel.side",
+        "slot": "tool.view",
         "size": "compact",
         "priority": 10,
         "content": [

@@ -1,768 +1,122 @@
-import { FileKindIcon } from '../../shared/FileKindIcon';
-import './styles/right-panel.css';
-import './styles/panel-file.css';
-import { lazy, memo, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import type { MutableRefObject, ReactNode, Ref } from 'react';
-import {
-  AppWindow,
-  ChevronDown,
-  Eye,
-  FileText,
-  Folder,
-  FolderOpen,
-  MoreHorizontal,
-  RotateCw,
-  Search,
-  X,
-} from 'lucide-react';
-import { LoadingState } from '../../shared/LoadingState';
-import type { ModelSelection } from '../../types/model-types';
-import type { FilePreviewResult } from '../../types/file-preview-types';
-import type { PanelTab } from '../app-types';
-import type { SessionStateForPersistence } from '../../features/conversation/useMessageDelivery';
-import { TemporaryChat } from '../../features/conversation/TemporaryChat';
-import { ChangesView } from '../../features/conversation/ChangesView';
-import { DiffView } from '../../features/conversation/DiffView';
-import { TurnFilePreview } from '../../features/conversation/TurnFilePreview';
-import { prefersFilePreview } from '../../shared/file-preview';
-import { DeferredFilePreview, preloadFilePreview } from '../../shared/DeferredFilePreview';
-import { ActionMenu } from '../../shared/ActionMenu';
-import { formatFileSize } from '../../shared/filesize';
-import { SurfaceActiveContext } from '../../shared/surface-visibility';
-import type { ExtensionPanelPickerProps } from '../../features/extensions/ExtensionPanelPicker';
-import { AppWorkbench } from './AppWorkbench';
-import { BrowserPanel } from './BrowserPanel';
-import { RightPanelStart, type RightPanelToolAction } from './RightPanelStart';
-import type { useAppWorkbenchController } from './useAppWorkbench';
-import type { TerminalAppearance } from '../../features/terminal/TerminalPanel';
-
-const LazyTerminalPanel = lazy(async () => {
-  const module = await import('../../features/terminal/TerminalPanel');
-  return { default: module.TerminalPanel };
-});
-const RuntimeServicesPanel = lazy(async () => {
-  const module = await import('../../features/runtime-services/RuntimeServicesPanel');
-  return { default: module.RuntimeServicesPanel };
-});
-
-type TerminalTabSlotProps = {
-  id: string;
-  cwd: string;
-  isActive: boolean;
-  focusRef?: Ref<() => void>;
-  appearance: TerminalAppearance;
-  shellIntegration: boolean;
-  onFontSizeChange: (size: number) => void;
-  onNewTerminal: () => void;
-  onRestartTerminal: (id: string) => void;
-  onOpenFile: (path: string) => void;
-  onOpenUrl: (url: string) => void;
-  onTitle: (id: string, title: string) => void;
-};
-
-const TerminalTabSlot = memo(function TerminalTabSlot({
-  id,
-  cwd,
-  isActive,
-  focusRef,
-  appearance,
-  shellIntegration,
-  onFontSizeChange,
-  onNewTerminal,
-  onRestartTerminal,
-  onOpenFile,
-  onOpenUrl,
-  onTitle,
-}: TerminalTabSlotProps) {
-  const handleRestart = useCallback(() => {
-    onRestartTerminal(id);
-  }, [id, onRestartTerminal]);
-  const handleTitle = useCallback((title: string) => {
-    onTitle(id, title);
-  }, [id, onTitle]);
-
-  return <Suspense fallback={
-    <div className={`terminal-tab-slot ${isActive ? 'is-active' : ''}`}>
-      <LoadingState variant="panel">正在加载终端…</LoadingState>
-    </div>
-  }>
-    <div className={`terminal-tab-slot ${isActive ? 'is-active' : ''}`} aria-hidden={!isActive}>
-      <LazyTerminalPanel
-        active={isActive}
-        focusRef={focusRef}
-        id={id}
-        cwd={cwd}
-        appearance={appearance}
-        shellIntegration={shellIntegration}
-        onFontSizeChange={onFontSizeChange}
-        onNewTerminal={onNewTerminal}
-        onRestartTerminal={handleRestart}
-        onOpenFile={onOpenFile}
-        onOpenUrl={onOpenUrl}
-        onTitle={handleTitle}
-      />
-    </div>
-  </Suspense>;
-});
-
-type TerminalPanelTab = PanelTab & { kind: 'terminal' };
-
-type WorkbenchPaneProps = {
-  controller: ReturnType<typeof useAppWorkbenchController>;
-  settingsOpen: boolean;
-  workspace: string;
-  workspaces?: Array<{ cwd: string; name: string }>;
-  session: SessionStateForPersistence;
-  modelSelection: ModelSelection;
-  workspaceName: string;
-  renderToolPanel: (tab: PanelTab) => ReactNode;
-  extensionPicker: ExtensionPanelPickerProps;
-  launcherOrder: string[];
-  onLauncherOrderChange: (order: string[]) => void;
-  showTrace: boolean;
-  dragPreviewRef: MutableRefObject<HTMLDivElement | null>;
-  onSelectWorkspace?: (cwd: string) => void;
-  onChooseWorkspace: () => void;
-  onOpenSettings: (page: 'models') => void;
-  terminalAppearance: TerminalAppearance;
-  terminalShellIntegration: boolean;
-  onTerminalFontSize: (size: number) => void;
-  makeDragPreview: (event: React.DragEvent, label: string, kind: '工作区' | '会话' | '标签') => void;
-};
+import { useEffect, useRef, type CSSProperties, type RefObject } from 'react';
+import { Files } from 'lucide-react';
+import { BranchIcon } from '../../features/git/git-icons';
+import GitWorkspacePage from '../../features/git/GitWorkspacePage';
+import { restoreDismissedFocus } from '../../shared/keyboard-navigation';
+import { WorkspaceFiles } from './WorkspaceFiles';
+import type { SessionWorkbench } from './useAppWorkbench';
 
 export function WorkbenchPane({
   controller,
-  settingsOpen,
-  workspace,
-  workspaces = [],
-  session,
-  modelSelection,
-  workspaceName,
-  renderToolPanel,
-  extensionPicker,
-  launcherOrder,
-  onLauncherOrderChange,
-  showTrace,
-  dragPreviewRef,
-  onSelectWorkspace,
-  onChooseWorkspace,
-  onOpenSettings,
-  terminalAppearance,
-  terminalShellIntegration,
-  onTerminalFontSize,
-  makeDragPreview,
-}: WorkbenchPaneProps) {
-  const {
-    filesOpen,
-    entries,
-    file,
-    fileError,
-    panelTabs,
-    tabMenu,
-    closeTabMenu,
-    activePanelTabId,
-    activePanelTab,
-    panelFullscreen,
-    setPanelFullscreen,
-    panelWidth,
-    panelMaxWidth,
-    panelOverlay,
-    resizePanel,
-    panelResizing,
-    setPanelResizing,
-    panelDrag,
-    panelEntered,
-    panelSplit,
-    setPanelSplit,
-    fileBusy,
-    treeBusy,
-    treeError,
-    treeOwner,
-    fileMenuOpen,
-    fileApps,
-    fileAppsLoading,
-    fileAppsError,
-    fileActionsRef,
-    loadTree,
-    readTreeDirectory,
-    closePanel,
-    openTemporaryChat,
-    openTerminalTab,
-    openBrowserTab,
-    openFilesTab,
-    openServicesTab,
-    openProgressTab,
-    openTraceTab,
-    openGitTab,
-    openSubagentsTab,
-    loadFileToTab,
-    activatePanelTab,
-    openFile,
-    closePanelTab,
-    reorderPanelTabs,
-    openDiffTab,
-    closePanelTabs,
-    showFileActions,
-    openFileWith,
-    revealCurrentFile,
-    saveCurrentFileText,
-    setTabMenu,
-    setPanelTabs,
-  } = controller;
-
-  const [renamingId, setRenamingId] = useState<string | null>(null);
-  const focusActiveTerminal = useRef<(() => void) | null>(null);
-  const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => new Set());
-  const [directoryEntries, setDirectoryEntries] = useState<Record<string, typeof entries>>({});
-  const [directoryLoading, setDirectoryLoading] = useState<Set<string>>(() => new Set());
-  const [directoryErrors, setDirectoryErrors] = useState<Record<string, string>>({});
-  const [treeSearchOpen, setTreeSearchOpen] = useState(false);
-  const [treeSearchQuery, setTreeSearchQuery] = useState('');
-  const [treeSearchResults, setTreeSearchResults] = useState<Array<{ name: string; path: string; type: 'file' | 'directory'; size?: number }>>([]);
-  const [treeSearchBusy, setTreeSearchBusy] = useState(false);
-  const [activatedToolTabs, setActivatedToolTabs] = useState<Set<string>>(() => (
-    activePanelTabId ? new Set([activePanelTabId]) : new Set()
-  ));
-  const [activatedTerminalTabs, setActivatedTerminalTabs] = useState<Set<string>>(() => (
-    filesOpen && activePanelTab?.kind === 'terminal' ? new Set([activePanelTab.id]) : new Set()
-  ));
-  const panelWorkspace = session?.cwd || workspace;
-  const fileView = activePanelTab && ['files', 'file', 'changes', 'diff'].includes(activePanelTab.kind);
-
+  toggleRef,
+  gitSessionId,
+  openGitFile,
+}: {
+  controller: SessionWorkbench;
+  toggleRef: RefObject<HTMLButtonElement>;
+  gitSessionId?: string;
+  openGitFile: (root: string, path: string) => void;
+}) {
+  const drag = useRef<{ pointerId: number; x: number; width: number } | undefined>(undefined);
+  const { layout, closePanel, panelWidth, panelMaxWidth, panelOverlay, resizePanel } = controller;
   useEffect(() => {
-    void preloadFilePreview().catch(() => {});
-  }, []);
-
-  useEffect(() => {
-    const validIds = new Set(panelTabs.filter(isToolPanel).map(tab => tab.id));
-    setActivatedToolTabs((current) => {
-      let changed = false;
-      const next = new Set<string>();
-      for (const id of current) {
-        if (validIds.has(id)) next.add(id);
-        else changed = true;
-      }
-      if (activePanelTab && isToolPanel(activePanelTab) && !next.has(activePanelTab.id)) {
-        next.add(activePanelTab.id);
-        changed = true;
-      }
-      return changed ? next : current;
-    });
-  }, [activePanelTab, panelTabs]);
-
-  useEffect(() => {
-    if (!filesOpen) {
-      setActivatedTerminalTabs((current) => (current.size === 0 ? current : new Set()));
-      return;
-    }
-    const validIds = new Set(panelTabs.filter(tab => tab.kind === 'terminal').map(tab => tab.id));
-    setActivatedTerminalTabs((current) => {
-      let changed = false;
-      const next = new Set<string>();
-      for (const id of current) {
-        if (validIds.has(id)) next.add(id);
-        else changed = true;
-      }
-      if (activePanelTab?.kind === 'terminal' && !next.has(activePanelTab.id)) {
-        next.add(activePanelTab.id);
-        changed = true;
-      }
-      return changed ? next : current;
-    });
-  }, [activePanelTab, filesOpen, panelTabs]);
-
-  useEffect(() => {
-    setExpandedPaths(new Set());
-    setDirectoryEntries({});
-    setDirectoryLoading(new Set());
-    setDirectoryErrors({});
-  }, [workspace]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.isComposing || event.altKey || event.shiftKey) return;
-      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 'f') return;
-      const target = event.target as HTMLElement | null;
-      if (!target?.closest?.('.panel-file-browser')) return;
-      event.preventDefault();
-      setTreeSearchOpen(true);
-      window.setTimeout(() => document.querySelector<HTMLInputElement>('.file-tree-search input')?.focus(), 0);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, []);
-
-  useEffect(() => {
-    if (!treeSearchOpen || !workspace || !treeSearchQuery.trim()) {
-      setTreeSearchResults([]);
-      setTreeSearchBusy(false);
-      return;
-    }
-    let cancelled = false;
-    setTreeSearchBusy(true);
-    const timer = window.setTimeout(() => {
-      void window.piApi.searchFiles({ cwd: workspace, query: treeSearchQuery.trim() }).then((result) => {
-        if (!cancelled) setTreeSearchResults(result.files as typeof treeSearchResults);
-      }).catch(() => {
-        if (!cancelled) setTreeSearchResults([]);
-      }).finally(() => {
-        if (!cancelled) setTreeSearchBusy(false);
-      });
-    }, 120);
-    return () => { cancelled = true; window.clearTimeout(timer); };
-  }, [treeSearchOpen, treeSearchQuery, workspace]);
-
-  function renamePanelTab(id: string, title?: string) {
-    const next = title?.trim();
-    if (next) setPanelTabs((current) => current.map((tab) =>
-      tab.id === id && tab.title !== next ? { ...tab, title: next, customTitle: true } : tab
-    ));
-    setRenamingId(null);
-  }
-
-  /** 重启终端：先结束旧会话，再用同一个 id 重新挂载面板。 */
-  async function restartTerminal(id: string) {
-    await window.piApi.terminalClose(id).catch(() => {});
-    setPanelTabs((current) => current.map((tab) => tab.id === id ? { ...tab, restart: (tab.restart ?? 0) + 1 } : tab));
-  }
-
-  // 面板级快捷键：⌘W 关当前标签，⌘1..9 切标签。终端内的组合键由终端自己先拦。
-  useEffect(() => {
-    if (!filesOpen) return;
-    const onKey = (event: KeyboardEvent) => {
-      if (event.isComposing || event.altKey || event.shiftKey) return;
-      if (!(event.metaKey || event.ctrlKey)) return;
-      // 终端里只认 ⌘（Ctrl+W 是 readline 的删词，不能抢）。
-      const inTerminal = (event.target as HTMLElement | null)?.closest?.('.terminal-host');
-      if (inTerminal && !event.metaKey) return;
-      const tabs = panelTabs;
-      if (event.key.toLowerCase() === 'w') {
-        if (!activePanelTabId) return;
-        event.preventDefault();
-        closePanelTab(activePanelTabId);
+    function escape(event: KeyboardEvent) {
+      if (
+        event.key !== 'Escape' ||
+        event.defaultPrevented ||
+        document.querySelector('dialog[open],[role=dialog],[role=menu]')
+      )
         return;
-      }
-      if (!/^[1-9]$/u.test(event.key)) return;
-      const target = tabs[Number(event.key) - 1];
-      if (!target) return;
-      event.preventDefault();
-      activatePanelTab(target);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [activatePanelTab, activePanelTabId, closePanelTab, filesOpen, panelTabs]);
-  const sessionTools: RightPanelToolAction[] = session ? [
-    { id: 'progress', label: '进展', description: '查看目标、任务与子智能体', group: 'conversation', onSelect: () => openProgressTab() },
-    { id: 'trace', label: '轨迹', description: '查看请求与工具调用过程', group: 'conversation', onSelect: openTraceTab },
-    { id: 'subagents', label: '子智能体', description: '查看子智能体与运行记录', group: 'conversation', onSelect: () => openSubagentsTab() },
-    { id: 'git', label: 'Git', description: '查看当前仓库的变更、历史与同步状态', group: 'conversation', onSelect: () => openGitTab() },
-  ] : [];
-  const toolActions: RightPanelToolAction[] = [
-    ...sessionTools.filter(action => action.id !== 'trace' || showTrace),
-    { id: 'files', label: '工作区文件', description: '浏览与预览项目文件', disabled: !panelWorkspace, needsWorkspace: !panelWorkspace, onSelect: openFilesTab },
-    { id: 'terminal', label: '新建终端', description: '在工作区执行命令', disabled: !panelWorkspace, needsWorkspace: !panelWorkspace, onSelect: openTerminalTab },
-    { id: 'services', label: '运行服务', description: '查看运行中的服务', disabled: !panelWorkspace, needsWorkspace: !panelWorkspace, onSelect: openServicesTab },
-    { id: 'browser', label: '浏览器', description: '内置网页与调试预览', onSelect: () => openBrowserTab() },
-    { id: 'temporary', label: '临时聊天', description: '不留历史的临时会话', onSelect: openTemporaryChat },
-  ];
-
-  async function loadDirectory(path: string) {
-    if (directoryLoading.has(path)) return;
-    setDirectoryErrors((current) => {
-      if (!current[path]) return current;
-      const next = { ...current };
-      delete next[path];
-      return next;
-    });
-    setDirectoryLoading((current) => new Set(current).add(path));
-    try {
-      const nextEntries = await readTreeDirectory(path);
-      setDirectoryEntries((current) => ({ ...current, [path]: nextEntries }));
-    } catch (error) {
-      setDirectoryErrors((current) => ({
-        ...current,
-        [path]: error instanceof Error ? error.message : String(error),
-      }));
-    } finally {
-      setDirectoryLoading((current) => {
-        const next = new Set(current);
-        next.delete(path);
-        return next;
-      });
-    }
-  }
-
-  function toggleDirectory(path: string) {
-    if (directoryLoading.has(path)) return;
-    if (expandedPaths.has(path)) {
-      setExpandedPaths((current) => {
-        const next = new Set(current);
-        next.delete(path);
-        return next;
-      });
-      return;
-    }
-    setExpandedPaths((current) => new Set(current).add(path));
-    if (!directoryEntries[path]) void loadDirectory(path);
-  }
-
-  function renderFileEntries(list: typeof entries, depth = 0): ReactNode[] {
-    const rows: ReactNode[] = [];
-    for (const entry of list) {
-      const isDirectory = entry.type === 'directory';
-      const expanded = expandedPaths.has(entry.path);
-      rows.push(
-        <button
-          key={entry.path}
-          className={`file-row ${isDirectory ? 'is-directory' : ''}`}
-          title={entry.name}
-          style={{ paddingLeft: `calc(var(--space-2) + ${depth * 18}px)` }}
-          onClick={() => isDirectory ? void toggleDirectory(entry.path) : void openFile(entry.path, undefined, 'workspace')}
-        >
-          {isDirectory
-            ? expanded ? <FolderOpen size={15} /> : <Folder size={15} />
-            : <FileKindIcon path={entry.path} />}
-          <span>{entry.name}</span>
-          {entry.type === 'file' && <small>{formatFileSize(entry.size, '')}</small>}
-          {isDirectory && <ChevronDown size={13} className={`chevron-left ${expanded ? 'is-expanded' : ''}`} />}
-        </button>,
-      );
-      if (!isDirectory || !expanded) continue;
-      if (directoryLoading.has(entry.path)) {
-        rows.push(<LoadingState key={`${entry.path}:loading`} className="file-tree-nested-loading">正在读取…</LoadingState>);
-      } else if (directoryErrors[entry.path]) {
-        rows.push(
-          <div key={`${entry.path}:error`} className="file-tree-nested-error" role="alert">
-            <span>{directoryErrors[entry.path]}</span>
-            <button className="text-button" onClick={() => void loadDirectory(entry.path)}>重试</button>
-          </div>,
-        );
-      } else {
-        rows.push(...renderFileEntries(directoryEntries[entry.path] ?? [], depth + 1));
-      }
-    }
-    return rows;
-  }
-
-  function renderFileTree() {
-    if (!workspace) {
-      return <div className="panel-empty">
-        <strong>先选择工作区</strong>
-        <button className="text-button" onClick={onChooseWorkspace}>打开工作区</button>
-      </div>;
-    }
-    const visibleEntries = treeOwner === workspace ? entries : [];
-    const visiblePath = '';
-    return <div className="panel-file-browser">
-      <div className="file-toolbar">
-        {treeSearchOpen ? <div className="file-tree-search">
-          <Search aria-hidden="true" />
-          <input value={treeSearchQuery} onChange={(event) => setTreeSearchQuery(event.target.value)} placeholder="搜索文件" aria-label="搜索文件" />
-          <button className="icon-button" aria-label="关闭文件搜索" title="关闭搜索" onClick={() => { setTreeSearchOpen(false); setTreeSearchQuery(''); }}><X /></button>
-        </div> : <>
-          <span className="path-label">{visiblePath ? `/${visiblePath}` : '/'}</span>
-          <button className="icon-button" aria-label="搜索文件" title="搜索文件" onClick={() => setTreeSearchOpen(true)}><Search /></button>
-          <button className="icon-button" aria-label="刷新文件列表" title="刷新" onClick={() => { setDirectoryEntries({}); setExpandedPaths(new Set()); void loadTree(''); }}><RotateCw /></button>
-          <small>{visibleEntries.length} 项</small>
-        </>}
-      </div>
-      {treeError && treeOwner === workspace && <div className="panel-file-error" role="alert"><p>{treeError}</p><button className="text-button" onClick={() => void loadTree('')}>重试读取目录</button></div>}
-      <div className="file-tree">
-        {treeBusy && <LoadingState variant="section">正在读取文件…</LoadingState>}
-        {!treeBusy && treeSearchOpen && treeSearchQuery.trim() && (treeSearchBusy
-          ? <LoadingState variant="section">正在搜索…</LoadingState>
-          : treeSearchResults.map((entry) => <button key={entry.path} className={`file-row ${entry.type === 'directory' ? 'is-directory' : ''}`} title={entry.path} onClick={() => entry.type === 'directory' ? void openFile(entry.path, undefined, 'workspace') : void openFile(entry.path, undefined, 'workspace')}>
-            {entry.type === 'directory' ? <Folder size={15} /> : <FileKindIcon path={entry.path} />}<span>{entry.path}</span>
-          </button>))}
-        {!treeBusy && !(treeSearchOpen && treeSearchQuery.trim()) && renderFileEntries(visibleEntries)}
-        {!treeBusy && !treeError && !(treeSearchOpen && treeSearchQuery.trim()) && visibleEntries.length === 0 && <div className="file-empty"><FolderOpen /><strong>目录为空</strong></div>}
-      </div>
-    </div>;
-  }
-
-  function renderFilePreview() {
-    const retry = () => { if (activePanelTab) void loadFileToTab(activePanelTab); };
-    if (fileError && !file) {
-      return <div className="panel-file-error" role="alert">
-        <p>{fileError}</p>
-        <button className="text-button" onClick={retry}>重试读取文件</button>
-      </div>;
-    }
-    if (!file) {
-      return fileBusy
-        ? <LoadingState variant="panel">正在读取文件</LoadingState>
-        : <div className="panel-empty"><FileText /><strong>在左侧选择文件</strong></div>;
-    }
-    const preview: FilePreviewResult = file.preview ?? {
-      path: file.path,
-      name: file.path.split(/[\\/]/).pop() || file.path,
-      size: file.size,
-      mimeType: '',
-      kind: file.binary ? 'binary' : 'text',
-      text: file.text,
-    };
-    const canEdit = activePanelTab?.kind === 'file'
-      && (activePanelTab.source || 'workspace') === 'workspace'
-      && file.actionSource !== 'external'
-      && preview.kind === 'text'
-      && !preview.truncated;
-    // 文件标签复用共享预览组件：Markdown/HTML 可切换渲染与源码，PDF 走内置阅读器。
-    return <div className="panel-file-preview">
-      <DeferredFilePreview
-        key={activePanelTab?.id}
-        file={preview}
-        loading={fileBusy}
-        refreshError={fileError ? { message: fileError, onRetry: retry } : undefined}
-        editable={canEdit}
-        onSave={saveCurrentFileText}
-        onOpenExternal={() => void openFileWith()}
-        actions={<div className="file-actions" ref={fileActionsRef}>
-          <button className="icon-button" aria-label="文件操作" title="文件操作" aria-expanded={fileMenuOpen} onClick={() => void showFileActions()}><MoreHorizontal /></button>
-          {fileMenuOpen && <div className="file-actions-menu" role="menu">
-            <div className="file-actions-label">打开方式</div>
-            <button className="file-action" role="menuitem" onClick={() => void openFileWith()}><Eye /><span>用默认应用打开</span></button>
-            {(fileAppsLoading || fileApps.length > 0) && <div className="file-actions-sep" />}
-            {fileAppsLoading && <LoadingState className="file-action-loading">正在读取可用应用…</LoadingState>}
-            {fileAppsError && <div className="file-action-loading" role="alert">{fileAppsError}</div>}
-            {!fileAppsLoading && fileApps.map((app) => <button className="file-action" role="menuitem" key={app.path} onClick={() => void openFileWith(app.path)}>{app.icon ? <img src={app.icon} alt="" /> : <AppWindow />}<span>{app.name}</span></button>)}
-            <div className="file-actions-sep" />
-            <button className="file-action" role="menuitem" onClick={() => void revealCurrentFile()}><FolderOpen /><span>显示文件位置</span></button>
-          </div>}
-        </div>}
-      />
-    </div>;
-  }
-
-  const handleTerminalRestart = useCallback((id: string) => {
-    void restartTerminal(id);
-  }, [restartTerminal]);
-
-  const handleTerminalOpenFile = useCallback((path: string) => {
-    void openFile(path.replace(/:\d+(?::\d+)?$/u, ''), session?.id, 'external');
-  }, [openFile, session?.id]);
-
-  const handleTerminalOpenUrl = useCallback((url: string) => {
-    openBrowserTab(url);
-  }, [openBrowserTab]);
-
-  const handleTerminalTitle = useCallback((id: string, title: string) => {
-    setPanelTabs((current) => {
-      const index = current.findIndex((item) => item.id === id);
-      if (index < 0 || current[index].customTitle || current[index].title === title) return current;
-      return current.map((item, itemIndex) => (itemIndex === index ? { ...item, title } : item));
-    });
-  }, [setPanelTabs]);
-
-  function renderTerminalTab(tab: TerminalPanelTab, isActive: boolean) {
-    return <TerminalTabSlot
-      key={`${tab.id}:${tab.restart ?? 0}`}
-      id={tab.id}
-      cwd={tab.cwd || session?.cwd || workspace}
-      isActive={isActive}
-      focusRef={isActive ? focusActiveTerminal : undefined}
-      appearance={terminalAppearance}
-      shellIntegration={terminalShellIntegration}
-      onFontSizeChange={onTerminalFontSize}
-      onNewTerminal={openTerminalTab}
-      onRestartTerminal={handleTerminalRestart}
-      onOpenFile={handleTerminalOpenFile}
-      onOpenUrl={handleTerminalOpenUrl}
-      onTitle={handleTerminalTitle}
-    />;
-  }
-
-  function renderTerminalStack(isActive: boolean) {
-    const terminalTabs = panelTabs.filter((tab): tab is TerminalPanelTab => tab.kind === 'terminal');
-    return <div className={`terminal-tab-stack ${isActive ? 'is-active' : 'is-background'}`}>
-      {terminalTabs.map((tab) => {
-        const tabActive = isActive && tab.id === activePanelTabId;
-        if (!tabActive && !activatedTerminalTabs.has(tab.id)) return null;
-        return renderTerminalTab(tab, tabActive);
-      })}
-    </div>;
-  }
-
-  function renderPanelContent() {
-    if (!activePanelTab) {
-      return <RightPanelStart
-        workspace={workspace}
-        workspaces={workspaces}
-        cwd={session?.cwd}
-        actions={toolActions}
-        extensionPanels={extensionPicker.groups.map(group => group.panels[0])}
-        onOpenExtension={extensionPicker.onOpenPanel}
-        order={launcherOrder}
-        onOrderChange={onLauncherOrderChange}
-        onSelectWorkspace={onSelectWorkspace}
-        onChooseWorkspace={onChooseWorkspace}
-      />;
-    }
-    if (isToolPanel(activePanelTab)) return null;
-    if (activePanelTab.kind === 'temporary') {
-      return <TemporaryChat key={activePanelTab.id} id={activePanelTab.id} selection={modelSelection} onManage={() => onOpenSettings('models')} />;
-    }
-    if (activePanelTab.kind === 'terminal') {
-      // 终端统一由 persistentTerminalContent 渲染，切到文件、服务或浏览器时
-      // 仍留在 DOM 中，回来只切换可见槽位，不重放整段输出。
-      return null;
-    }
-    if (activePanelTab.kind === 'services') {
-      return <Suspense fallback={
-        <LoadingState variant="panel">正在加载服务面板…</LoadingState>
-      }>
-        <RuntimeServicesPanel cwd={session?.cwd} workspace={workspace} />
-      </Suspense>;
-    }
-    if (activePanelTab.kind === 'browser') {
-      // Browser shell stays mounted via persistentBrowserContent so guest tabs
-      // survive switching to files/terminal and back.
-      return null;
-    }
-    if (activePanelTab.kind === 'files') return renderFileTree();
-    if (activePanelTab.kind === 'changes' && activePanelTab.review) {
-      return <ChangesView
-        key={`${activePanelTab.id}:${activePanelTab.review.initial.at}:${activePanelTab.review.focusPath}`}
-        {...activePanelTab.review}
-        onOpenFile={path => void openFile(path, activePanelTab.review!.sessionId, 'diff')}
-        onOpenDiff={(file, at) => openDiffTab(file, at, activePanelTab.review!.sessionId)}
-      />;
-    }
-    if (activePanelTab.kind === 'diff' && activePanelTab.diff) {
-      const { diff, sessionId, turnAt } = activePanelTab;
-      return sessionId && turnAt !== undefined && prefersFilePreview(diff.label, diff.binary)
-        ? <TurnFilePreview key={activePanelTab.id} sessionId={sessionId} at={turnAt} file={diff} />
-        : <DiffView file={diff} />;
-    }
-    return renderFilePreview();
-  }
-
-  const browserTab = panelTabs.find((tab) => tab.kind === 'browser');
-  const persistentBrowserContent = browserTab ? (
-    <div className={`browser-tab-stack ${activePanelTab?.kind === 'browser' ? 'is-active' : 'is-background'}`} aria-hidden={activePanelTab?.kind !== 'browser'}>
-      <BrowserPanel
-        key={browserTab.id}
-        url={browserTab.url || ''}
-        openNonce={browserTab.openNonce || 0}
-        commandRequestId={browserTab.commandRequestId || ''}
-        libraryRequest={browserTab.browserLibrary}
-        onLibraryOpened={(requestId) => setPanelTabs(current => current.map(tab =>
-          tab.id === browserTab.id && tab.browserLibrary?.id === requestId
-            ? { ...tab, browserLibrary: undefined }
-            : tab
-        ))}
-        onUrlChange={(next) => setPanelTabs((current) => {
-          const index = current.findIndex((tab) => tab.id === browserTab.id);
-          if (index < 0 || current[index].url === next) return current;
-          return current.map((tab, itemIndex) => (itemIndex === index ? { ...tab, url: next } : tab));
-        })}
-        onTitleChange={(title) => setPanelTabs((current) => {
-          const nextTitle = title || '浏览器';
-          const index = current.findIndex((tab) => tab.id === browserTab.id);
-          if (index < 0 || current[index].customTitle || current[index].title === nextTitle) return current;
-          return current.map((tab, itemIndex) => (itemIndex === index ? { ...tab, title: nextTitle } : tab));
-        })}
-        onCommandHandled={(requestId) => setPanelTabs((current) => current.map((tab) => (
-          tab.id === browserTab.id && tab.commandRequestId === requestId
-            ? { ...tab, commandRequestId: undefined }
-            : tab
-        )))}
-        onClose={() => closePanelTab(browserTab.id)}
-      />
-    </div>
-  ) : null;
-  const persistentTerminalContent = renderTerminalStack(activePanelTab?.kind === 'terminal');
-  const persistentPanelContent = <>
-    {persistentTerminalContent}
-    {persistentBrowserContent}
-    {panelTabs.filter(isToolPanel).map(tab => {
-      const selected = activePanelTab?.id === tab.id;
-      if (!selected && !activatedToolTabs.has(tab.id)) return null;
-      return <SurfaceActiveContext.Provider key={tab.id} value={selected && panelEntered && !settingsOpen}>
-        <div className="workbench-tool-pane" role="tabpanel" hidden={!selected} aria-label={tab.title}>
-          {renderToolPanel(tab)}
-        </div>
-      </SurfaceActiveContext.Provider>;
-    })}
-  </>;
-
-  return <>
-    {tabMenu && <ActionMenu x={tabMenu.x} y={tabMenu.y} onClose={closeTabMenu} items={[
-      { label: '重命名', run: () => { setRenamingId(tabMenu.id); closeTabMenu(); } },
-      ...(panelTabs.find((tab) => tab.id === tabMenu.id)?.kind === 'terminal'
-        ? [{ label: '重启终端', run: () => { void restartTerminal(tabMenu.id); closeTabMenu(); } }]
-        : []),
-      { label: '关闭标签页', run: () => closePanelTab(tabMenu.id) },
-      { label: '关闭左侧标签页', disabled: panelTabs.findIndex(tab => tab.id === tabMenu.id) <= 0, run: () => closePanelTabs(tabMenu.id, 'left') },
-      { label: '关闭右侧标签页', disabled: panelTabs.findIndex(tab => tab.id === tabMenu.id) === panelTabs.length - 1, run: () => closePanelTabs(tabMenu.id, 'right') },
-      { label: '关闭其他标签页', disabled: panelTabs.length <= 1, run: () => closePanelTabs(tabMenu.id, 'others') },
-      { label: '关闭所有标签页', run: () => closePanelTabs(tabMenu.id, 'all') },
-    ]} />}
-    <AppWorkbench
-      open={filesOpen}
-      fullscreen={panelFullscreen}
-      overlay={panelOverlay}
-      split={Boolean(fileView && panelSplit)}
-      resizing={panelResizing}
-      panelWidth={panelWidth}
-      panelMaxWidth={panelMaxWidth}
-      entered={panelEntered}
-      workspaceName={workspaceName}
-      tabs={panelTabs}
-      activeTabId={activePanelTabId}
-      activeTab={activePanelTab}
-      toolActions={toolActions}
-      extensionPicker={extensionPicker}
-      fileTree={renderFileTree()}
-      panelContent={renderPanelContent()}
-      persistentPanelContent={persistentPanelContent}
-      onClose={closePanel}
-      onActivate={(tab) => {
-        activatePanelTab(tab);
-        if (tab.kind === 'terminal' && tab.id === activePanelTabId) focusActiveTerminal.current?.();
-      }}
-      onCloseTab={closePanelTab}
-      onReorder={reorderPanelTabs}
-      onContextMenu={(id, x, y) => setTabMenu({ id, x, y })}
-      renamingId={renamingId}
-      onStartRename={setRenamingId}
-      onRename={renamePanelTab}
-      onToggleSplit={fileView ? () => setPanelSplit((value) => !value) : undefined}
-      onToggleFullscreen={() => setPanelFullscreen((value) => !value)}
-      onMakeDragPreview={(event, title) => makeDragPreview(event, title, '标签')}
-      onClearDragPreview={() => {
-        dragPreviewRef.current?.remove();
-        dragPreviewRef.current = null;
-      }}
-      onResizeStart={event => {
-        if (event.button !== 0) return;
+      if (
+        panelOverlay ||
+        (event.target instanceof Element && event.target.closest('.file-panel'))
+      ) {
         event.preventDefault();
-        event.currentTarget.setPointerCapture(event.pointerId);
-        panelDrag.current = { x: event.clientX, width: event.currentTarget.parentElement!.getBoundingClientRect().width };
-        setPanelResizing(true);
-      }}
-      onResizeMove={event => {
-        if (panelDrag.current) resizePanel(panelDrag.current.width + panelDrag.current.x - event.clientX);
-      }}
-      onResizeEnd={event => {
-        panelDrag.current = null;
-        setPanelResizing(false);
-        event.currentTarget.releasePointerCapture(event.pointerId);
-      }}
-      onResizeLostCapture={() => {
-        panelDrag.current = null;
-        setPanelResizing(false);
-      }}
-      onResizeKeyDown={event => {
-        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
-          event.preventDefault();
-          resizePanel(panelWidth + (event.key === 'ArrowLeft' ? 40 : -40));
-        }
-      }}
-    />
-  </>;
-}
-
-function isToolPanel(tab: PanelTab) {
-  return tab.kind === 'progress' || tab.kind === 'trace' || tab.kind === 'subagents'
-    || tab.kind === 'git' || tab.kind === 'extension';
+        closePanel();
+        if (event.target instanceof Element && event.target.closest('.file-panel'))
+          restoreDismissedFocus(toggleRef.current);
+      }
+    }
+    window.addEventListener('keydown', escape);
+    return () => window.removeEventListener('keydown', escape);
+  }, [panelOverlay, closePanel, toggleRef]);
+  return (
+    <>
+      {panelOverlay && (
+        <button className="file-panel-backdrop" aria-label="关闭右侧面板" onClick={closePanel} />
+      )}
+      <aside
+        id="workspace-side-panel"
+        className={'file-panel is-open' + (panelOverlay ? ' is-overlay' : '')}
+        style={{ '--panel-w': panelWidth + 'px' } as CSSProperties}
+        aria-label="工作区侧栏"
+      >
+        <nav className="workspace-side-modes" aria-label="工作区视图">
+          <button aria-pressed={layout.side === 'files'} onClick={controller.openFilesTab}>
+            <Files />
+            文件
+          </button>
+          {gitSessionId && (
+            <button aria-pressed={layout.side === 'git'} onClick={() => controller.openGitTab()}>
+              <BranchIcon aria-hidden="true" />
+              Git
+            </button>
+          )}
+        </nav>
+        <div
+          className="panel-resize-handle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="调整右侧面板宽度"
+          tabIndex={0}
+          aria-valuenow={panelWidth}
+          aria-valuemin={320}
+          aria-valuemax={panelMaxWidth}
+          onPointerDown={(e) => {
+            if (e.button !== 0 || drag.current) return;
+            e.preventDefault();
+            e.currentTarget.setPointerCapture(e.pointerId);
+            drag.current = { pointerId: e.pointerId, x: e.clientX, width: panelWidth };
+          }}
+          onPointerMove={(e) => {
+            if (drag.current?.pointerId === e.pointerId) resizePanel(drag.current.width + drag.current.x - e.clientX);
+          }}
+          onLostPointerCapture={(e) => {
+            if (drag.current?.pointerId === e.pointerId) drag.current = undefined;
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+              e.preventDefault();
+              resizePanel(panelWidth + (e.key === 'ArrowLeft' ? 24 : -24));
+            }
+          }}
+        />
+        <div className="file-panel-inner">
+          <div className="panel-body">
+            {layout.side === 'git' && gitSessionId ? (
+                <GitWorkspacePage
+                  sessionId={gitSessionId}
+                  tab={layout.gitPage}
+                  onTab={controller.openGitTab}
+                  openFile={openGitFile}
+                  onOpenDiff={controller.openGitDiff}
+                />
+              ) : (
+                <WorkspaceFiles
+                  key={JSON.stringify([controller.owner, controller.cwd])}
+                  selected={controller.activeTab?.kind === 'file' && controller.activeTab.source === 'workspace' && controller.activeTab.cwd === controller.cwd ? controller.activeTab.path : undefined}
+                  cwd={controller.cwd}
+                  state={layout.files}
+                  update={controller.updateFiles}
+                  actions={controller.treeActions}
+                  open={(path, preview, line) =>
+                    void controller.openFile(path, undefined, 'workspace', { preview, line })
+                  }
+                />
+              )}
+          </div>
+        </div>
+      </aside>
+    </>
+  );
 }

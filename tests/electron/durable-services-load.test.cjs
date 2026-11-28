@@ -16,7 +16,6 @@ const assert = require('node:assert/strict');
 const Module = require('node:module');
 const path = require('node:path');
 
-const ROOT = path.join(__dirname, '../..');
 
 function withElectronStub(load) {
   const original = Module._load;

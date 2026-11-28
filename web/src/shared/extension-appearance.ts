@@ -2,7 +2,7 @@ import type { ExtensionIconColor, ExtensionUiSlot } from '../types/extension-typ
 
 export const iconLabels = {
   activity: '波形', gauge: '仪表盘', timer: '计时器', terminal: '终端', chart: '柱状图',
-  wallet: '钱包', database: '数据库', cloud: '云', cpu: '芯片', layers: '图层', plug: '插头', zap: '闪电',
+  wallet: '钱包', database: '数据库', cloud: '云', coffee: '咖啡杯', cpu: '芯片', layers: '图层', plug: '插头', zap: '闪电',
 } as const;
 export const colorLabels = {
   neutral: '中性', accent: '主题强调色', info: '信息蓝', success: '成功绿', warning: '琥珀黄', error: '提示红',
@@ -27,7 +27,7 @@ export function statusIconDataUrl(panel: StatusPanel, override?: Partial<StatusA
 
 export function statusAppearance(panel: StatusPanel, override?: Partial<StatusAppearance>): StatusAppearance {
   return {
-    icon: iconName(override?.icon) ?? iconName(panel.icon) ?? (panel.slot === 'panel.side' ? 'plug' : 'activity'),
+    icon: iconName(override?.icon) ?? iconName(panel.icon) ?? ((panel.slot === 'tool.view' || panel.slot === 'status.detail') ? 'plug' : 'activity'),
     color: colorName(override?.color) ?? colorName(panel.color) ?? 'neutral',
   };
 }

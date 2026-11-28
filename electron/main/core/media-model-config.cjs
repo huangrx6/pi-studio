@@ -16,4 +16,4 @@ function isMediaModel(provider, modelId) {
   return mediaKinds.some(kind => provider?.mediaModels?.[kind]?.includes(modelId));
 }
 
-module.exports = { isMediaModel, mediaKinds, normalizeMediaModels };
+module.exports = { isMediaModel, normalizeMediaModels };

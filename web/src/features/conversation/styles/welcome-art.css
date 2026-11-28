@@ -1,0 +1,31 @@
+:is(.main.is-new-conversation, .temporary-main-canvas > .temporary-chat.is-empty)::after {
+  /* 底部多留一些空间，让欢迎内容最多上移 56px。空间紧张时先收回这段留白。 */
+  content: '';
+  flex: 0 1 min(14%, 112px);
+}
+
+.welcome-art {
+  --welcome-ink: color-mix(in srgb, var(--text-2) 65%, var(--theme-accent));
+  pointer-events: none;
+  user-select: none;
+}
+
+.welcome-art::before,
+.welcome-art::after {
+  content: '';
+  position: absolute;
+}
+.welcome-art::before {
+  inset: -3% -24% 4%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--text-2) 23%, transparent) .65px, transparent .95px) center / 14px 14px;
+  mask: radial-gradient(ellipse closest-side, var(--mask-opaque) 12%, transparent);
+}
+.welcome-art::after {
+  inset: 0;
+  mask: var(--welcome-shape) center / contain no-repeat;
+}
+
+.is-wallpaper-inside .welcome-art { opacity: calc(1 - .75 * var(--wallpaper-inside)); }
+@media (forced-colors: active) {
+  .welcome-art { display: none; }
+}

@@ -42,6 +42,8 @@ test('只有多行或超长的粘贴才需要确认', () => {
   assert.equal(needsPasteConfirm(''), false);
   assert.equal(needsPasteConfirm('git status\n'), false, '结尾换行不算第二条命令');
   assert.equal(needsPasteConfirm('pnpm build\npnpm test'), true);
+  assert.equal(needsPasteConfirm('pnpm build\r\npnpm test\r\n'), true);
+  assert.equal(needsPasteConfirm('pnpm build\rpnpm test'), true);
   assert.equal(needsPasteConfirm('a'.repeat(401)), true);
 });
 

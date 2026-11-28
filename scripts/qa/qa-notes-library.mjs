@@ -1,4 +1,5 @@
 /** Exercise the official notes package on a disposable PARA vault. */
+import { checkPluginTheme, openPluginCatalog, openPluginTool } from './fixtures/tool-panel.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -62,6 +63,7 @@ await Promise.all([
 
 let app;
 let page;
+let mainPage;
 const errors = [];
 const blockedRequests = [];
 const ui = () => page.frameLocator('iframe.extension-view-frame[title="知识库"]');
@@ -70,7 +72,8 @@ const tree = () => ui().getByRole('navigation', { name: 'PARA 目录', exact: tr
 const workspace = () => ui().locator('.knowledge-app');
 const background = locator => locator.evaluate(element => getComputedStyle(element).backgroundColor);
 const rgb = hex => 'rgb(' + hex.slice(1).match(/../g).map(channel => parseInt(channel, 16)).join(', ') + ')';
-const rowAppearance = locator => locator.evaluate(row => {
+const rowAppearance = locator => locator.evaluate(async row => {
+  await Promise.allSettled(row.getAnimations().map(animation => animation.finished));
   const style = getComputedStyle(row);
   return { height: row.offsetHeight, font: style.fontSize, radius: style.borderRadius, background: style.backgroundColor };
 });
@@ -88,15 +91,16 @@ async function verifyTheme(name) {
 }
 
 async function openNotes() {
-  if (!(await page.locator('iframe.extension-view-frame[title="知识库"]').isVisible())) {
-    const open = page.getByRole('button', { name: '打开右侧面板', exact: true });
-    if (await open.isVisible()) await open.click();
-    const tab = page.getByRole('tab', { name: '知识库', exact: true });
-    const tile = page.locator('.panel-launcher').getByRole('button', { name: '知识库', exact: true });
-    await tab.or(tile).first().click();
+  const toolWindow = await openPluginTool(app, mainPage, '知识库');
+  if (page !== toolWindow.page) {
+    page = toolWindow.page;
+    page.on('pageerror', error => errors.push(error.message));
+    page.on('request', request => {
+      if (request.url().includes('notes-preview.invalid')) blockedRequests.push(request.url());
+    });
   }
-  await page.locator('iframe.extension-view-frame[title="知识库"]').waitFor();
-  await page.getByRole('button', { name: '退出全屏', exact: true }).waitFor();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await ui().locator('body').waitFor();
 }
 
 async function openResource(name) {
@@ -107,6 +111,7 @@ async function openResource(name) {
 
 try {
   ({ app, page } = await launchTestDesktop(work, profile, 1500, 930));
+  mainPage = page;
   await app.evaluate(({ dialog, shell }, { vault, trash }) => {
     const nativePick = dialog.showOpenDialog;
     dialog.showOpenDialog = (...args) => args.at(-1)?.title === '选择笔记目录'
@@ -115,14 +120,9 @@ try {
     shell.trashItem = file => process.getBuiltinModule('node:fs/promises').rename(file, paths.join(trash, paths.basename(file)));
   }, { vault, trash });
   page.on('pageerror', error => errors.push(error.message));
-  page.on('request', request => {
-    if (request.url().includes('notes-preview.invalid')) blockedRequests.push(request.url());
-  });
   await page.evaluate(() => window.piApi.waitForStartup());
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
-  await page.locator('.settings-navigation').getByRole('button', { name: '插件', exact: true }).click();
-  await page.getByRole('tab', { name: '插件', exact: true }).click();
+  await openPluginCatalog(page);
   const notesCard = page.locator('.plugin-package-card').filter({
     has: page.getByRole('button', { name: '查看插件 知识库', exact: true }),
   });
@@ -134,19 +134,15 @@ try {
 
   await page.reload();
   await page.locator('.app').waitFor();
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await openNotes();
-  const notesTab = page.getByRole('tab', { name: '知识库', exact: true });
-  assert.equal(await notesTab.locator('img.studio-package-mark').getAttribute('src'), iconUrl);
+  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
+  assert.equal(await page.locator('.tool-tab[data-active=true] button').first().innerText(), '知识库');
   await tool('选择目录').click();
   await tree().getByRole('button', { name: '03 Resources', exact: true }).waitFor();
   assert.equal((await ui().locator('.sidebar-title').textContent()).trim(), '知识库');
   assert.equal(await ui().locator('.sidebar-mark').evaluate(img => img.complete && img.naturalWidth === 128), true);
   const start = ui().locator('.library-start');
-  assert.ok(await start.locator('.library-illustration').evaluate(async img => {
-    await img.decode();
-    return img.naturalWidth > 0;
-  }));
+  await start.getByRole('heading', { name: '选择一篇笔记开始阅读' }).waitFor();
   assert.equal(await start.getByRole('button').count(), 0);
   await page.screenshot({ path: path.join(output, 'empty-library.png'), scale: 'css' });
   await tool('知识库设置').click();
@@ -156,6 +152,11 @@ try {
 
   await openResource('01 推理入门');
   await ui().getByRole('heading', { name: '推理入门', exact: true }).waitFor();
+  assert.equal(await workspace().getAttribute('data-knowledge-theme'), 'studio');
+  await checkPluginTheme(page, ui(), [
+    ['.notes-document', '--surface-canvas'], ['.notes-sidebar', '--surface-chrome'],
+    ['.notes-toolbar', '--surface-chrome'], ['.notes-search', '--surface-raised'],
+  ], output);
   assert.equal(await ui().locator('.katex').count(), 1);
   await ui().getByRole('img', { name: 'Mermaid 图表', exact: true }).waitFor();
   await tool('大纲与反向链接').click();
@@ -196,7 +197,7 @@ try {
   await resize.press('Home');
   assert.equal(await resize.getAttribute('aria-valuenow'), '180');
   await resize.press('End');
-  assert.equal(await resize.getAttribute('aria-valuenow'), '400');
+  assert.equal(await resize.getAttribute('aria-valuenow'), await resize.getAttribute('aria-valuemax'));
   await resize.press('Home');
   await resize.press('ArrowLeft');
   assert.equal(await resize.getAttribute('aria-valuenow'), '196');
@@ -295,7 +296,6 @@ try {
   await editor.fill(markdown + '\n## 重开后恢复的草稿\n');
   await ui().getByRole('navigation', { name: 'PARA 目录' }).click({ position: { x: 10, y: 2 } });
   await page.reload();
-  await page.locator('.app').waitFor();
   await openNotes();
   await openResource('01 推理入门');
   assert.equal(await workspace().getAttribute('data-knowledge-theme'), 'paper');

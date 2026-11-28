@@ -333,7 +333,7 @@ test('packed archive installs only with its integrity manifest', async (t) => {
       panels: [{
         id: 'main',
         title: 'Main',
-        slot: 'panel.side',
+        slot: 'tool.view',
         content: [{ kind: 'text', text: 'ready' }],
       }],
     },
@@ -477,7 +477,7 @@ test('permission expansion requires fresh consent and preserves data through upg
       panels: [{
         id: 'summary',
         title: 'Summary',
-        slot: 'panel.side',
+        slot: 'tool.view',
         content: [{ kind: 'text', text: 'v2' }],
       }],
     },
@@ -1232,7 +1232,7 @@ test('distribution manifest normalizer matches the runtime host contract', () =>
         panels: [{
           id: 'main',
           title: 'Main',
-          slot: 'panel.side',
+          slot: 'tool.view',
           content: [
             { kind: 'text', text: 'hello' },
             { kind: 'notice', tone: 'success', text: 'ready' },

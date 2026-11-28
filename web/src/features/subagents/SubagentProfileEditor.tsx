@@ -92,7 +92,7 @@ function selectOptions(options: Option[], current: string, inheritedLabel: strin
 }
 
 function ResourceField({ title, description, mode, value, options, onMode, onChange, disabled = false }: {
-  title: string; description: string; mode: SelectionMode; value: string[] | null; options: Option[];
+  title: string; description?: string; mode: SelectionMode; value: string[] | null; options: Option[];
   onMode: (mode: SelectionMode) => void; onChange: (values: string[]) => void; disabled?: boolean;
 }) {
   const [search, setSearch] = useState('');
@@ -107,7 +107,7 @@ function ResourceField({ title, description, mode, value, options, onMode, onCha
       <Select label={title + '范围'} value={disabled ? 'restricted' : mode} disabled={disabled} onChange={next => onMode(next as SelectionMode)}
         options={disabled ? [{ value: 'restricted', label: '限于文件工具' }] : [{ value: 'inherit', label: '继承' }, { value: 'picked', label: '仅使用所选' }, { value: 'none', label: '不使用' }]} />
     </div>
-    <p>{description}</p>
+    {description && <p>{description}</p>}
     {!disabled && mode === 'picked' && <div className="role-resource-choices">
       {rows.length > 8 && <input aria-label={'搜索' + title} type="search" placeholder={'搜索' + title} value={search} onChange={event => setSearch(event.target.value)} />}
       <div className="role-resource-list">
@@ -221,10 +221,10 @@ export function SubagentProfileEditor({ initial, cwd, onClose }: { initial: Suba
       <section className="role-resources" aria-label="权限与资源">
         <RoleToolAccess access={draft.runtimeOverrides.allowedTools} common={resources.defaults.allowedTools} tools={resources.tools}
           onChange={value => changeOverride('allowedTools', value)} />
-        <ResourceField title="MCP 服务" disabled={fileOnly} description={fileOnly ? '文件工具模式下暂停 MCP。选择其他工具模式后，会恢复已选服务。' : '从父智能体可用的服务中选择。具体方法在 MCP 设置中管理。'}
+        <ResourceField title="MCP 服务" disabled={fileOnly} description={fileOnly ? '文件工具模式下暂停 MCP。' : undefined}
           mode={mcpMode} value={draft.mcpServers} options={resources.mcpServers.map(name => ({ id: name, name }))}
           onMode={setMcpMode} onChange={value => update('mcpServers', value)} />
-        <ResourceField title="技能" description="选择角色可使用的技能。此处仅列出当前工作区已信任的技能。"
+        <ResourceField title="技能"
           mode={skillMode} value={draft.skills} options={resources.skills} onMode={setSkillMode} onChange={value => update('skills', value)} />
       </section>
       <RoleRuntimeFields overrides={draft.runtimeOverrides} defaults={resources.defaults} onChange={changeOverride}

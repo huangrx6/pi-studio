@@ -116,7 +116,7 @@ function diffLive(previous, next) {
   // A queued follow-up can replace one run with another in a single commit.
   // The first input survives tool rounds and Goal handovers within the same run.
   if (previousRun && nextRun && previousRun.inputs?.[0] !== nextRun.inputs?.[0]) {
-    changes.push({ type: 'todo.changed', payload: {} });
+    changes.push({ type: 'todo.changed', payload: { turnId: String(nextRun.inputs?.[0] ?? '') } });
   }
 
   if (!previousRun && nextRun) {

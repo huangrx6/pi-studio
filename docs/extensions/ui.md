@@ -1,8 +1,8 @@
 # Pi Studio Extension UI 规范
 
-Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、颜色、字号、圆角、间距、动画、可访问性和响应式行为）；当插件需要独立交互界面（如实时画布或任务看板）时，可在 `panel.side` 声明 `view` 并在受控沙箱 `<iframe>` 中加载插件自身的 `ui/` 静态资源，不与主渲染进程耦合。
+扩展 UI 使用 JSON 声明式数据，由 Studio 负责布局、主题与可访问性。实时画布或任务看板等交互界面可在 `tool.view` 声明 `view`，在悬浮工具面板的受控沙箱 iframe 中加载插件自身的 `ui/` 静态资源。
 
-这套约束让扩展在不同主题、背景图片、侧栏宽度和系统辅助功能下保持一致，也避免第三方内容绕过全局设计系统。
+这套约束让扩展在不同主题、背景图片、窗口宽度和系统辅助功能下保持一致，也避免第三方内容绕过全局设计系统。
 
 ## 1. 基本原则
 
@@ -49,7 +49,7 @@ Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、�
 | `tabs` | 页内切换 | `tabs[{ id, label, content }]`, `activeTab?` |
 | `disclosure` | 可折叠详情 | `title`, `description?`, `open?`, `content` |
 
-侧栏和紧凑 slot 会自动把 `grid` 与 `metricGrid` 收敛为一列，扩展不需要判断窗口宽度。
+窄窗口和紧凑 slot 会自动把 `grid` 与 `metricGrid` 收敛为一列，扩展不需要判断窗口宽度。
 
 ### 数据可视化
 
@@ -92,15 +92,15 @@ Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、�
 按钮只能使用 `default`、`primary`、`danger` 三种语义 tone。
 同一组 `actions` 最多只能声明一个 `primary`。Studio 会在 manifest 和实时数据进入渲染层之前拒绝多个主操作，避免页面出现竞争性视觉焦点。
 
-## 3. 会话摘要和右侧工作台
+## 3. 会话摘要和详情面板
 
-`status.chip`、`composer.above`、`composer.below` 使用单行摘要。每项最多允许两个区块，支持 `text`、`badge`、`keyValue`、`notice`、`dataView`。详情、操作和其余区块放在 `panel.side`。
+`status.chip`、`composer.above`、`composer.below` 使用单行摘要。每项最多允许两个区块，支持 `text`、`badge`、`keyValue`、`notice`、`dataView`。
 
-「扩展」弹框为每个提供 `panel.side` 的扩展显示一张卡片。卡片展示扩展摘要或面板说明，点击「详情」打开右侧工作台。
+悬浮工具面板承载 `tool.view`，状态栏弹出层承载 `status.detail`。摘要可通过 `details` 打开同一扩展的任一详情视图。
 
 `visibility` 默认为 `always`。声明 `while-active` 时只在当前回合执行中显示摘要，详情始终可以打开。额度状态卡片按当前会话的模型来源读取用户选中的额度字段。内置 Studio 指标卡片在生成时显示实时速率，回合结束后显示最近请求的读数。
 
-摘要可用 `slot` 声明一个位置，或用 `slots` 声明用户可选择的位置。会话中最多固定显示在一处，扩展卡片也会展示可见的摘要。
+摘要可用 `slot` 声明一个位置，或用 `slots` 声明用户可选择的位置。用户在扩展设置的「界面显示」中为每条摘要选择一个位置，也可以隐藏摘要。其详情面板仍可从「扩展」打开。
 
 ```json
 {
@@ -116,18 +116,18 @@ Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、�
 }
 ```
 
-包含 `status.chip` 时，`details` 必须指向同一扩展声明的 `panel.side` 面板。Studio 默认把此类摘要显示在扩展卡片中，用户可以从该扩展声明的顶栏或输入框位置选择固定展示。官方额度扩展的摘要位置为「扩展菜单」，也可选择「隐藏摘要」。
+包含 `status.chip` 的摘要必须声明 `details`，默认显示在底部状态栏。用户可以隐藏摘要，或切换到扩展同时声明的输入框位置。仅声明输入框位置时使用第一个已声明的位置。
 
-### 给工作台面板和摘要设置图标与配色
+### 给视图和摘要设置图标与配色
 
-提供 `panel.side` 的扩展会在启动台显示一个应用入口，打开该扩展声明的第一个工作台面板。启动台入口、工作台标签和外观预览优先使用所属插件清单 `icon` 指向的包内 PNG，其次使用面板声明的 `icon` 和 `color`。摘要使用其自身的声明。
+应用入口优先使用所属插件清单 `icon` 指向的包内 PNG，其次使用视图声明的 `icon` 和 `color`。摘要使用自身的外观声明。
 
 | 字段 | 可选值 | 缺省行为 |
 | --- | --- | --- |
-| `icon` | `activity`、`gauge`、`timer`、`terminal`、`chart`、`wallet`、`database`、`cloud`、`cpu`、`layers`、`plug`、`zap` | 工作台面板默认使用插头，摘要默认使用波形 |
+| `icon` | `activity`、`gauge`、`timer`、`terminal`、`chart`、`wallet`、`database`、`cloud`、`cpu`、`layers`、`plug`、`zap` | 视图默认使用插头，摘要默认使用波形 |
 | `color` | `neutral`、`accent`、`info`、`success`、`warning`、`error` | 缺省为 `neutral`，颜色随主题切换 |
 
-在「设置 → 插件 → 扩展」中点击卡片或列表项，即可打开扩展设置。「界面显示」按工作台面板和对话摘要列出各项，可分别调整图标与配色，或为摘要选择显示位置。插件图标保留原配色，选用内置图标时可以调整主题配色。「恢复默认」会清除图标和配色覆盖，恢复插件图标或面板声明的外观。
+在「设置 → 插件 → 扩展」中点击卡片或列表项，即可打开扩展设置。「界面显示」按视图和对话摘要列出各项，可分别调整图标与配色，或为摘要选择显示位置。插件图标保留原配色，选用内置图标时可以调整主题配色。「恢复默认」会清除图标和配色覆盖，恢复插件图标或面板声明的外观。
 
 ```json
 [
@@ -146,7 +146,7 @@ Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、�
   {
     "id": "quota-detail",
     "title": "额度状态",
-    "slot": "panel.side",
+    "slot": "status.detail",
     "icon": "gauge",
     "color": "info",
     "size": "regular",
@@ -155,7 +155,7 @@ Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、�
 ]
 ```
 
-`details` 必须指向同一份 manifest 里声明的 `panel.side` 面板。上面的额度数字演示声明式布局。实际模型额度在「设置 → 模型配置」中按来源配置。可运行的官方示例会在会话工作区展示当前项目的脚本数量，打开详情可复制脚本命令。[项目脚本速查](../../extensions/pi-project-scripts/README.md)
+`details` 使用同一份清单中的视图 ID。实际模型额度在「设置 → 模型配置」中按来源配置。项目脚本示例通过摘要打开工具面板中的脚本命令表。[项目脚本速查](../../extensions/pi-project-scripts/README.md)
 
 ```json
 {
@@ -172,13 +172,13 @@ Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、�
 }
 ```
 
-完整数据使用独立的 `panel.side` 面板。它可以组合指标、表格、图表、状态列表和操作，以便用户看清来源、时间、额度窗口和异常说明。
+状态栏详情可组合指标、表格、图表和操作，展示来源、更新时间、额度窗口和异常说明。
 
 ```json
 {
   "id": "quota-detail",
   "title": "额度状态",
-  "slot": "panel.side",
+  "slot": "status.detail",
   "size": "regular",
   "content": [
     {
@@ -200,7 +200,7 @@ Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、�
 }
 ```
 
-同一扩展的工作台面板共用一个标签。声明多个面板时，可在标签内切换。扩展自己的设置由 `contributes.settings` 声明，使用 `ui.settings` 权限，在该扩展的设置中显示。
+扩展设置由 `contributes.settings` 声明，使用 `ui.settings` 权限，在该扩展的设置中显示。
 
 ## 4. 组合示例
 
@@ -210,7 +210,7 @@ Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、�
 {
   "id": "runtime",
   "title": "运行概览",
-  "slot": "panel.side",
+  "slot": "tool.view",
   "size": "regular",
   "content": [
     {
@@ -272,13 +272,13 @@ Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、�
 
 ### 受控沙箱视图（`panel.view`）
 
-需要独立交互界面的插件（例如官方的 `studio.excalidraw` 与 `studio.task-board`），可在 `panel.side` 声明 `view`，把前端界面完全打包在插件自身的 `ui/` 目录内，与 Pi Studio 宿主彻底解耦：
+需要独立交互界面的插件（例如官方的 `studio.excalidraw` 与 `studio.task-board`），可在 `tool.view` 声明 `view`，把前端界面完全打包在插件自身的 `ui/` 目录内，与 Pi Studio 宿主彻底解耦：
 
 ```json
 {
   "id": "board",
   "title": "我的面板",
-  "slot": "panel.side",
+  "slot": "tool.view",
   "view": {
     "entry": "ui/index.html",
     "sourceId": "board-data",
@@ -290,9 +290,49 @@ Pi Studio 的扩展 UI 优先使用 **JSON 声明式数据**（负责布局、�
 - `entry`：必须指向扩展包 `ui/` 目录内的相对 HTML 路径（如 `ui/index.html`），通过只读协议 `pi-ext://view/<scope>/<manifestId>/...` 加载，并附带严格 CSP 与 `iframe sandbox="allow-scripts allow-downloads"`。
 - `sourceId`：同一扩展声明的数据源 ID，需同时具备 `ui.panels` 与 `ui.data` 权限，且该面板 `content` 留空。
 - `scope`：`"session"`（默认，随工作区与会话切换）或 `"global"`（跨工作区与会话共享，需用户级安装）。
-- `fullscreen`：可选布尔值。设为 `true` 时打开此面板会展开整个工作台，用户可以通过工作台工具栏退出全屏。
-- 数据源可返回 `{ viewData: <JSON-safe payload> }`（并在 `context.viewParams` 中接收前端通过 `view:query` 传来的筛选条件），并实现 `invoke(context, method, params)` 处理前端 `view:invoke` RPC 请求。
-- 沙箱视图与宿主通过 `pi-studio:ext-view:v1` `postMessage` 协议通信，支持读取宿主主题与设计变量（`host:context`）、订阅快照（`host:snapshot`）、触发提示（`view:notify`）、填入当前会话（`view:sendPrompt`）以及打开临时会话（`view:openTemporaryChat`）。完整类型定义见 [扩展 SDK 声明](../../sdk/extensions/types/pi-studio-extension-authoring.d.ts)。
+- 数据源可返回 `{ viewData: <JSON-safe payload> }`（并在 `context.viewParams` 中接收前端通过 `view:query` 传来的筛选条件），并实现 `invoke(context, method, params)` 处理前端 `view:invoke` RPC 请求。状态栏弹窗中的视图可在按下 Escape 时发送 `view:close`，由宿主关闭弹窗并把焦点还给入口。
+- 紧凑状态栏弹窗可发送 `{ type: 'view:resize', height }` 报告内容高度。宿主按窗口可用空间限制高度，展开和收起使用状态栏的统一动效。
+- 沙箱视图与宿主通过 `pi-studio:ext-view:v1` `postMessage` 协议通信，支持读取宿主主题与设计变量（`host:context`）、订阅快照（`host:snapshot`）、触发提示（`view:notify`）、填入当前会话（`view:sendPrompt`）以及打开临时会话（`view:openTemporaryChat`）。宿主上下文和数据源接口分别见 [视图 SDK 声明](../../sdk/extensions/view-theme.d.mts)和[扩展 SDK 声明](../../sdk/extensions/types/pi-studio-extension-authoring.d.ts)。
+
+### 在插件中跟随 Studio 外观
+
+声明式面板由 Studio 自动配色。独立 HTML 视图可以把 SDK 的 `view-theme.mjs` 复制到插件的 `ui/` 目录，或随前端一起打包。注册消息监听后发送 `view:ready`。首次连接、切换亮暗模式、强调色或圆角时，宿主会发送当前的 `theme`（`light` 或 `dark`）和已解析的 CSS 变量。主窗口和独立工具面板使用同一份协议。完整变量表和应用函数见 [主题 SDK](../../sdk/extensions/view-theme.mjs)。
+
+```js
+import { applyStudioTheme } from './view-theme.mjs';
+
+const protocol = 'pi-studio:ext-view:v1';
+window.addEventListener('message', ({ source, data }) => {
+  if (source === window.parent && data?.protocol === protocol && data.type === 'host:context') {
+    applyStudioTheme(data);
+  }
+});
+window.parent.postMessage({ protocol, type: 'view:ready' }, '*');
+```
+
+| 界面用途 | CSS 变量 |
+| --- | --- |
+| 文档、画布和列表底色 | `--surface-canvas` |
+| 侧栏和工具栏 | `--surface-chrome` |
+| 卡片、输入框 | `--surface-raised`、`--composer-surface` |
+| 菜单、弹窗和遮罩 | `--surface-floating`、`--dialog-surface`、`--scrim`、`--shadow-float` |
+| 正文、说明和边界 | `--text`、`--muted`、`--border`、`--divider` |
+| 悬停、当前项、键盘焦点 | `--surface-hover`、`--nav-selected-bg`、`--focus-color` |
+| 强调色、主按钮 | `--accent`、`--button-bg`、`--on-button` |
+| 状态反馈 | `--info`、`--success`、`--warning`、`--error`，各有 `-soft` 底色和 `-border` 边框 |
+
+```css
+body { background: var(--surface-canvas, var(--bg, Canvas)); color: var(--text, CanvasText); }
+.sidebar { background: var(--surface-chrome, var(--surface)); }
+.card, input { background: var(--surface-raised, var(--surface)); border: 1px solid var(--border); }
+dialog { background: var(--dialog-surface, var(--surface)); color: var(--text); }
+```
+
+默认主题使用内容底色和侧栏底色。卡片、输入框和浮层复用侧栏底色，边框和阴影区分边界。插件可以在自身容器上覆盖变量来实现用户选定的主题，切回「跟随 Studio」时移除这些覆盖即可。较早的宿主只提供 `--bg`、`--surface` 等基础角色，上例也适用于这些版本。
+
+视图可以从 `host:context.tokens` 取宿主的字号。页面、弹窗和分组标题分别使用 `--text-title`、`--text-heading` 和 `--text-subtitle`。正文用 `--text-body`，按钮和表单用 `--text-label`，说明用 `--text-description`，时间与计数用 `--text-caption`，代码用 `--text-code`。完整定义见[全局排版变量](../../web/src/styles/typography.css)。
+
+同一条消息也提供图标尺寸。按钮和工具栏用 `--icon-sm`，导航和列表用 `--icon-md`。将变量应用到 SVG 或图片的宽高，按钮本身保留独立的点击范围。详见[全局图标尺寸](../../web/src/styles/icon-sizes.css)。
 
 静态面板适合说明和检查清单；指标、任务状态等短期数据使用 `dataView`。
 
@@ -350,7 +390,7 @@ type ExtensionUiAction =
 
 - `openUrl` 只允许 `http` 和 `https`。
 - `sendPrompt` 只填充或提交输入框。
-- `openPanel` 只能打开当前扩展自己声明、当前仍然可用的 `panel.side` 面板 ID，并要求 `ui.panels` 权限。
+- `openPanel` 需有 `ui.panels` 权限，目标为同一扩展声明且可用的 `tool.view` 或 `status.detail`。
 - `runCommand` 只能调用当前扩展自己声明、由 runtime handler 提供实现的完整 command ID，并要求 `ui.commands` 权限。它不能转去执行另一个带静态 action 的命令，避免声明之间形成递归操作链。
 - command handler 返回的 action、panel ID 和设置页会在执行前再次清洗。
 - renderer 对动态 command 返回的 action 最多跟随 4 层；恶意或错误的循环会被中止并显示统一错误。
@@ -374,7 +414,7 @@ Agent extension 本身仍是受信任 Node 代码。UI 数据限制不能替代�
 - 为每个 panel、setting、command 使用稳定 ID。
 - 为内容选择语义 block，不模拟具体像素布局。
 - 所有颜色由 Studio token 决定，不在文案或数据里携带 CSS。
-- 面板在侧栏、右栏、明暗主题和窄窗口中都能正常阅读。
+- 视图在工具面板、明暗主题和窄窗口中均可阅读。
 - 实时数据有加载、空、错误和清理路径。
 - 危险按钮使用 `danger`，主要操作只使用一个 `primary`。
 - 一个 `actions` 分组只保留一个 `primary`；其余操作用 `default`，必要时降级为 `danger`。

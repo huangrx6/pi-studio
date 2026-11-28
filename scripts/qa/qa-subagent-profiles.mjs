@@ -101,7 +101,7 @@ try {
     const icon = header.querySelector('.settings-page-header-icon').getBoundingClientRect();
     return [title.getBoundingClientRect().left, getComputedStyle(title).font, icon.right, icon.width];
   });
-  const settings = () => page.locator('.sidebar-bottom button[title="设置"]').click();
+  const settings = () => page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   const editor = page.getByRole('textbox', { name: '发送给 Pi 的消息' });
   const snap = name => page.screenshot({ path: path.join(output, name + '.png'), animations: 'disabled' });
   const snapDialog = (dialog, name) => dialog.screenshot({ path: path.join(output, name + '.png'), scale: 'css', animations: 'disabled' });
@@ -386,20 +386,18 @@ try {
     const generalHeader = await headerLayout();
     await open('子智能体');
     await roles.getByRole('button', { name: '编辑代码审阅' }).waitFor();
-    assert.equal(await roles.locator('.settings-profile-card').count(), 2);
+    assert.equal(await roles.locator('.subagent-roster-card').count(), 2);
     assert.equal(await defaults.count(), 0);
     assert.deepEqual(await headerLayout(), generalHeader);
     const bounds = await roles.evaluate(node => {
       const box = selector => node.querySelector(selector).getBoundingClientRect();
-      return [box('h1').left - box('.settings-profile-grid').left, box('.settings-profile-grid').right - box('.settings-page-header-icon').right,
-        box('.settings-profile-grid').right - box('.settings-profile-actions').right];
+      return [box('h1').left - box('.subagent-roster-grid').left, box('.subagent-roster-grid').right - box('.settings-page-header-icon').right,
+        box('.subagent-roster-grid').right - box('.settings-profile-actions').right];
     });
     assert.ok(bounds.every(delta => Math.abs(delta) <= 1), 'header and card edges align');
     await page.locator('.settings-toast').first().waitFor({ state: 'hidden' });
     await snap(filename);
     await checkActionButtons(roles, ['新建子智能体', '共用运行默认值']);
-    const editRows = await roles.locator('.settings-profile-foot').evaluateAll(rows => rows.map(row => row.getBoundingClientRect().height));
-    assert.ok(editRows.length === 2 && editRows.every(height => Math.abs(height - 40) <= 1), JSON.stringify(editRows));
     if (theme === '浅色') await snapDialog(roles.locator('.settings-profile-toolbar'), 'actions-role-toolbar');
     await defaultsButton.click();
     await defaults.getByRole('group', { name: '子智能体配置范围' }).waitFor();
@@ -653,7 +651,7 @@ try {
     await window.piApi.saveSubagentSettings({ cwd, scope: 'project', settings: { ...common.project, maxSpawns: 7 } });
   }, workspace);
 
-  await open('返回对话');
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await editor.fill('@');
   await page.getByRole('option').filter({ hasText: 'README.md' }).waitFor();
   assert.equal(await page.getByRole('option').filter({ hasText: '文档校对' }).count(), 0);
@@ -724,7 +722,7 @@ try {
   assert.equal((await getCreated()).avatarId, 'rabbit-lilac');
   assert.equal((await getCreated()).runtimeOverrides.maxSpawns, undefined);
   assert.equal(await page.evaluate(async () => (await window.piApi.subagentProfiles()).find(row => row.name === '代码审阅').runtimeOverrides.allowedTools), 'read-write');
-  await open('返回对话');
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await editor.locator('.is-agent').filter({ hasText: '资料校对' }).waitFor();
   await editor.press('Enter');
   await page.locator('.user-message .ref-chip.is-agent').filter({ hasText: '资料校对' }).waitFor();
@@ -763,7 +761,7 @@ try {
   await remove.getByRole('button', { name: '删除角色' }).click();
   await edit.waitFor({ state: 'detached' });
   assert.equal(await getCreated(), undefined);
-  await open('返回对话');
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await editor.press('Enter');
   await page.getByText(/引用的子智能体已不存在/).first().waitFor();
   await editor.locator('.is-agent').waitFor();

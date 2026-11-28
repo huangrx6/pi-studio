@@ -1,24 +1,11 @@
 .settings-header {
-  font-size: var(--settings-label-size);
+  font-size: var(--text-label);
   font-weight: var(--weight-semibold);
 }
 
-.settings-header-back {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-1);
-  min-height: var(--settings-control-height);
-  margin-inline-start: auto;
-  padding-inline: var(--space-2);
-  border-radius: var(--radius-control);
-  color: var(--muted);
-  font: var(--settings-preference-body-font);
-}
-.settings-header-back:hover { background: var(--surface-hover); color: var(--text); }
-
 .settings-navigation .settings-navigation-search {
   height: var(--settings-control-height);
-  margin: var(--space-3) 0 0;
+  margin: 0;
   padding-inline: var(--space-2);
   gap: var(--settings-field-gap);
   background: var(--surface);
@@ -38,7 +25,7 @@
   border: 0;
   color: var(--text);
   background: transparent;
-  font: var(--settings-preference-body-font);
+  font: var(--font-label);
 }
 
 .settings-navigation-search input::-webkit-search-cancel-button { -webkit-appearance: none; }
@@ -57,11 +44,11 @@
   margin: 0 0 var(--space-1);
   padding-inline: var(--space-3);
   color: var(--muted);
-  font: var(--settings-description-font);
+  font: var(--font-description);
   font-weight: var(--weight-medium);
 }
 
-.settings-navigation .settings-nav-row, .settings-navigation .settings-back-button {
+.settings-navigation .settings-nav-row {
   min-width: 0;
   min-height: var(--row-height);
   display: grid;
@@ -71,45 +58,32 @@
   padding-inline: var(--space-3);
   border: 0;
   border-radius: var(--radius-control);
-  color: var(--text);
+  color: var(--muted);
   text-align: start;
-  font: var(--settings-preference-body-font);
+  font: var(--font-label);
 }
 
-.settings-navigation :is(.settings-nav-row, .settings-back-button) > svg {
+.settings-navigation .settings-nav-row > svg {
   width: var(--icon-md);
   height: var(--icon-md);
-  color: var(--muted);
   stroke-width: 1.8;
 }
 
 .settings-navigation .settings-nav-row > span { min-width: 0; overflow-wrap: anywhere; }
-.settings-navigation .settings-nav-row.is-active > svg { color: var(--accent); }
 .settings-navigation .settings-navigation-empty {
   margin: var(--space-3) var(--space-2);
   color: var(--muted);
-  font: var(--settings-description-font);
+  font: var(--font-description);
 }
 
-.settings-navigation > .settings-nav-bottom {
-  flex-shrink: 0;
-  margin-top: auto;
-  padding-top: var(--space-2);
-  border-top: 1px solid var(--divider);
-}
-.settings-navigation .settings-back-button {
-  height: auto;
-  background: transparent;
-  box-shadow: none;
-}
-.settings-navigation .settings-back-button:hover { background: var(--surface-hover); }
-.settings-overlay .settings-navigation :is(.settings-nav-row, .settings-back-button):focus-visible {
+.settings-navigation:focus { outline: none; }
+.shell-sidebar .settings-navigation .settings-nav-row:focus-visible {
   outline: none;
   box-shadow: inset 0 0 0 2px var(--focus-color);
 }
 
 @media (forced-colors: active) {
-  .settings-overlay .settings-navigation :is(.settings-nav-row, .settings-back-button):focus-visible {
+  .shell-sidebar .settings-navigation .settings-nav-row:focus-visible {
     outline: 2px solid Highlight;
     outline-offset: -2px;
   }

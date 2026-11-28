@@ -7,7 +7,6 @@ import { chromium } from 'playwright-core';
 import quotaMapping from '../../electron/main/core/provider-quota.cjs';
 import quotaService from '../../electron/main/services/provider-quota.cjs';
 import { serveProductionRenderer } from './fixtures/production-renderer-server.mjs';
-import { assertSettingsRowLinkHover } from './fixtures/isolated-desktop.mjs';
 import { installPerformanceFixture } from './fixtures/performance.mjs';
 import { installSettingsResourcesFixture } from './fixtures/settings-resources.mjs';
 
@@ -15,7 +14,7 @@ const output = new URL('../../.qa/provider-quota/', import.meta.url);
 const root = fileURLToPath(new URL('../..', import.meta.url));
 await mkdir(output, { recursive: true });
 const server = await serveProductionRenderer(root);
-const responseData = { usage: { week: { remaining: 120 }, hour: { used: 0.375 } }, status: 'active' };
+const responseData = { usage: { week: { remaining: 120 }, hour: { used: 0.375 } }, balance: 22.11, status: 'active' };
 let status = 200, reads = 0;
 const quotaApi = createServer((req, res) => {
   reads++;
@@ -89,6 +88,12 @@ function installQuotaFixture(baseUrl) {
     extensionName: '额度状态', scope: 'user', slot: 'status.chip', details: 'quota-detail', title: '额度状态', size: 'compact',
     content: [],
   };
+  const draftPlacement = sessionStorage.getItem('qa:quota-placement');
+  if (draftPlacement) {
+    const preferences = JSON.parse(localStorage.getItem('pi-studio:preferences'));
+    preferences.extensionPlacements = { [quotaChip.id]: draftPlacement };
+    localStorage.setItem('pi-studio:preferences', JSON.stringify(preferences));
+  }
   const withSessionModel = read => async input => {
     const result = await read(input);
     if ((input.id ?? input) === 'perf-1') return { ...result, model: { ...result.model, modelRef: 'missing/model', label: '第二来源模型' } };
@@ -96,6 +101,12 @@ function installQuotaFixture(baseUrl) {
     return { ...result, model: { ...result.model, quotaProvider: quota?.enabled ? { id: 'qa', name: fixtures.longProvider } : undefined } };
   };
   window.piApi = new Proxy({
+    state: async () => {
+      const result = await base.state();
+      const quota = await window.readQuotaConfig();
+      return {...result, model: {...result.model, quotaProvider: quota?.enabled && extensionEnabled()
+        ? {id:'qa', name:fixtures.longProvider} : undefined}};
+    },
     settings: async () => (await project()).settings, models: async () => (await project()).models,
     refreshModels: project,
     providerConfig: async id => ({ ...(await base.providerConfig(id)), baseUrl, quota: id === 'qa' ? await window.readQuotaConfig() : null }),
@@ -115,7 +126,7 @@ function installQuotaFixture(baseUrl) {
     conversationSnapshot: withSessionModel(base.conversationSnapshot),
     subscribeConversation: withSessionModel(base.subscribeConversation),
     extensionsUi: async () => ({ items: extensionEnabled() ? [quotaChip,
-      { ...quotaChip, id: 'user:pi-quota-status/quota-detail', contributionId: 'quota-detail', slot: 'panel.side', size: 'regular' },
+      { ...quotaChip, id: 'user:pi-quota-status/quota-detail', contributionId: 'quota-detail', slot: 'status.detail', size: 'regular' },
     ] : [], errors: [], syncedAt: Date.now(), apiVersion: 1 }),
   }, { get: (target, key) => key in target ? target[key] : base[key] });
 }
@@ -140,23 +151,19 @@ try {
   await page.locator('.session-row').first().click();
   await page.locator('.assistant-response').first().waitFor();
   const header = page.locator('.chat-header');
-  const picker = page.getByRole('dialog', { name: '扩展', exact: true });
-  const quotaCard = picker.getByRole('article', { name: '额度状态', exact: true });
-  const openExtensions = async () => {
-    await header.getByRole('button', { name: '扩展', exact: true }).click();
-    await picker.waitFor();
-  };
-  await openExtensions();
-  assert.equal(await quotaCard.count(), 0);
+  const footer = page.getByRole('contentinfo', { name: '状态栏' });
+  const quotaChip = footer.getByRole('button', { name: '打开 额度状态 详情' });
+  const quotaPanel = footer.getByRole('dialog', { name: '额度状态', exact: true });
+  assert.equal(await quotaChip.count(), 0);
   assert.equal(reads, 0);
-  await page.keyboard.press('Escape');
 
   const nav = page.locator('.settings-navigation');
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '设置', exact: true }).click();
   await nav.getByRole('button', { name: '模型配置', exact: true }).click();
-  await page.getByText('已启用模型 350').waitFor();
+  await page.getByRole('button', {name: '查看已启用模型'}).filter({hasText:'350'}).waitFor();
   assert.equal(await page.locator('[data-enabled-model-id]').count(), 0);
-  await page.getByRole('button', { name: '新对话默认模型' }).click();
+  const defaultModelButton = page.getByRole('button', { name: '新对话默认模型' });
+  await defaultModelButton.click();
   const directory = page.getByRole('dialog', { name: '已启用模型' });
   await directory.waitFor();
   assert.equal(await directory.locator('[data-enabled-model-id]').count(), 24);
@@ -169,22 +176,25 @@ try {
   await directory.locator('.enabled-model-default').waitFor();
   await page.keyboard.press('Escape');
   await directory.waitFor({ state: 'detached' });
+  assert.ok(await defaultModelButton.evaluate(node => document.activeElement === node && getComputedStyle(node).outlineStyle === 'none'),
+    'the native dialog restores its mouse opener without a focus ring');
   await page.screenshot({ path: fileURLToPath(new URL('models.png', output)) });
 
   const source = page.locator('[data-provider-id="qa"]');
-  assert.equal(await source.locator('.model-source-actions > button').count(), 2);
-  const manage = source.getByRole('button', { name: /个对话模型，/, expanded: false });
-  assert.match(await manage.textContent(), /\d+ 个对话模型/);
-  await assertSettingsRowLinkHover(page, manage, '.model-settings-provider');
+  const manage = source.getByRole('button', { name: /^管理 / });
   await manage.focus();
   await page.keyboard.press('Enter');
-  const collapse = source.getByRole('button', { name: /个对话模型，/, expanded: true });
-  await collapse.waitFor();
-  assert.ok(await collapse.evaluate(el => document.activeElement === el));
+  const back = page.getByRole('button', {name:'模型来源', exact:true});
+  await back.waitFor();
+  await back.focus();
   await page.keyboard.press('Space');
   await manage.waitFor();
-  const edit = source.getByRole('button', { name: /^编辑 / });
-  await edit.click();
+  const more = source.getByRole('button', { name: /更多操作$/ });
+  async function openEditor() {
+    await more.click();
+    await page.getByRole('menuitem', {name:'编辑连接', exact:true}).click();
+  }
+  await openEditor();
   const editor = page.getByRole('dialog', { name: '编辑模型来源' });
   const toggle = editor.getByRole('switch', { name: '开启额度监控' });
   await toggle.waitFor();
@@ -200,9 +210,11 @@ try {
   await editor.getByLabel('图像生成模型 ID', { exact: true }).fill('');
   await media.locator('summary').click();
   await editor.getByLabel('服务地址', { exact: true }).fill(provider.baseUrl);
+  const settingsDialogBackgrounds = {};
   for (const theme of ['light', 'dark']) {
     await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
     await editor.locator('.dialog-body').evaluate(body => { body.scrollTop = 0; });
+    settingsDialogBackgrounds[theme] = await editor.evaluate(node => getComputedStyle(node).backgroundColor);
     await editor.screenshot({ path: fileURLToPath(new URL(`provider-sections-${theme}.png`, output)) });
   }
   await page.evaluate(() => { document.documentElement.dataset.theme = 'light'; });
@@ -389,15 +401,14 @@ try {
   await editor.getByRole('button', { name: '保存更改' }).click();
   await editor.waitFor({ state: 'detached' });
   assert.equal(provider.quota.fields.length, 3);
-  assert.equal(await source.locator('.provider-model-list').count(), 0, 'editing quota keeps the catalog collapsed');
-  const more = source.getByRole('button', { name: /更多操作$/ });
+  assert.equal(await page.locator('.model-stage').count(), 0, 'editing quota preserves the source list');
   const quotaButton = page.getByRole('menuitem', { name: '查看额度', exact: true });
   for (const width of [1280, 432]) {
     await page.setViewportSize({ width, height: 820 });
     await more.click();
     await quotaButton.waitFor();
     assert.equal(await quotaButton.locator('svg').count(), 0, 'quota action is text only');
-    const menu = page.getByRole('menu', { name: await more.getAttribute('aria-label'), exact: true });
+    const menu = page.getByRole('menu').filter({ has: quotaButton });
     assert.ok(await menu.evaluate(menu => {
       const box = menu.getBoundingClientRect();
       return box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight;
@@ -406,7 +417,8 @@ try {
     assert.ok(Math.max(...labelEdges) - Math.min(...labelEdges) < 1, 'all action labels use the same left edge');
     await page.screenshot({ path: fileURLToPath(new URL(`provider-actions-${width}.png`, output)) });
     await page.keyboard.press('Escape');
-    assert.equal(await more.evaluate(node => document.activeElement === node), true);
+    assert.ok(await more.evaluate(node => document.activeElement === node && getComputedStyle(node).outlineStyle === 'none'),
+      'Escape returns focus to the mouse-opened menu trigger without a ring');
   }
   await page.setViewportSize({ width: 1280, height: 820 });
   await more.click();
@@ -416,56 +428,112 @@ try {
   const refresh = detail.getByRole('button', { name: '刷新额度' });
   status = 503; await refresh.click(); await detail.getByText(/上次成功/).waitFor();
   await detail.getByText('120 次').waitFor();
+  await detail.locator('.provider-quota-dialog').screenshot({ path: fileURLToPath(new URL('detail-stale.png', output)) });
   status = 401; await refresh.click(); await detail.getByText(/认证失败/).waitFor();
   assert.equal(await detail.getByText('120 次').count(), 0);
+  await detail.locator('.provider-quota-dialog').screenshot({ path: fileURLToPath(new URL('detail-error.png', output)) });
+  assert.equal(await detail.locator('.provider-quota-dialog').evaluate(node => getComputedStyle(node).backgroundColor), settingsDialogBackgrounds.light);
   status = 200; await refresh.click(); await detail.getByText('可用').waitFor();
   await page.setViewportSize({ width: 980, height: 680 });
   await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
   await page.screenshot({ path: fileURLToPath(new URL('quota.png', output)) });
   await page.keyboard.press('Escape');
-  await nav.getByRole('button', { name: '返回对话' }).click();
+  await page.locator('[data-sidebar-section="conversations"]').click();
   await page.setViewportSize({ width: 1440, height: 920 });
   assert.equal(await header.getByText('每周剩余', { exact: true }).count(), 0);
-  await openExtensions();
-  await quotaCard.getByText('120 次', { exact: true }).waitFor();
-  await quotaCard.getByText('37.5%', { exact: true }).waitFor();
-  assert.deepEqual(await quotaCard.locator('dt').allTextContents(), ['每周剩余', '小时已用']);
-  const quotaPanel = page.getByRole('tabpanel', { name: '额度状态', exact: true });
-  await quotaCard.getByText('120 次', { exact: true }).click();
-  assert.equal(await quotaPanel.count(), 0, 'quota metrics are a preview');
-  await quotaCard.getByRole('button', { name: '查看 额度状态 详情', exact: true }).click();
+  await quotaChip.getByText(/每周剩余 120 次 · 小时已用 37.5%/).waitFor();
+  assert.equal(await page.locator('.composer-quota-button').count(), 0);
+  await quotaChip.click();
   await quotaPanel.getByText('可用').waitFor();
-  await picker.waitFor({ state: 'hidden' });
-  await openExtensions();
-  await quotaCard.getByText('120 次', { exact: true }).waitFor();
+  assert.equal(await page.locator('.file-panel').count(), 0);
   const savedQuota = provider.quota;
   const saveQuota = quota => page.evaluate(quota => window.piApi.addProvider({ providerId: 'qa', quota }), quota);
+  await saveQuota({ ...savedQuota, fields: [{ ...savedQuota.fields[0], label: '¥', path: 'balance', unit: '元' }] });
+  await quotaChip.getByText('余额 22.11 元', { exact: true }).waitFor();
+  const balance = quotaPanel.locator('.quota-featured');
+  await balance.getByText('余额', { exact: true }).waitFor();
+  assert.equal(await balance.locator('dd').innerText(), '22.11 元');
+  assert.equal(await quotaPanel.getByText('¥', { exact: true }).count(), 0);
+  const sidebarDivider = page.getByRole('separator', { name: '调整侧边栏宽度' });
+  const divider = await sidebarDivider.boundingBox();
+  const popover = await quotaPanel.boundingBox();
+  const overlap = { x: divider.x + divider.width / 2, y: popover.y + 20 };
+  assert.ok(overlap.x > popover.x && overlap.x < popover.x + popover.width, 'the quota popover straddles the divider');
+  for (const theme of ['light', 'dark']) {
+    await page.evaluate(theme => { document.documentElement.dataset.theme = theme; }, theme);
+    const backgrounds = await quotaPanel.evaluate(node => {
+      const app = node.closest('.app');
+      const original = app.classList.contains('has-custom-background');
+      const initial = getComputedStyle(node).backgroundColor;
+      app.classList.add('has-custom-background');
+      const withWallpaper = getComputedStyle(node).backgroundColor;
+      app.classList.toggle('has-custom-background', original);
+      return [initial, withWallpaper];
+    });
+    assert.deepEqual(backgrounds, [settingsDialogBackgrounds[theme], settingsDialogBackgrounds[theme]]);
+    await page.mouse.move(overlap.x, overlap.y);
+    assert.ok(await quotaPanel.evaluate((el, { x, y }) => el.contains(document.elementFromPoint(x, y)), overlap),
+      'the quota popover receives pointer events on top of the sidebar divider');
+    await page.mouse.click(overlap.x, overlap.y);
+    assert.equal(await quotaChip.getAttribute('aria-expanded'), 'true');
+    await quotaPanel.screenshot({ path: fileURLToPath(new URL(`balance-${theme}.png`, output)) });
+  }
+  await saveQuota({ ...savedQuota, fields: [{ ...savedQuota.fields[0], label: '¥', path: 'balance', unit: '' }] });
+  await quotaChip.getByText('余额 ¥22.11', { exact: true }).waitFor();
+  await saveQuota({ ...savedQuota, fields: [{ ...savedQuota.fields[0], label: '余额', path: 'balance', unit: '¥' }] });
+  await balance.getByText('¥22.11', { exact: true }).waitFor();
+  await saveQuota({ ...savedQuota, fields: [{ ...savedQuota.fields[0], path: 'missing' }] });
+  await quotaPanel.getByText('未返回此字段', { exact: true }).waitFor();
+  assert.equal(await quotaPanel.locator('.quota-featured').count(), 0);
+  await quotaPanel.screenshot({ path: fileURLToPath(new URL('unmapped.png', output)) });
+  await saveQuota(savedQuota);
+  await quotaPanel.getByText('120 次', { exact: true }).waitFor();
+  assert.equal(await quotaPanel.getByRole('progressbar', { name: '小时已用' }).getAttribute('value'), '37.5');
+  await quotaPanel.screenshot({ path: fileURLToPath(new URL('usage-windows.png', output)) });
   const beforeLiveUpdate = reads;
   await saveQuota({ ...savedQuota, fields: savedQuota.fields.map((field, index) => index === 0
     ? { ...field, label: '短周期额度', path: 'usage.hour.used', format: 'fraction', unit: '' } : field) });
-  await quotaCard.getByText('短周期额度', { exact: true }).waitFor();
+  await quotaChip.getByText(/短周期额度 37.5% · 小时已用 37.5%/).waitFor();
   await quotaPanel.getByText('短周期额度', { exact: true }).waitFor();
-  assert.equal(await quotaCard.getByText('37.5%', { exact: true }).count(), 2);
   assert.equal(await quotaPanel.getByText('120 次', { exact: true }).count(), 0);
   assert.equal(reads, beforeLiveUpdate + 1, 'visible quota surfaces share one new read after the commit');
   await saveQuota(savedQuota);
-  await quotaCard.getByText('120 次', { exact: true }).waitFor();
+  await quotaChip.getByText(/每周剩余 120 次/).waitFor();
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: '收起右侧面板', exact: true }).click();
+  await quotaPanel.waitFor({state:'detached'});
+  assert.ok(await quotaChip.evaluate(node => document.activeElement === node && getComputedStyle(node).outlineStyle === 'none'),
+    'Escape quietly restores the pointer-opened quota chip');
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Shift+Tab');
+  assert.ok(await quotaChip.evaluate(node => document.activeElement === node && getComputedStyle(node).outlineStyle === 'solid'),
+    'keyboard navigation immediately restores a visible focus ring');
+  await page.keyboard.press('Enter');
+  await quotaPanel.waitFor();
+  await page.keyboard.press('Escape');
+  await quotaPanel.waitFor({state:'detached'});
+  assert.ok(await quotaChip.evaluate(node => document.activeElement === node && getComputedStyle(node).outlineStyle === 'solid'),
+    'a keyboard-opened panel keeps keyboard focus visible on return');
+  await page.mouse.move(overlap.x, overlap.y);
+  await page.mouse.down();
+  await page.mouse.move(overlap.x + 16, overlap.y);
+  assert.ok(Math.abs((await sidebarDivider.boundingBox()).x - divider.x - 16) < 1, 'the same point resizes the sidebar once the popover closes');
+  await page.mouse.move(overlap.x, overlap.y);
+  await page.mouse.up();
   await page.evaluate(() => window.__settingsResourcesQa.openSecondSession());
   await page.locator('.model-label').getByText('第二来源模型').waitFor();
-  await openExtensions();
-  assert.equal(await quotaCard.count(), 0);
+  assert.equal(await quotaChip.count(), 0);
+  await page.evaluate(() => sessionStorage.setItem('qa:quota-placement', 'hidden'));
+  await page.reload();
+  await page.locator('.composer-editor').waitFor();
+  assert.equal(await quotaChip.count(), 0);
+  await page.evaluate(() => sessionStorage.removeItem('qa:quota-placement'));
   await page.reload();
   await page.locator('.session-row').filter({ hasText: '性能会话 0000' }).click();
   await page.locator('.model-label').getByText('当前会话模型').waitFor();
-  await openExtensions();
-  await quotaCard.getByText('120 次', { exact: true }).waitFor();
-  await quotaCard.getByText('37.5%', { exact: true }).waitFor();
-  await page.keyboard.press('Escape');
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await quotaChip.getByText(/每周剩余 120 次 · 小时已用 37.5%/).waitFor();
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '设置', exact: true }).click();
   await nav.getByRole('button', { name: '模型配置', exact: true }).click();
-  await edit.click();
+  await openEditor();
   assert.equal(await group(1).getByLabel('返回字段路径').inputValue(), 'usage.week.remaining');
   await editor.getByLabel('额度接口（GET）').fill(endpoint + '/authorization');
   await editor.getByRole('button', { name: '额度接口认证' }).click();
@@ -485,15 +553,15 @@ try {
   await editor.waitFor({ state: 'detached' });
   assert.equal(provider.quota.auth, 'authorization');
   assert.deepEqual(provider.quota.headers, [{ name: 'anthropic-version', value: '2023-06-01' }]);
-  await nav.getByRole('button', { name: '返回对话' }).click();
-  await openExtensions();
-  await quotaCard.getByText('生效', { exact: true }).waitFor();
-  assert.deepEqual(await quotaCard.locator('dt').allTextContents(), ['小时额度', '套餐状态']);
-  assert.deepEqual(await quotaCard.locator('dd').allTextContents(), ['37.5%', '生效']);
+  await page.locator('[data-sidebar-section="conversations"]').click();
+  await quotaChip.getByText(/小时额度 37.5% · 套餐状态 生效/).waitFor();
+  await quotaChip.click();
+  await quotaPanel.getByText('生效', { exact: true }).waitFor();
+  await page.screenshot({path: fileURLToPath(new URL('statusbar-quota.png', output))});
   await page.keyboard.press('Escape');
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '设置', exact: true }).click();
   await nav.getByRole('button', { name: '模型配置', exact: true }).click();
-  await edit.click();
+  await openEditor();
   assert.match(await editor.getByRole('button', { name: '额度接口认证' }).innerText(), /原始 Authorization/);
   assert.equal(await editor.getByRole('textbox', { name: '附加请求头 1 的值' }).inputValue(), '2023-06-01');
   await editor.getByRole('button', { name: '读取接口字段' }).click();
@@ -535,28 +603,30 @@ try {
   assert.equal(await quotaButton.count(), 0);
   await page.keyboard.press('Escape');
   const before = reads;
-  await nav.getByRole('button', { name: '返回对话' }).click();
-  await openExtensions();
-  assert.equal(await quotaCard.count(), 0);
+  await page.locator('[data-sidebar-section="conversations"]').click();
+  assert.equal(await quotaChip.count(), 0);
   assert.equal(reads, before);
   // A saved, enabled source still needs the extension to expose any quota UI.
   provider.quota = { ...provider.quota, enabled: true };
   await page.evaluate(() => localStorage.setItem('quota-extension', 'off'));
   await page.reload();
   await page.locator('.session-row').first().click();
-  await openExtensions();
-  assert.equal(await quotaCard.count(), 0);
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  assert.equal(await quotaChip.count(), 0);
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '设置', exact: true }).click();
   await nav.getByRole('button', { name: '模型配置', exact: true }).click();
   await more.click();
   assert.equal(await quotaButton.count(), 0);
   await page.keyboard.press('Escape');
-  await edit.click();
+  await openEditor();
   await editor.getByLabel('显示名称', { exact: true }).waitFor();
   assert.equal(await toggle.count(), 0);
   assert.equal(reads, before);
   assert.deepEqual(errors, []);
   console.log('350-model directory, quota mapping, stale/auth/retry, saved preferences, keyboard focus and existing extension verified.');
+} catch (error) {
+  const page = browser?.contexts()[0]?.pages()[0];
+  if (page) await page.screenshot({path:fileURLToPath(new URL('failure.png', output))});
+  throw error;
 } finally {
   await browser?.close();
   quotaApi.closeAllConnections();

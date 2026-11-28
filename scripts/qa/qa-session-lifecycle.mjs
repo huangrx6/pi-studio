@@ -1,4 +1,5 @@
 // Production Electron, preload, SQLite, Durable, todo tools and renderer. Only model replies are scripted.
+import { openSessionInspection } from './fixtures/open-session-inspection.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -18,7 +19,7 @@ const clearedAfterMs = {};
 const pageErrors = [];
 let app, page;
 const button = name => page.getByRole('button', { name, exact: true });
-const panel = () => page.locator('.file-panel .conversation-progress');
+const panel = () => page.locator('.inspection-card .conversation-progress');
 const taskPage = () => page.getByRole('region', { name: '本会话全部任务' });
 
 async function launch() {
@@ -27,7 +28,8 @@ async function launch() {
 }
 
 async function openProgress() {
-  if (!await panel().isVisible()) await button('进展').click();
+  const card = await openSessionInspection(page);
+  await card.getByRole('tab', { name: '进展', exact: true }).click();
   if (await button('返回进展').isVisible()) await button('返回进展').click();
   await panel().getByRole('button', { name: '查看全部任务' }).waitFor();
 }
@@ -41,6 +43,13 @@ async function start(tag) {
   await page.locator('.composer-editor').fill(tag);
   await button('发送消息').click();
   await runTodo(tag, { action: 'createMany', items: [{ subject: tag + ' 第一项' }, { subject: tag + ' 第二项' }] });
+  if (tag === 'QA-DONE') {
+    const compact = page.locator('.transcript-viewport .inspection-card[data-mode="compact"]');
+    await compact.getByText('0/2 项完成').waitFor();
+    assert.equal(await page.locator('.file-panel, .header-inspector-entry').count(), 0);
+    await page.screenshot({ path: path.join(output, 'inspection-created.png') });
+    await compact.getByRole('button', { name: '展开会话详情' }).click();
+  }
   await panel().getByText(tag + ' 第一项', { exact: true }).waitFor();
   await panel().getByText(tag + ' 第二项', { exact: true }).waitFor();
   await model.wait(tag);
@@ -76,6 +85,9 @@ async function ended(id) {
 async function verifyHistory(id, expected) {
   await panel().getByRole('button', { name: '查看全部任务' }).click();
   await taskPage().locator('li').first().waitFor();
+  for (const group of await taskPage().locator('.session-tasks-disclosure').all()) {
+    if (await group.getAttribute('aria-expanded') === 'false') await group.click();
+  }
   const plans = await page.evaluate(async id => (await window.piApi.conversationTodoHistory({ id })).items, id);
   assert.ok(plans.every(plan => plan.conversationId === id && plan.lifecycle === 'ended' && plan.scope === 'turn'));
   assert.equal(new Set(plans.map(plan => plan.turnId)).size, Object.keys(expected).length);
@@ -108,7 +120,8 @@ try {
     return [a.id, b.id];
   }, workspace);
   const expectedA = {}, expectedB = {};
-  await select(a);
+  await selectTestSession(page, workspace, a);
+  assert.equal(await page.locator('.inspection-card').count(), 0);
   for (const [tag, first] of [['QA-DONE', 1], ['QA-MISSED', 3], ['QA-STOP', 5], ['QA-FAIL', 7]]) {
     console.log('Running', tag);
     await start(tag);
@@ -145,16 +158,44 @@ try {
   await ended(b);
   expectedB['QA-SWITCH'] = ['completed', 'pending'];
   const beforeB = await verifyHistory(b, expectedB);
+  await button('移动会话浮卡').press('Shift+ArrowLeft');
+  const card = () => page.getByRole('complementary', { name: '会话详情', exact: true });
+  const original = await card().boundingBox();
+  await button('调整会话浮卡大小').press('Shift+ArrowLeft');
+  await button('调整会话浮卡大小').press('ArrowDown');
+  const custom = await card().boundingBox();
+  assert.equal(custom.width, original.width + 32);
+  assert.equal(custom.height, original.height + 8);
+  await button('放大会话详情').click();
+  await page.waitForFunction(async ({ id, width, height }) => {
+    const saved = await window.piApi.readLayout('conversation:' + id, 'inspector');
+    return saved?.mode === 'expanded' && saved.maximized && saved.position?.right === 32
+      && saved.size?.width === width && saved.size?.height === height;
+  }, { id: b, width: custom.width, height: custom.height });
   report.push('会话快速切换及后台完成');
 
   await app.close();
   await launch();
   for (const [id, expected, previous] of [[a, expectedA, beforeA], [b, expectedB, beforeB]]) {
-    await select(id);
+    await selectTestSession(page, workspace, id);
+    await button('收起会话详情').waitFor();
+    if (id === b) {
+      await button('还原会话详情大小').waitFor();
+      assert.deepEqual(await card().boundingBox(), await page.locator('.inspection-stage').boundingBox());
+      await button('还原会话详情大小').click();
+      await page.waitForFunction(() => document.querySelector('.inspection-card')?.style.right === '32px');
+      const restored = await card().boundingBox();
+      assert.equal(restored.width, custom.width);
+      assert.equal(restored.height, custom.height);
+    } else {
+      await button('放大会话详情').waitFor();
+      assert.equal(await card().getAttribute('data-sized'), null);
+    }
+    await openProgress();
     await ended(id);
     assert.deepEqual(await verifyHistory(id, expected), previous, 'Persisted plan identity and states after restart');
   }
-  report.push('空闲时重启恢复');
+  report.push('空闲时重启恢复清单及各会话浮卡的尺寸、位置和放大状态');
 
   const resumedTag = 'QA-RESTART';
   await start(resumedTag);

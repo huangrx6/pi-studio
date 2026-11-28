@@ -2,7 +2,7 @@
   "format": 1,
   "id": "studio.notes-library",
   "name": "知识库",
-  "version": "1.3.0",
+  "version": "1.4.1",
   "author": "Pi Studio",
   "publisher": "Pi Studio",
   "license": "MIT",
@@ -22,8 +22,8 @@
       "title": "知识库",
       "description": "打开本地 PARA 目录，阅读和编辑 Markdown 或 HTML。",
       "icon": "book-open",
-      "slot": "panel.side",
-      "view": { "entry": "ui/index.html", "sourceId": "library-data", "scope": "global", "fullscreen": true }
+      "slot": "tool.view",
+      "view": { "entry": "ui/index.html", "sourceId": "library-data", "scope": "global" }
     }],
     "dataSources": [{ "id": "library-data", "title": "本地知识库" }],
     "commands": [{

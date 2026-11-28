@@ -33,6 +33,7 @@ test('the notes plugin binds an existing directory, preserves source files and e
   const provider = active.dataSources['library-data'];
   const call = (method, args) => provider.invoke({}, method, args);
   assert.equal(provider.read().viewData.library, null);
+  assert.equal(provider.read().viewData.appearance.theme, 'studio');
   const selected = await call('chooseDirectory');
   assert.equal(selected.library.name, 'notes');
   assert.ok(!JSON.stringify(selected).includes(vault));

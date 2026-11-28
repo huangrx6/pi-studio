@@ -1,7 +1,9 @@
 const { ipcMain } = require('electron');
-const { temporaryModel, temporaryPrompt, stopTemporary, closeTemporary, closeOwner } = require('../services/temporary-chat.cjs');
+const { temporaryHistory, temporaryRead, temporaryModel, temporaryPrompt, stopTemporary, closeTemporary, closeOwner } = require('../services/temporary-chat.cjs');
 function registerTemporaryChatIpc() {
   const owners = new Set();
+  ipcMain.handle('pi:temporary-history', () => temporaryHistory());
+  ipcMain.handle('pi:temporary-read', (_event, id) => temporaryRead(id));
   ipcMain.handle('pi:temporary-model', (_event, payload) => temporaryModel(payload));
   ipcMain.handle('pi:temporary-prompt', async (event, payload) => {
     const owner = event.sender.id;

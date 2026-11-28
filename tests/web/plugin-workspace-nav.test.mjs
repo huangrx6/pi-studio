@@ -25,7 +25,7 @@ function loadConfig() {
       if (id.endsWith('.png') || id.endsWith('.css')) return 'data:image/png;base64,';
       if (id === 'react/jsx-runtime' || id === 'react/jsx-dev-runtime') return require(id);
       if (id === 'react') return require('react');
-      if (id === 'lucide-react') {
+      if (id === 'lucide-react' || id === '../features/git/git-icons') {
         return new Proxy({}, { get: () => () => null });
       }
       return require(id);
@@ -38,9 +38,14 @@ function loadConfig() {
 
 const mod = loadConfig();
 
-test('settingsPages only keep plugins under 资源与扩展 primitives', () => {
+test('settingsPages group plugins, browser, and desktop-control under 插件与扩展 while keeping mcp/skills/extensions inside hub', () => {
   const ids = mod.settingsPages.map((page) => page.id);
   assert.ok(ids.includes('plugins'));
+  assert.ok(ids.includes('browser'));
+  assert.ok(ids.includes('desktop-control'));
+  assert.equal(mod.settingsPages.find((page) => page.id === 'plugins')?.group, '插件与扩展');
+  assert.equal(mod.settingsPages.find((page) => page.id === 'browser')?.group, '插件与扩展');
+  assert.equal(mod.settingsPages.find((page) => page.id === 'desktop-control')?.group, '插件与扩展');
   assert.equal(ids.includes('extensions'), false);
   assert.equal(ids.includes('mcp'), false);
   assert.equal(ids.includes('skills'), false);

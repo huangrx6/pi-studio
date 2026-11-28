@@ -35,3 +35,61 @@ test('archived titles cannot create matches and empty workspaces only survive un
   assert.deepEqual(filterSidebarWorkspaces(workspaces, 'empty', 'running'), []);
   assert.deepEqual(filterSidebarWorkspaces([], '', 'all'), []);
 });
+
+test('checkout groups keep the exact execution directory and display the main tree first', async () => {
+  const { groupSidebarProjects, sidebarProjectKey } = await import('../../web/src/shell/sidebar-projects.ts');
+  const main = { cwd: '/repo', name: '我的项目', worktree: { projectRoot: '/repo', branch: 'main', main: true } };
+  const secondary = { cwd: '/w/fix', name: 'fix', worktree: { projectRoot: '/repo', branch: 'feat/search', main: false } };
+  const folder = { cwd: '/notes', name: '笔记' };
+  const groups = groupSidebarProjects([secondary, folder, main]);
+  assert.deepEqual(groups.map(group => [group.name, group.nested, group.workspaces.map(item => item.cwd)]), [
+    ['我的项目', true, ['/repo', '/w/fix']], ['笔记', false, ['/notes']],
+  ]);
+  assert.equal(groups[0].key, sidebarProjectKey('/repo'));
+  for (const workspace of [main, secondary]) {
+    const [solo] = groupSidebarProjects([workspace]);
+    assert.equal(solo.nested, true);
+    assert.equal(solo.key, sidebarProjectKey('/repo'));
+    assert.deepEqual(solo.workspaces, [workspace]);
+  }
+  assert.equal(groupSidebarProjects([secondary])[0].name, 'repo');
+  assert.equal(groupSidebarProjects([{ ...secondary, name: '我的修复分支' }])[0].name, 'repo');
+  assert.deepEqual(filterSidebarWorkspaces([secondary, main].map(item => ({ ...item, sessions: [] })), 'feat/search', 'all').map(item => item.cwd), ['/w/fix']);
+});
+
+test('a filtered project retains its registered worktree hierarchy and main display name', async () => {
+  const { groupSidebarProjects } = await import('../../web/src/shell/sidebar-projects.ts');
+  const main = { cwd: '/repo', name: '设计工具', worktree: { projectRoot: '/repo', branch: 'dev', main: true }, sessions: [] };
+  const other = { cwd: '/w/fix', name: 'fix', worktree: { projectRoot: '/repo', branch: 'fix', main: false },
+    sessions: [{ title: '按钮对齐' }, { title: '检查构建' }] };
+  const solo = { cwd: '/docs', name: '文档', worktree: { projectRoot: '/docs', branch: 'main', main: true }, sessions: [] };
+  const all = [other, solo, main];
+  const visible = filterSidebarWorkspaces(all, '按钮', 'all');
+  const [group] = groupSidebarProjects(all, visible);
+  assert.equal(group.name, main.name);
+  assert.equal(group.nested, true);
+  assert.deepEqual(group.workspaces, [visible[0]]);
+  assert.deepEqual(group.workspaces[0].sessions, [other.sessions[0]]);
+  assert.deepEqual(groupSidebarProjects(all, []), []);
+});
+
+test('switching branches updates the worktree label while keeping its project, directory and sessions', async () => {
+  const { groupSidebarProjects, workspaceRowTitle } = await import('../../web/src/shell/sidebar-projects.ts');
+  const cwd = '/work/notes';
+  const sessions = [{ title: '索引测试' }];
+  const describe = branch => groupSidebarProjects([{ cwd, name: '笔记', sessions, worktree: { projectRoot: cwd, main: true, branch, detached: false } }])[0];
+  const dev = describe('dev'), main = describe('main');
+  assert.equal(dev.key, main.key);
+  const [tree] = main.workspaces;
+  assert.equal(tree.cwd, cwd);
+  assert.equal(tree.sessions, sessions);
+  assert.equal(workspaceRowTitle(tree), '主工作树 · 笔记\n/work/notes\n当前分支 · main');
+  assert.match(workspaceRowTitle({ ...tree, worktree: { ...tree.worktree, detached: true, branch: 'cafe1234' } }), /游离提交 · cafe1234/);
+});
+
+test('team rooms match within their own checkout and do not leak into pinned or running filters', () => {
+  const group = { cwd: '/project', name: 'project', sessions: [], rooms: [{ id: '1', name: '设计评审' }, { id: '2', name: '开发' }] };
+  assert.deepEqual(filterSidebarWorkspaces([group], '评审', 'all')[0].rooms.map(room => room.id), ['1']);
+  assert.deepEqual(filterSidebarWorkspaces([group], '', 'running'), []);
+  assert.deepEqual(filterSidebarWorkspaces([group], '', 'pinned'), []);
+});

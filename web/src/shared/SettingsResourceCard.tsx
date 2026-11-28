@@ -66,23 +66,3 @@ export function SettingsResourceCardIcon({
     {children}
   </span>;
 }
-
-export function SettingsResourceCardBody({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return <div className={classes('settings-resource-card-body', className)}>{children}</div>;
-}
-
-export function SettingsResourceCardFooter({
-  children,
-  className,
-}: {
-  children: ReactNode;
-  className?: string;
-}) {
-  return <footer className={classes('settings-resource-card-footer', className)}>{children}</footer>;
-}

@@ -24,7 +24,7 @@ const { ExtensionDetailDialog } = compile('../../web/src/features/extensions/Ext
   '../../shared/plugin-ownership.ts': compile('../../web/src/shared/plugin-ownership.ts'),
   '../../shared/PackageIcon': compile('../../web/src/shared/PackageIcon.tsx'),
   '../../shared/SettingsToast': { SettingsToast: ({ message, children }) => React.createElement('aside', null, message, children) },
-  '../../shared/DetailDialog': { DetailDialog: ({ children }) => React.createElement('section', null, children) },
+  '../../shared/DetailDialog': { DetailDialog: ({ children, onClose }) => React.createElement('section', null, typeof children === 'function' ? children(onClose) : children) },
 });
 const item = {
   id: 'qa.extension', name: '扩展详情测试', version: '1.2.3', source: '/workspace/project/.pi-studio/extensions/qa',
@@ -40,7 +40,12 @@ const item = {
 const props = overrides => ({ item, busy: false, refreshError: null, refreshing: false, onRefresh() {},
   onClose() {}, onTrust() {}, onRollback() {}, onToggle() {}, onDelete() {}, onOpenPlugins() {}, ...overrides });
 const render = overrides => renderToStaticMarkup(React.createElement(ExtensionDetailDialog, props(overrides)));
-const nodes = value => !value || typeof value !== 'object' ? [] : [value, ...[value.props?.children].flat(Infinity).flatMap(nodes)];
+const nodes = value => {
+  if (!value || typeof value !== 'object') return [];
+  const raw = value.props?.children;
+  const children = typeof raw === 'function' ? raw(value.props?.onClose ?? (() => {})) : raw;
+  return [value, ...[children].flat(Infinity).flatMap(nodes)];
+};
 
 test('empty permissions never imply safe declarative-only execution and trust essentials remain visible', () => {
   const html = render();
@@ -96,4 +101,61 @@ test('plugin-managed extensions provide a route to plugins in place of uninstall
   assert.equal(manage.props.disabled, false);
   manage.props.onClick();
   assert.ok(navigated);
+});
+
+test('extension detail renders contributed tools, commands, panels, and builtin settings link', () => {
+  const browserExt = {
+    ...item,
+    id: 'builtin:studio-browser-tools',
+    name: 'Studio 浏览器',
+    scope: 'builtin',
+    tier: 'system',
+    trusted: true,
+    available: true,
+    blockedReason: '',
+    canRemove: false,
+    manifest: {
+      description: '在工作台内嵌浏览器中打开、阅读并受控操作网页。',
+      permissions: ['agent.tools'],
+      author: 'Pi Studio',
+      contributes: {
+        tools: [
+          { name: 'browser_open', description: '在工作台的浏览器中打开网页。' },
+          { name: 'browser_click', description: '点击快照中指定的网页元素。' },
+        ],
+        commands: [
+          { id: 'browser', title: '打开浏览器', description: '打开内置工作台浏览器。' },
+        ],
+        panels: [
+          { id: 'browser-view', title: '浏览器面板', description: '实时网页视图', slot: 'tool.view' },
+        ],
+      },
+    },
+  };
+  const html = render({ item: browserExt, onOpenSettingsPage() {} });
+  assert.match(html, /提供的能力/);
+  assert.match(html, /2 个工具 · 1 个命令 · 1 个面板/);
+  assert.match(html, /<code>browser_open<\/code>/);
+  assert.match(html, /在工作台的浏览器中打开网页。/);
+  assert.match(html, /<code>\/browser<\/code>/);
+  assert.match(html, /工具面板视图/);
+  assert.match(html, /打开浏览器设置/);
+
+  let openedTab = null;
+  const tree = ExtensionDetailDialog(props({ item: browserExt, onOpenSettingsPage: tab => { openedTab = tab; } }));
+  const btn = nodes(tree).filter(node => node.type === 'button').find(node => [node.props.children].flat().includes('打开浏览器设置'));
+  assert.ok(btn);
+  btn.props.onClick();
+  assert.equal(openedTab, 'browser');
+});
+
+test('detail labels distinguish composer summaries and status bar details', () => {
+  const html = render({item: {...item, manifest: {...item.manifest, contributes: {panels: [
+    {id: 'above', title: '置顶读数', slot: 'composer.above'},
+    {id: 'below', title: '底部读数', slot: 'composer.below'},
+    {id: 'detail', title: '指标详情', slot: 'status.detail'},
+  ]}}}});
+  assert.equal((html.match(/>会话摘要</g) || []).length, 2);
+  assert.match(html, />状态栏详情</);
+  assert.doesNotMatch(html, />工具面板视图</);
 });

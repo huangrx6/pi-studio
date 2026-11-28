@@ -1,0 +1,167 @@
+.plan-calendar {
+  display: grid;
+  grid-template-columns: minmax(0, 2.5fr) minmax(192px, 1fr);
+  align-items: stretch;
+  padding: var(--space-6) 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-panel);
+  background: var(--surface-raised);
+}
+.plan-calendar-week { min-width: 0; padding-inline: var(--space-6); }
+.plan-calendar-header, .plan-calendar-header nav { display: flex; align-items: center; gap: var(--space-2); }
+.plan-calendar-header { flex-wrap: wrap; justify-content: space-between; }
+.plan-calendar-header h2 {
+  margin: 0;
+  font-size: var(--text-subtitle);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+.plan-calendar-header nav { gap: var(--space-1); }
+.plan-today {
+  height: var(--icon-button);
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-control);
+  color: var(--text-2);
+  font-size: var(--text-description);
+}
+.plan-today:hover { background: var(--surface-hover); color: var(--text); }
+.plan-date-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: var(--space-1);
+  margin-top: var(--space-3);
+}
+.plan-date-strip button {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--space-1);
+  min-width: 0;
+  min-height: 76px;
+  padding: 0 0 var(--space-2);
+  border-radius: var(--radius-control);
+  font-variant-numeric: tabular-nums;
+}
+.plan-date-strip button > span { color: var(--text-2); font-size: var(--text-description); }
+.plan-date-strip button > strong {
+  position: relative;
+  font-size: var(--text-heading);
+  font-weight: var(--weight-regular);
+  line-height: var(--leading-tight);
+}
+.plan-date-strip button:hover { background: var(--tint-neutral); }
+.plan-date-strip button:is([aria-pressed="true"], [aria-current="date"])::after {
+  content: '';
+  position: absolute;
+  bottom: var(--space-2);
+  width: var(--space-4);
+  height: 2px;
+  border-radius: var(--radius-round);
+  background: var(--text-2);
+}
+.plan-date-strip button[aria-pressed="true"]::after { background: var(--accent); }
+.plan-date-mark {
+  position: absolute;
+  top: 0;
+  inset-inline-start: calc(100% + 3px);
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--text-2);
+}
+.plan-date-mark.mark-failed { background: var(--error); }
+.plan-date-mark.mark-cancelled { background: var(--text-3); }
+.plan-upcoming {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--space-2);
+  min-width: 0;
+  padding-inline: var(--space-6);
+  border-inline-start: 1px solid var(--border);
+}
+.plan-upcoming h2 { margin: 0; color: var(--text-2); font-size: var(--text-subtitle); font-weight: var(--weight-medium); }
+.plan-upcoming button { display: grid; justify-items: start; gap: var(--space-2); max-width: 100%; padding: 0; text-align: start; }
+.plan-upcoming-time, .plan-upcoming-empty {
+  margin: 0;
+  font-size: clamp(var(--text-metric), 6cqi, calc(2 * var(--text-metric)));
+  font-weight: var(--weight-regular);
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: -0.045em;
+  line-height: 1;
+}
+.plan-upcoming-empty { color: var(--text-3); }
+.plan-upcoming-caption {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  min-width: 0;
+  font-size: var(--text-description);
+  line-height: var(--leading-normal);
+}
+.plan-upcoming-caption > :first-child { color: var(--text-2); }
+.plan-upcoming-name { overflow-wrap: anywhere; }
+.plan-upcoming button:hover .plan-upcoming-name { text-decoration: underline; text-underline-offset: 3px; }
+
+.plan-day-layout { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(272px, 1fr); gap: var(--space-10); align-items: start; }
+.plan-day-empty { display: grid; align-items: center; }
+.plan-hour-ruler, .plan-empty-note { grid-area: 1 / 1; }
+.plan-hour-ruler {
+  display: grid;
+  align-content: space-between;
+  min-height: 176px;
+  color: var(--text-2);
+  font-size: var(--text-caption);
+  font-variant-numeric: tabular-nums;
+}
+.plan-hour-ruler > span { display: flex; align-items: center; gap: var(--space-3); }
+.plan-hour-ruler > span::after { content: ''; flex: 1; height: 1px; background: var(--divider); }
+.plan-empty-note {
+  justify-self: center;
+  margin: 0;
+  margin-inline-start: var(--space-10);
+  color: var(--text-2);
+  font-size: var(--text-description);
+}
+.plan-day-list { list-style: none; padding: 0; margin: 0; }
+.plan-day-list li { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: var(--space-4); }
+.plan-day-list li + li { border-top: 1px solid var(--divider); }
+.plan-day-list time { color: var(--text-2); font-variant-numeric: tabular-nums; font-size: var(--text-caption); }
+.plan-day-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: var(--space-1) var(--space-2);
+  padding: var(--space-4) 0;
+  text-align: start;
+}
+.plan-day-item strong { overflow-wrap: anywhere; font-size: var(--text-label); font-weight: var(--weight-medium); }
+.plan-day-item:hover strong { text-decoration: underline; text-underline-offset: 3px; }
+.plan-day-item small { grid-row: 2; overflow-wrap: anywhere; color: var(--text-2); font-size: var(--text-description); }
+.plan-day-item .plan-state { grid-column: 2; grid-row: 1; }
+
+@container plans (max-width: 700px) {
+  .plan-day-layout { grid-template-columns: minmax(0, 1fr); gap: var(--space-8); }
+  .plan-calendar { grid-template-columns: minmax(0, 2fr) minmax(160px, 1fr); padding-block: var(--space-4); }
+  .plan-calendar-week, .plan-upcoming { padding-inline: var(--space-4); }
+}
+@container plans (max-width: 520px) {
+  .plan-calendar { grid-template-columns: minmax(0, 1fr); gap: var(--space-4); padding: var(--space-4); }
+  .plan-calendar-week { padding: 0; }
+  .plan-upcoming {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    justify-content: start;
+    gap: var(--space-4);
+    padding: var(--space-4) 0 0;
+    border: 0;
+    border-top: 1px solid var(--divider);
+  }
+  .plan-upcoming button { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); }
+  .plan-upcoming-empty { font-size: var(--text-metric); }
+  .plan-date-strip { gap: 0; }
+}

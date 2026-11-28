@@ -248,7 +248,8 @@
                   "status.chip",
                   "composer.above",
                   "composer.below",
-                  "panel.side"
+                  "tool.view",
+                  "status.detail"
                 ]
               },
               "slots": {
@@ -325,9 +326,6 @@
                       "session",
                       "global"
                     ]
-                  },
-                  "fullscreen": {
-                    "type": "boolean"
                   }
                 }
               }
@@ -355,7 +353,10 @@
               ],
               "properties": {
                 "slot": {
-                  "const": "panel.side"
+                  "enum": [
+                    "tool.view",
+                    "status.detail"
+                  ]
                 },
                 "content": {
                   "maxItems": 0

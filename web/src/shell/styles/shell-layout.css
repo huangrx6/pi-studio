@@ -1,14 +1,19 @@
 /* Shared window geometry. The outer frame supplies the chrome and wallpaper. */
 .app {
   --sidebar-w: clamp(var(--sidebar-min-width), var(--sidebar-preferred-width), var(--sidebar-max-width));
+  --workbench-bottom-inset: var(--space-5);
+  --titlebar-toggle-size: var(--icon-button-lg);
+  --titlebar-toggle-space: calc(var(--titlebar-toggle-size) + 2 * var(--space-2));
   display: grid;
   grid-template: minmax(0, 1fr) / auto minmax(0, 1fr);
 }
 
+.app.has-custom-background { --workbench-bottom-inset: var(--space-4); }
+
 .settings-overlay {
-  grid-area: 1 / 1 / -1 / -1;
+  grid-area: 1 / 2;
   display: grid;
-  grid-template: minmax(0, 1fr) / subgrid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   animation: pi-settings-overlay-in var(--motion-enter) both;
 }
 
@@ -56,11 +61,10 @@
 
 /* An exposed canvas edge gets the same gutter as the opposite edge. The wallpaper
  * backing follows the visible canvas, including when settings covers the workbench. */
-.app.is-sidebar-collapsed,
-.app.is-panel-fullscreen:not(:has(> .settings-overlay)) {
+.app.is-sidebar-collapsed {
   --canvas-start-gutter: var(--content-gutter);
 }
-.content-region, .app.is-wallpaper-inside::before {
+.content-region, .app > .tool-panel-anchor, .app.is-wallpaper-inside::before {
   grid-area: 1 / 2;
   margin-block: var(--header-height) var(--content-gutter);
   margin-inline: var(--canvas-start-gutter, 0px) var(--content-gutter);
@@ -74,6 +78,14 @@
   grid-template-rows: minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
+}
+
+.app > .tool-panel-anchor {
+  pointer-events: none;
+}
+
+.content-region:has(> .main:not(.is-new-conversation) > .composer-dock > .extension-summaries) {
+  --workbench-bottom-inset: var(--space-1);
 }
 
 /* Explicit end lines keep the absolute header inside the canvas column as the workbench resizes. */
@@ -90,7 +102,91 @@
   background: var(--canvas-surface, var(--surface-canvas));
 }
 
-.settings-overlay > .content-region { container: main-pane / inline-size; }
+.content-region:has(> .file-panel:not(.is-overlay)) > .shell-canvas {
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.content-region > .file-panel {
+  position: relative;
+  grid-area: 1 / 2;
+  width: var(--panel-w);
+  min-height: 0;
+  border-start-end-radius: var(--radius-panel);
+  border-end-end-radius: var(--radius-panel);
+  background: var(--canvas-surface, var(--surface-canvas));
+}
+
+/* Clip panel content separately so the resize grip can straddle the divider. */
+.file-panel-inner {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  container: file-panel / inline-size;
+  overflow: clip;
+  border-radius: inherit;
+}
+
+.file-panel:not(.is-overlay) > .file-panel-inner {
+  border-inline-start: 1px solid var(--border);
+}
+
+.content-region > .file-panel-backdrop {
+  position: absolute;
+  inset: calc(-1 * var(--header-height)) 0 0;
+  z-index: 19;
+  background: var(--scrim);
+  cursor: default;
+}
+
+.content-region > .file-panel.is-overlay {
+  --canvas-surface: var(--surface-floating);
+  position: absolute;
+  inset: 0 0 0 auto;
+  grid-area: 1 / 1 / -1 / -1;
+  z-index: 20;
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-drawer);
+}
+
+.file-panel > .workspace-side-modes {
+  position: absolute;
+  inset-inline: 0 var(--titlebar-toggle-space);
+  inset-block-end: 100%;
+  height: var(--header-height);
+  padding-inline: var(--space-2);
+  -webkit-app-region: drag;
+}
+.file-panel.is-overlay::before {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 100%;
+  height: var(--header-height);
+  background: var(--surface-floating);
+  pointer-events: none;
+}
+
+.sidebar-top-toggle::after,
+.shell-header .sidebar-expand::after,
+.workspace-side-modes::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 1px;
+  height: 18px;
+  border-radius: var(--radius-round);
+  background: var(--divider);
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+.sidebar-top-toggle::after { inset-inline-end: calc(0px - var(--space-2)); }
+.shell-header .sidebar-expand::after { inset-inline-end: -6px; }
+.workspace-side-modes::before { inset-inline-start: 0; }
+
+.settings-overlay > .content-region { grid-area: 1 / 1; container: main-pane / inline-size; }
+.content-region[hidden] { display: none; }
 
 .content-region > .shell-header {
   position: absolute;
@@ -109,35 +205,67 @@
 }
 
 .app.is-sidebar-collapsed { --shell-header-leading: var(--window-controls-leading, var(--space-6)); }
+.shell-panel-toggle {
+  width: var(--titlebar-toggle-size);
+  height: var(--titlebar-toggle-size);
+  -webkit-app-region: no-drag;
+}
+.shell-panel-toggle > svg { width: var(--icon-md); height: var(--icon-md); pointer-events: none; }
+.content-region > .workspace-panel-toggle {
+  position: absolute;
+  grid-area: 1 / 1 / 2 / -1;
+  inset-block-start: calc((var(--header-height) + var(--titlebar-toggle-size)) / -2);
+  inset-inline-end: var(--space-2);
+  z-index: 21;
+}
+/* Electron hit-tests native drag rectangles independently of DOM stacking. */
+.content-region:has(> .workspace-panel-toggle):not(:has(> .file-panel:not(.is-overlay))) > .shell-header {
+  inset-inline-end: var(--titlebar-toggle-space);
+  padding-inline-end: var(--space-2);
+}
 .app.has-custom-background.is-sidebar-collapsed { --shell-header-leading: var(--space-3); }
 html[data-window-fullscreen='true'] .app.is-sidebar-collapsed { --shell-header-leading: var(--space-6); }
 
-.sidebar-resize-handle {
+.sidebar-resize-handle,
+.panel-resize-handle {
   position: absolute;
-  z-index: 30;
-  top: 0;
-  bottom: 0;
-  left: var(--sidebar-w);
   width: 9px;
-  margin-left: -4px;
   cursor: ew-resize;
+  touch-action: none;
+  user-select: none;
   -webkit-app-region: no-drag;
 }
+.sidebar-resize-handle {
+  grid-row: 1 / 2;
+  inset-block: 0 var(--content-gutter);
+  left: var(--sidebar-w);
+  margin-left: -4px;
+  z-index: 30;
+}
+.panel-resize-handle {
+  inset-block: calc(-1 * var(--header-height)) 0;
+  inset-inline-start: -4px;
+  z-index: 4;
+}
 
-.sidebar-resize-handle::after {
+.sidebar-resize-handle::after,
+.panel-resize-handle::after {
   position: absolute;
-  top: 10%;
-  bottom: 10%;
+  inset-block: 10%;
   left: 4px;
   width: 1px;
   border-radius: var(--radius-round);
-  background: var(--transparent);
+  background: var(--divider);
   content: '';
-  transition: background var(--transition-fast), width var(--transition-fast), left var(--transition-fast);
+  transition: background var(--transition-fast), width var(--transition-fast);
 }
 
-.sidebar-resize-handle:hover::after,
-.sidebar-resize-handle.is-resizing::after { left: 3px; width: 2px; background: var(--accent); }
+:is(.sidebar-resize-handle, .panel-resize-handle):is(:hover, :active, .is-resizing)::after {
+  width: 2px;
+  background: var(--muted);
+}
+.panel-resize-handle:focus-visible { outline: none; }
+.panel-resize-handle:focus-visible::after { background: var(--focus-color); }
 
 .is-sidebar-resizing .shell-sidebar { transition: none; }
 body.is-sidebar-resizing,

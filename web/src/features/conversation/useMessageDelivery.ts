@@ -8,12 +8,10 @@ import type {
 } from '../../types/chat-types';
 import type {
   ConversationPage,
-  ConversationSummary,
 } from '../../types/durable-types';
 import type { ModelSelection } from '../../types/model-types';
 import type {
   DispatchOutcome,
-  PiSessionSummary,
   PiWorkspace,
 } from '../../shell/app-types';
 import { errorText } from '../../shared/error-text';
@@ -64,6 +62,8 @@ export type SessionStateForPersistence = {
 type SessionState = SessionStateForPersistence;
 
 type MessageDeliveryDependencies = {
+  onDraftCreated: (session: {id: string; cwd: string; title: string}) => void;
+  createFromDraft: typeof window.piApi.createConversation;
   session: SessionState;
   sessionRef: MutableRefObject<SessionState>;
   sessionLoadRef: MutableRefObject<number>;
@@ -72,7 +72,6 @@ type MessageDeliveryDependencies = {
   workspaces: PiWorkspace[];
   workspace: string;
   modelSelection: ModelSelection;
-  busy: boolean;
   setBusy: Setter<boolean>;
   setError: Setter<string | null>;
   setRetryInfo: Setter<{ attempt: number; maxAttempts: number; errorMessage?: string } | null>;
@@ -94,7 +93,6 @@ type MessageDeliveryDependencies = {
   setQueuedPromptsBySession: Setter<Record<string, QueuedPrompt[]>>;
   queuedPromptsRef: MutableRefObject<Record<string, QueuedPrompt[]>>;
   queuedDrainSessionsRef: MutableRefObject<Set<string>>;
-  queueAdmissionPendingBySession: Record<string, string>;
   setQueueAdmissionPendingBySession: Setter<Record<string, string>>;
   queueAdmissionPendingRef: MutableRefObject<Record<string, string>>;
   queuedEditContextsRef: MutableRefObject<Record<string, QueuedEditContext>>;
@@ -132,6 +130,7 @@ type MessageDeliveryDependencies = {
 };
 
 export function useMessageDelivery({
+  onDraftCreated, createFromDraft,
   session,
   sessionRef,
   sessionLoadRef,
@@ -139,7 +138,6 @@ export function useMessageDelivery({
   workspaces,
   workspace,
   modelSelection,
-  busy,
   setBusy,
   setError,
   setRetryInfo,
@@ -161,7 +159,6 @@ export function useMessageDelivery({
   setQueuedPromptsBySession,
   queuedPromptsRef,
   queuedDrainSessionsRef,
-  queueAdmissionPendingBySession,
   setQueueAdmissionPendingBySession,
   queueAdmissionPendingRef,
   queuedEditContextsRef,
@@ -837,9 +834,10 @@ export function useMessageDelivery({
       let current = sessionRef.current;
       if (!current) {
         let created;
-        try { created = await window.piApi.createConversation({ cwd: workspace }); }
+        try { created = await createFromDraft({ cwd: workspace }); }
         catch (error) { if (ownsDraft()) setError(errorText(error)); return; }
         if (!ownsDraft()) return;
+        onDraftCreated(created);
         current = { id: created.id, cwd: created.cwd, title: created.title, longTask: created.longTask } as SessionState;
         const nextDraftKey = composerDraftKeyForSession(current!.id);
         const latestDraft = readComposerDraft(composerDraftsRef.current, sourceDraftKey);

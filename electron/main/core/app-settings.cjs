@@ -788,7 +788,8 @@ function getPermissionProfilesStore() {
     builtins[DEFAULT_PERMISSION_PROFILE_IDS.full],
   );
   let migratedMainId = '';
-  // Guard against older migrations that wrote non-smart user policy into smart-default.
+  let needsHealPersist = false;
+  // Guard against older migrations / mode-sync writes that corrupted a builtin profile's preset.
   if (smartProfile.policy.preset !== 'smart') {
     const misassignedPreset = smartProfile.policy.preset;
     migratedMainId = initialMainProfileIdForUserPolicy(smartProfile.policy);
@@ -798,6 +799,21 @@ function getPermissionProfilesStore() {
       askProfile = { ...askProfile, policy: clone(smartProfile.policy) };
     }
     smartProfile = { ...smartProfile, policy: defaultPermissionPolicy('smart') };
+    needsHealPersist = true;
+  }
+  if (askProfile.policy.preset !== 'ask') {
+    if (!migratedMainId && raw.mainProfileId === DEFAULT_PERMISSION_PROFILE_IDS.ask) {
+      migratedMainId = initialMainProfileIdForUserPolicy(askProfile.policy);
+    }
+    askProfile = { ...askProfile, policy: defaultPermissionPolicy('ask') };
+    needsHealPersist = true;
+  }
+  if (fullProfile.policy.preset !== 'full') {
+    if (!migratedMainId && raw.mainProfileId === DEFAULT_PERMISSION_PROFILE_IDS.full) {
+      migratedMainId = initialMainProfileIdForUserPolicy(fullProfile.policy);
+    }
+    fullProfile = { ...fullProfile, policy: defaultPermissionPolicy('full') };
+    needsHealPersist = true;
   }
   const profiles = {
     [DEFAULT_PERMISSION_PROFILE_IDS.smart]: smartProfile,
@@ -830,19 +846,23 @@ function getPermissionProfilesStore() {
   let mainProfileId = typeof raw.mainProfileId === 'string' && Object.hasOwn(profiles, raw.mainProfileId)
     ? raw.mainProfileId
     : initialMainProfileIdForUserPolicy(policyStore.user);
-  if (migratedMainId && mainProfileId === DEFAULT_PERMISSION_PROFILE_IDS.smart) {
+  if (migratedMainId && isBuiltinPermissionProfileId(mainProfileId)) {
     mainProfileId = migratedMainId;
   }
   const temporaryProfileId = typeof raw.temporaryProfileId === 'string' && Object.hasOwn(profiles, raw.temporaryProfileId)
     ? raw.temporaryProfileId
     : DEFAULT_PERMISSION_PROFILE_IDS.ask;
-  return {
+  const resolved = {
     version: 1,
     mainProfileId,
     workspaceProfiles,
     temporaryProfileId,
     profiles,
   };
+  if (needsHealPersist) {
+    db.setSetting(KEYS.permissionProfiles, resolved);
+  }
+  return resolved;
 }
 
 function getPermissionProfilesSnapshot(cwd = '') {
@@ -878,9 +898,19 @@ function syncUserPermissionProfile(policy) {
   const db = getStudioDatabase();
   if (!Object.hasOwn(db.getSettings(), KEYS.permissionProfiles)) return;
   const store = getPermissionProfilesStore();
-  if (Object.hasOwn(store.profiles, store.mainProfileId)) {
-    store.profiles[store.mainProfileId] = {
-      ...store.profiles[store.mainProfileId],
+  let targetId = store.mainProfileId;
+  // Never overwrite a builtin profile with a different preset when switching quick modes;
+  // switch mainProfileId to the matching builtin profile instead.
+  if (isBuiltinPermissionProfileId(targetId)) {
+    const matchingBuiltinId = initialMainProfileIdForUserPolicy(policy);
+    if (Object.hasOwn(store.profiles, matchingBuiltinId)) {
+      targetId = matchingBuiltinId;
+      store.mainProfileId = matchingBuiltinId;
+    }
+  }
+  if (Object.hasOwn(store.profiles, targetId)) {
+    store.profiles[targetId] = {
+      ...store.profiles[targetId],
       policy: clone(policy),
     };
     db.setSetting(KEYS.permissionProfiles, store);

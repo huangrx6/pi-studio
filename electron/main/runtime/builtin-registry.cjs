@@ -14,6 +14,7 @@ const capabilityModules = Object.freeze([
   require('../capabilities/permissions/index.cjs'),
   require('../capabilities/subagents/index.cjs'),
   require('../capabilities/metrics/index.cjs'),
+  require('../capabilities/keep-awake/index.cjs'),
 ]);
 
 const BUILTIN_MANIFESTS = Object.freeze(

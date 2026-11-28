@@ -11,19 +11,33 @@ import { PluginDetail, PluginInstallReview, type OpenPluginResource } from './Pl
 import { PluginCatalog } from './PluginCatalog';
 import { PluginSources } from './PluginSources';
 import { PluginWorkspaceAction } from './PluginWorkspaceHeader';
+import './styles/plugin-workspace.css';
 import './styles/plugin-settings.css';
 
 type Operation = 'prepare' | 'install' | 'toggle' | 'uninstall';
 
+let cachedPluginMarket: PluginMarketSnapshot | undefined;
+
 export function PluginSettings({
-  plugins, busy, cwd, toolbar, onChanged, onOpenResource,
+  plugins,
+  busy,
+  cwd,
+  toolbar,
+  showStatusFilter = false,
+  openablePanels,
+  onOpenApp,
+  onChanged,
+  onOpenResource,
 }: {
   plugins: readonly StudioPluginSummary[];
   busy: boolean;
   cwd: string;
   toolbar: HTMLDivElement | null;
+  showStatusFilter?: boolean;
+  openablePanels?: ReadonlyMap<string, string>;
+  onOpenApp?: (panelId: string) => void;
   onChanged: (settings: SettingsSnapshot, message: string) => void;
-  onOpenResource: OpenPluginResource;
+  onOpenResource?: OpenPluginResource;
 }) {
   const showToast = useSettingsToast();
   const confirmation = useActionConfirmation();
@@ -39,12 +53,12 @@ export function PluginSettings({
   const [review, setReview] = useState<PluginInstallPreview>();
   const [installError, setInstallError] = useState('');
   const [sourcesOpen, setSourcesOpen] = useState(false);
-  const [catalog, setCatalog] = useState<PluginMarketSnapshot>();
-  const [catalogLoading, setCatalogLoading] = useState(true);
+  const [catalog, setCatalog] = useState<PluginMarketSnapshot | undefined>(() => cachedPluginMarket);
+  const [catalogLoading, setCatalogLoading] = useState(!cachedPluginMarket);
   const [catalogError, setCatalogError] = useState('');
   const [catalogRevision, setCatalogRevision] = useState(0);
   const locked = busy || operation !== undefined;
-  const catalogUnavailable = catalogLoading || Boolean(catalogError);
+  const catalogUnavailable = (!catalog && catalogLoading) || Boolean(catalogError);
   const installed = detail && plugins.find(plugin => plugin.id === detail.id);
   const detailListings = detail?.sourceId ? catalog?.catalogs.find(source => source.source.id === detail.sourceId)?.plugins : catalog?.plugins;
   const detailItem = detail && (detailListings?.find(item => item.id === detail.id) ?? installed);
@@ -62,7 +76,10 @@ export function PluginSettings({
     setCatalogLoading(true);
     setCatalogError('');
     void window.piApi.pluginMarket().then(
-      value => { if (current) setCatalog(value); },
+      value => {
+        cachedPluginMarket = value;
+        if (current) setCatalog(value);
+      },
       error => { if (current) setCatalogError(errorText(error)); },
     ).finally(() => { if (current) setCatalogLoading(false); });
     return () => { current = false; };
@@ -204,16 +221,39 @@ export function PluginSettings({
       <PluginWorkspaceAction label="本地安装" icon={<FolderOpen aria-hidden="true" />} primary disabled={locked}
         aria-haspopup="menu" aria-expanded={Boolean(localMenu)} onClick={event => setLocalMenu(localMenu ? undefined : event.currentTarget)} />
     </>, toolbar)}
-    <PluginCatalog plugins={plugins} catalog={catalog} loading={catalogLoading} error={catalogError} busy={locked}
-      catalogUnavailable={catalogUnavailable} preparingId={operation === 'prepare' ? preparingId : ''} onToggle={toggle} onInstall={prepareMarket}
-      onOpen={({ item }) => setDetail({ id: item.id, sourceId: 'sourceId' in item ? item.sourceId : undefined })} />
+    <PluginCatalog
+      plugins={plugins}
+      catalog={catalog}
+      loading={catalogLoading}
+      error={catalogError}
+      busy={locked}
+      catalogUnavailable={catalogUnavailable}
+      preparingId={operation === 'prepare' ? preparingId : ''}
+      showStatusFilter={showStatusFilter}
+      openablePanels={openablePanels}
+      onOpenApp={onOpenApp}
+      onToggle={toggle}
+      onInstall={prepareMarket}
+      onOpen={({ item }) => setDetail({ id: item.id, sourceId: 'sourceId' in item ? item.sourceId : undefined })}
+    />
     {localMenu && <ActionMenu anchor={localMenu} placement="below" align="end" onClose={() => setLocalMenu(undefined)} items={[
       { label: '选择插件目录…', run: () => prepareLocal('directory', localMenu) },
       { label: '选择插件包…', run: () => prepareLocal('package', localMenu) },
     ]} />}
-    {detailItem && <PluginDetail key={detailItem.id} item={detailItem} installed={installed} busy={locked}
-      preparing={operation === 'prepare' && preparingId === detailItem.id} catalogUnavailable={catalogUnavailable}
-      onClose={() => setDetail(undefined)} onOpenResource={onOpenResource} onInstall={prepareMarket} onUninstall={uninstall} />}
+    {detailItem && <PluginDetail
+      key={detailItem.id}
+      item={detailItem}
+      installed={installed}
+      busy={locked}
+      preparing={operation === 'prepare' && preparingId === detailItem.id}
+      catalogUnavailable={catalogUnavailable}
+      openablePanelId={openablePanels?.get(detailItem.id)}
+      onOpenApp={onOpenApp}
+      onClose={() => setDetail(undefined)}
+      onOpenResource={onOpenResource}
+      onInstall={prepareMarket}
+      onUninstall={uninstall}
+    />}
     {review && <PluginInstallReview preview={review} busy={operation === 'install'} error={installError}
       onClose={closeReview} onSubmit={dismiss => void install(dismiss)} />}
     {sourcesOpen && <PluginSources onClose={() => setSourcesOpen(false)} onChanged={refreshCatalog} />}

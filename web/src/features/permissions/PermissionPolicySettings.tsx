@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Check, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Accordion } from '../../shared/Accordion';
 import { useActionConfirmation } from '../../shared/ConfirmDialog';
 import { errorText } from '../../shared/error-text';
 import { LoadingState } from '../../shared/LoadingState';
+import { useDeferredEnter } from '../../shared/useDeferredEnter';
 import { useSettingsDraftGuard } from '../../shared/SettingsDraftGuard';
 import { SettingsPageHeader } from '../../shared/SettingsPageHeader';
-import { automaticProfileIcon, SettingsProfileMark } from '../../shared/SettingsProfileIcon';
-import { SettingsProfileCard, SettingsProfileLibrary } from '../../shared/SettingsProfileLibrary';
+import { automaticProfileIcon } from '../../shared/profile-icon';
+import { SettingsProfileLibrary } from '../../shared/SettingsProfileLibrary';
 import { useSettingsToast } from '../../shared/SettingsToast';
 import type { ModalDismiss } from '../../shared/useModalDialog';
 import type {
@@ -21,6 +22,7 @@ import type {
 } from '../../types/permission-types';
 import { permissionDraftError, permissionScopeKey, permissionWrites } from './permission-policy-editor';
 import { PERMISSION_DECISION_LABELS, PermissionPolicyFormFields } from './PermissionPolicyFormFields';
+import { PermissionPresetGlyph } from './PermissionPresetGlyph';
 import { PermissionProfileEditor, type PermissionProfileBindingScope } from './PermissionProfileEditor';
 import './styles/permission-policy.css';
 
@@ -316,13 +318,14 @@ function PermissionPolicyWorkspace({
   }
 
   const ready = Boolean(profilesSnapshot) && !loadError;
+  const bodyReveal = useDeferredEnter(ready);
   const pageClass = `settings-preference-page permission-policy ${className}`.trim();
 
   return <div className={pageClass} aria-label="权限策略">
     <SettingsPageHeader
       title="权限策略"
       iconPosition="end"
-      meta="管理可复用的权限策略方案，设置基础模式、工具例外和高危操作规则。"
+      meta="管理权限方案与工具确认边界。"
       icon={<svg viewBox="0 0 32 32" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M16 2.5c3.3 2.3 7.4 3.8 12 4.5v8c0 6.2-4.7 11-12 14.5C8.7 26 4 21.2 4 15V7c4.6-.7 8.7-2.2 12-4.5Z" />
         <path d="m11 15.5 3.4 3.4 6.8-7.1" stroke="var(--accent)" />
@@ -344,51 +347,114 @@ function PermissionPolicyWorkspace({
         </button>
       }
     >
-      {loading && !profilesSnapshot && <LoadingState variant="section">正在读取权限方案…</LoadingState>}
-      {loadError && <div className="settings-preference-card harness-load-error">
+      {loading && !profilesSnapshot && <div className="settings-loading-card"><LoadingState variant="section">正在读取权限方案…</LoadingState></div>}
+      {loadError && <div className="settings-load-error">
         <p role="alert">{loadError}</p>
         <button type="button" className="settings-outline" onClick={() => void loadAll()}>重新加载权限策略</button>
       </div>}
-      {ready && profilesSnapshot && <div className="settings-profile-grid">
-        {profilesSnapshot.profiles.map(profile => {
+      {ready && profilesSnapshot && (() => {
+        const tierOrder: Record<string, number> = { 'strict-ask': 0, 'smart-default': 1, 'full-access': 2 };
+        const builtins = profilesSnapshot.profiles
+          .filter(p => p.builtin)
+          .sort((a, b) => (tierOrder[a.id] ?? 9) - (tierOrder[b.id] ?? 9));
+        const customs = profilesSnapshot.profiles.filter(p => !p.builtin);
+
+        const renderMeta = (profile: PermissionProfile) => {
           const isMain = profile.id === profilesSnapshot.mainProfileId;
           const isWorkspace = Boolean(cwd) && profile.id === profilesSnapshot.workspaceProfileId;
           const isWorkspaceInherited = Boolean(cwd) && isMain && !profilesSnapshot.workspaceProfileId;
           const isTemporary = profile.id === profilesSnapshot.temporaryProfileId;
           const binding = [
             isMain && '主对话默认',
-            isWorkspace && '当前工作区使用',
-            isWorkspaceInherited && '当前工作区继承',
-            isTemporary && '临时对话使用',
+            isWorkspace && '当前工作区',
+            isWorkspaceInherited && '工作区继承',
+            isTemporary && '临时对话',
           ].filter(Boolean).join(' · ');
-
+          const preset = profile.policy.preset;
           const overrideCount = Object.keys(profile.policy.tools || {}).length;
           const ruleCount = profile.policy.rules.length;
-          const preset = profile.policy.preset;
-          const tierLabel = preset === 'ask' ? '严格' : preset === 'smart' ? '推荐' : '高权限';
+          const defaultDecision = PERMISSION_DECISION_LABELS[profile.policy.default];
+          const extras = [
+            overrideCount > 0 && `${overrideCount} 项工具例外`,
+            ruleCount > 0 && `${ruleCount} 条规则`,
+          ].filter(Boolean).join(' · ') || '内置规则';
+          return { binding, isActive: Boolean(binding), preset, defaultDecision, extras };
+        };
 
-          return <SettingsProfileCard
-            key={profile.id}
-            name={profile.name}
-            icon={<SettingsProfileMark group="permissions" icon={profile.icon ?? automaticProfileIcon('permissions', profile.id)} />}
-            subtitle={(profile.builtin ? '内置 · ' : '') + profile.id}
-            description={<span className="permission-card-meta">
-              <span className="permission-card-badges">
-                <span className={`permission-preset-tier is-${preset}`}>{tierLabel}</span>
-                {binding && <span className="harness-binding"><Check aria-hidden="true" />{binding}</span>}
-              </span>
-              {profile.description && <span className="permission-card-desc">{profile.description}</span>}
-            </span>}
-            summary={[
-              PRESET_LABEL[preset] || preset,
-              `默认${PERMISSION_DECISION_LABELS[profile.policy.default]}`,
-              overrideCount > 0 && `${overrideCount} 项覆盖`,
-              ruleCount > 0 && `${ruleCount} 条规则`,
-            ].filter(Boolean).join(' · ')}
-            onEdit={() => setEditor({ kind: 'edit', source: profile })}
-          />;
-        })}
-      </div>}
+        return <>
+          <div className={`settings-preference-card perm-console${bodyReveal ? ' settings-async-ready' : ''}`} role="list" aria-label="安全策略矩阵">
+            {builtins.map((profile, idx) => {
+              const { binding, isActive, preset, defaultDecision, extras } = renderMeta(profile);
+              return <button
+                key={profile.id}
+                type="button"
+                role="listitem"
+                className={`perm-col${isActive ? ' is-active' : ''}`}
+                aria-label={'编辑' + profile.name}
+                aria-haspopup="dialog"
+                onClick={() => setEditor({ kind: 'edit', source: profile })}
+              >
+                <div className="perm-col-top">
+                  <span className="perm-col-index">0{idx + 1}</span>
+                  {binding
+                    ? <span className="perm-live-tag"><i aria-hidden="true" />{binding}</span>
+                    : <span className="perm-idle-tag">备用</span>}
+                </div>
+
+                <div className="perm-col-emblem">
+                  <span className="perm-glyph-tile"><PermissionPresetGlyph preset={preset} /></span>
+                  <div className="perm-col-heading">
+                    <strong>{profile.name}</strong>
+                    <span>{PRESET_LABEL[preset] || preset}</span>
+                  </div>
+                </div>
+
+                {profile.description && <p className="perm-col-desc">{profile.description}</p>}
+
+                <dl className="perm-spec-list">
+                  <div>
+                    <dt>默认决策</dt>
+                    <dd>{defaultDecision}</dd>
+                  </div>
+                  <div>
+                    <dt>策略规则</dt>
+                    <dd>{extras}</dd>
+                  </div>
+                </dl>
+              </button>;
+            })}
+          </div>
+
+          {customs.length > 0 && <div className="permission-custom-section">
+            <h3 className="permission-custom-heading">自定义方案 <span>{customs.length}</span></h3>
+            <div className="settings-preference-card perm-custom-deck">
+              {customs.map(profile => {
+                const { binding, preset, defaultDecision, extras } = renderMeta(profile);
+                return <button
+                  key={profile.id}
+                  type="button"
+                  className="perm-custom-row"
+                  aria-label={'编辑' + profile.name}
+                  aria-haspopup="dialog"
+                  onClick={() => setEditor({ kind: 'edit', source: profile })}
+                >
+                  <span className="perm-glyph-tile is-compact"><PermissionPresetGlyph preset={preset} /></span>
+                  <div className="perm-custom-copy">
+                    <div className="perm-custom-head">
+                      <strong>{profile.name}</strong>
+                      {binding && <span className="perm-live-tag"><i aria-hidden="true" />{binding}</span>}
+                    </div>
+                    <p>{profile.description || `${PRESET_LABEL[preset] || preset} · 默认${defaultDecision}`}</p>
+                  </div>
+                  <div className="perm-custom-end">
+                    <span>{PRESET_LABEL[preset] || preset} · {extras}</span>
+                  </div>
+                </button>;
+              })}
+            </div>
+          </div>}
+        </>;
+      })()}
     </SettingsProfileLibrary>
 
     {policyState && overrideDraft && <div className="settings-preference-groups permission-live-groups">
@@ -398,9 +464,6 @@ function PermissionPolicyWorkspace({
         badge={`${SCOPE_LABELS[policyState.effectiveScope]} · ${PRESET_LABEL[policyState.effectivePolicy.preset]}`}
       >
         <div className="permission-live-body">
-          <p className="permission-live-note">
-            在对话审批弹框中选择的“本工作区始终允许”或“仅本会话允许”会写入动态覆盖，叠加在选定的基础权限方案之上。
-          </p>
           <div className="settings-segments permission-policy-scopes" role="group" aria-label="权限覆盖作用域">
             {(Object.keys(SCOPE_LABELS) as PermissionScope[]).map((item) => {
               const available = scopeAvailable(item, policyState.cwd, policyState.sessionId);

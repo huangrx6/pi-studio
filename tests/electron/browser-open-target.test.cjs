@@ -7,7 +7,6 @@ const {
   browserPreferenceInstructions,
   classifyOpenTarget,
   isSystemBrowserOpenCommand,
-  isSystemHtmlOpenCommand,
   preferWorkbenchForKind,
   resolveBrowserOpenUrl,
   shouldBlockSystemBrowserOpen,
@@ -51,8 +50,6 @@ test('isSystemBrowserOpenCommand detects OS open helpers and automation for any 
   assert.equal(isSystemBrowserOpenCommand('open ./notes.md'), true);
   assert.equal(isSystemBrowserOpenCommand('ls /tmp/x.html'), false);
   assert.equal(isSystemBrowserOpenCommand('cat index.html'), false);
-  // Deprecated alias still works.
-  assert.equal(isSystemHtmlOpenCommand('open /tmp/a.html'), true);
 });
 
 test('shouldBlockSystemBrowserOpen honors workbench prefs for web and local', () => {

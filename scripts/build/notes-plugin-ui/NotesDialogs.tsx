@@ -8,7 +8,7 @@ export function Modal({ title, onClose, children, wide }: ModalProps) {
   useEffect(() => { ref.current?.showModal(); }, []);
   return <dialog ref={ref} className={wide ? 'notes-dialog is-wide' : 'notes-dialog'} aria-label={title}
     onCancel={event => { event.preventDefault(); onClose(); }}>
-    <header><h2>{title}</h2><button type="button" className="icon-button" aria-label="关闭" onClick={onClose}><X size={18} /></button></header>
+    <header><h2>{title}</h2><button type="button" className="icon-button" aria-label="关闭" onClick={onClose}><X size="calc(var(--icon-md) + 2px)" /></button></header>
     {children}
   </dialog>;
 }
@@ -38,7 +38,7 @@ export function NewEntry({ parent, busy, error, onClose, onCreate }: MutationDia
       <div className="dialog-content">
         <div className="entry-kinds" role="group" aria-label="文件类型">
           {KINDS.map(({ id, label, icon: Icon }) => <button key={id} type="button" aria-pressed={kind === id}
-            onClick={() => setKind(id)}><Icon size={16} />{label}</button>)}
+            onClick={() => setKind(id)}><Icon size="var(--icon-md)" />{label}</button>)}
         </div>
         <label className="dialog-field">{kind === 'folder' ? '文件夹名' : '标题'}
           <input aria-label={kind === 'folder' ? '文件夹名' : '标题'} autoFocus maxLength={150} value={name}
@@ -46,7 +46,7 @@ export function NewEntry({ parent, busy, error, onClose, onCreate }: MutationDia
             onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) create(); }}
             onChange={event => setName(event.target.value)} />
         </label>
-        <small className="dialog-location"><Folder size={14} />{parent || '知识库根目录'}</small>
+        <small className="dialog-location"><Folder size="var(--icon-sm)" />{parent || '知识库根目录'}</small>
         {error && <p className="dialog-error" role="alert">{error}</p>}
       </div>
       <footer><button className="secondary" type="button" disabled={busy} onClick={onClose}>取消</button>
@@ -61,11 +61,11 @@ export function ManageEntry({ entry, onClose, onAction }: {
 }) {
   return <Modal title={entry.name} onClose={onClose}>
     <div className="dialog-content action-list">
-      {entry.kind === 'folder' && <button type="button" onClick={() => onAction('new')}><Plus size={16} />在此新建</button>}
+      {entry.kind === 'folder' && <button type="button" onClick={() => onAction('new')}><Plus size="var(--icon-md)" />在此新建</button>}
       {entry.section ? <p className="quiet">此目录是 PARA 分类入口。</p> : <>
-        <button type="button" onClick={() => onAction('rename')}><Pencil size={16} />重命名</button>
-        <button type="button" onClick={() => onAction('move')}><FolderInput size={16} />移动到</button>
-        <button type="button" className="danger-text" onClick={() => onAction('trash')}><Trash2 size={16} />移到废纸篓</button>
+        <button type="button" onClick={() => onAction('rename')}><Pencil size="var(--icon-md)" />重命名</button>
+        <button type="button" onClick={() => onAction('move')}><FolderInput size="var(--icon-md)" />移动到</button>
+        <button type="button" className="danger-text" onClick={() => onAction('trash')}><Trash2 size="var(--icon-md)" />移到废纸篓</button>
       </>}
     </div>
   </Modal>;
@@ -94,9 +94,9 @@ export function MoveEntry({ entry, folders, rename, busy, error, onClose, onMove
             <input autoFocus placeholder="搜索文件夹" value={query} onChange={event => setQuery(event.target.value)} />
           </label>
           <div className="folder-choices" role="group" aria-label="目标目录">
-            {!query && <button type="button" aria-pressed={parent === ''} onClick={() => setParent('')}><Folder size={14} />知识库根目录</button>}
+            {!query && <button type="button" aria-pressed={parent === ''} onClick={() => setParent('')}><Folder size="var(--icon-sm)" />知识库根目录</button>}
             {choices.map(folder => <button key={folder.path} type="button" aria-pressed={parent === folder.path}
-              onClick={() => setParent(folder.path)}><Folder size={14} />{folder.path.replaceAll('/', ' / ')}</button>)}
+              onClick={() => setParent(folder.path)}><Folder size="var(--icon-sm)" />{folder.path.replaceAll('/', ' / ')}</button>)}
           </div>
         </>}
         {error && <p className="dialog-error" role="alert">{error}</p>}

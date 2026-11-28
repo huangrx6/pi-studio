@@ -10,8 +10,8 @@ const output = new URL('.qa/extension-appearance/', root);
 const quota = JSON.parse(await readFile(new URL('extensions/pi-quota-status/pi-studio.extension.json', root), 'utf8'));
 function installAppearanceFixture(quotaManifest) {
   const api = window.piApi;
-  const detail = { id: 'detail', title: '构建详情', slot: 'panel.side', content: [{ kind: 'text', text: '当前构建正常' }] };
-  const history = { id: 'history', title: '构建历史', slot: 'panel.side', content: [{ kind: 'text', text: '最近构建已完成' }] };
+  const detail = { id: 'detail', title: '构建详情', slot: 'tool.view', content: [{ kind: 'text', text: '当前构建正常' }] };
+  const history = { id: 'history', title: '构建历史', slot: 'tool.view', content: [{ kind: 'text', text: '最近构建已完成' }] };
   const build = { id: 'build', title: '构建状态', slots: ['status.chip', 'composer.above', 'composer.below'], details: 'detail',
     icon: 'terminal', color: 'warning', content: [{ kind: 'text', text: '就绪' }] };
   const settings = [{ id: 'settings', title: '构建偏好', content: [{ kind: 'text', text: '自动检测构建状态' }] }];
@@ -19,11 +19,6 @@ function installAppearanceFixture(quotaManifest) {
     { id: 'qa.other', name: '另一个扩展', description: '管理工作区的自定义偏好。', author: 'Studio QA', version: '1.0.0', contributes: {
       settings: [{ id: 'settings', title: '其他偏好', content: [{ kind: 'text', text: '仅在自己的设置中显示' }] }],
     } }];
-  const notebook = { id: 'qa.notes', name: '自定义笔记', version: '1.0.0', contributes: { panels: [
-    { id: 'notes', title: '工作区笔记', description: '打开项目笔记', slot: 'panel.side', icon: 'database', color: 'info',
-      content: [{ kind: 'text', text: '工作区笔记内容' }] },
-  ] } };
-  if (localStorage.getItem('qa:launcher-notebook')) manifests.push(notebook);
   const toExtension = manifest => ({ id: 'user:' + manifest.id, name: manifest.name, version: manifest.version,
     scope: 'user', tier: 'user', enabled: true, trusted: true, available: true, health: 'ready', manifest });
   const extensions = manifests.map(toExtension);
@@ -40,14 +35,29 @@ function installAppearanceFixture(quotaManifest) {
     const snapshot = await readState(cwd);
     return { ...snapshot, model: { ...snapshot.model, quotaProvider: { id: 'qa', name: '测试来源' } } };
   };
+  for (const key of ['conversationPage', 'conversationSnapshot', 'subscribeConversation']) {
+    const read = api[key];
+    api[key] = async (...args) => {
+      const snapshot = await read(...args);
+      return { ...snapshot, model: { ...snapshot.model, quotaProvider: { id: 'qa', name: '测试来源' } } };
+    };
+  }
   api.settings = async cwd => ({ ...await readSettings(cwd),
     providers: [{ id: 'qa', name: '测试来源', enabled: true, quotaEnabled: true }], extensions, extensionErrors: [] });
   api.gitRepositories = async cwd => [
     { id: 'projects/a-repository-with-a-long-name', name: '长名称仓库', root: `${cwd}/projects/a-repository-with-a-long-name` },
     { id: '.', name: '项目根目录', root: cwd },
   ];
-  api.gitWorkspaceStatus = async () => ({ available: true, branch: 'feature/long-branch-for-narrow-header',
+  const branch = 'feature/long-branch-for-narrow-header';
+  api.gitWorkspaceStatus = async () => ({ available: true, branch,
     dirty: { total: 0, staged: 0, unstaged: 0, untracked: 0 }, worktree: { isWorktree: false }, worktrees: [] });
+  api.gitBranches = async cwd => ({ root: cwd, branch, head: 'abc1234',
+    branches: [{ name: branch, head: 'abc1234', remote: false, worktree: cwd, upstreamRemote: '', upstreamBranch: '' }] });
+  api.gitRead = async (_id, { kind, repository }) => {
+    if (kind !== 'state') throw new Error(`Unexpected Git read: ${kind}`);
+    return { root: repository, branch, head: 'abc1234', files: [], filesVersion: 'clean', filesUnchanged: false,
+      merging: false, mergeHead: '', indexVersion: 'clean', remotes: [], upstreamRemote: '', upstreamBranch: '', ahead: 0, behind: 0, gone: false };
+  };
   api.officialExtensions = async () => ({ extensions: [], errors: [] });
   api.extensionPublisherTrust = async () => ({ publishers: [] });
   const extensionListeners = new Set();
@@ -55,11 +65,7 @@ function installAppearanceFixture(quotaManifest) {
     extensionListeners.add(listener);
     return () => extensionListeners.delete(listener);
   };
-  window.__installLauncherNotebook = () => {
-    extensions.push(toExtension(notebook));
-    localStorage.setItem('qa:launcher-notebook', 'installed');
-    for (const listener of extensionListeners) listener();
-  };
+  api.openToolWindow = async request => { window.lastTool = request; };
   api.extensionsUi = async () => ({ items: items(), errors: [], apiVersion: 1, syncedAt: Date.now() });
   api.onProviderQuotaInvalidated = () => () => {};
   api.providerQuota = async (_id, refresh) => {
@@ -79,7 +85,7 @@ const server = await serveProductionRenderer(fileURLToPath(root));
 let browser;
 try {
   browser = await chromium.launch({ executablePath: process.env.CHROME_BIN || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' });
-  const page = await browser.newPage({ viewport: { width: 1440, height: 850 } });
+  const page = await browser.newPage({ viewport: { width: 1440, height: 850 }, reducedMotion: 'reduce' });
   page.setDefaultTimeout(6500);
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -89,17 +95,17 @@ try {
     if (saved) localStorage.setItem('pi-studio:preferences', saved);
     else {
       const prefs = JSON.parse(localStorage.getItem('pi-studio:preferences'));
-      prefs.extensionPlacements = { 'user:pi-quota-status/quota-chip': 'header' };
+      prefs.extensionPlacements = { 'user:pi-quota-status/quota-chip': 'hidden' };
       localStorage.setItem('pi-studio:preferences', JSON.stringify(prefs));
     }
     (${installAppearanceFixture})(${JSON.stringify(quota)});` });
   const button = name => page.getByRole('button', { name, exact: true });
   const openSettings = async () => {
-    await page.locator('.sidebar-bottom button[title="设置"]').click();
+    await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
     await page.locator('.settings-navigation').getByRole('button', { name: '插件', exact: true }).click();
     await page.getByRole('tab', { name: '扩展', exact: true }).click();
   };
-  const closeSettings = () => page.locator('.settings-navigation').getByRole('button', { name: '返回对话' }).click();
+  const closeSettings = () => page.locator('[data-sidebar-section="conversations"]').click();
   const configure = name => button(`打开 ${name} 设置`).click();
   const detailDialog = page.locator('.extension-detail-dialog');
   const closeDetail = async () => {
@@ -113,29 +119,10 @@ try {
   const placement = page.getByRole('group', { name: '构建状态 显示位置' });
   const above = page.locator('.extension-summaries.is-composer-above');
   const below = page.locator('.extension-summaries.is-composer-below');
-  const header = page.locator('.chat-header');
-  const picker = page.getByRole('dialog', { name: '扩展', exact: true });
-  const openExtensions = () => header.getByRole('button', { name: '扩展', exact: true }).click();
-  const quotaCard = picker.getByRole('article', { name: '额度状态', exact: true });
-  const buildCard = picker.getByRole('article', { name: '构建监控', exact: true });
   const composer = page.locator('.composer-editor');
   await page.goto(server.origin);
-  await composer.waitFor();
-  await openExtensions();
-  await quotaCard.waitFor();
-  assert.equal(await quotaCard.locator('.provider-quota-summary').count(), 0, 'drafts have an entry with no quota summary');
-  assert.equal(await page.evaluate(() => window.__quotaReads ?? 0), 0, 'opening the draft extension list does not query quota');
-  const manage = picker.getByRole('button', { name: '管理扩展', exact: true });
-  const background = await manage.evaluate(node => getComputedStyle(node).backgroundColor);
-  await manage.hover();
-  await page.waitForFunction(idle => getComputedStyle(document.querySelector('.extension-picker-manage')).backgroundColor !== idle, background);
-  assert.ok(await manage.evaluate(node => {
-    const { paddingLeft, paddingRight } = getComputedStyle(node);
-    return parseFloat(paddingLeft) >= 8 && paddingLeft === paddingRight;
-  }));
-  await picker.screenshot({ path: fileURLToPath(new URL('picker-hover.png', output)) });
-  await page.keyboard.press('Escape');
   await page.locator('.session-row').first().click();
+  await composer.waitFor();
   await openSettings();
   const library = page.locator('.installed-extension-section');
   const cards = library.locator('article');
@@ -161,9 +148,10 @@ try {
   assert.equal(await detailDialog.locator('.extension-appearance-trigger').count(), 1, 'linked quota chip and detail panel share one appearance row');
   await icon(button('额度状态 图标与配色'), 'gauge', 'neutral').waitFor();
   const quotaPlacement = page.getByRole('group', { name: '额度状态 显示位置' });
-  assert.deepEqual(await quotaPlacement.getByRole('button').allTextContents(), ['扩展菜单', '隐藏摘要']);
+  assert.deepEqual(await quotaPlacement.getByRole('button').allTextContents(), ['底部状态栏', '隐藏摘要']);
   await detailDialog.screenshot({ path: fileURLToPath(new URL('quota-settings.png', output)) });
-  assert.equal(await quotaPlacement.getByRole('button', { name: '扩展菜单', pressed: true }).count(), 1);
+  assert.equal(await quotaPlacement.getByRole('button', { name: '隐藏摘要', pressed: true }).count(), 1);
+  await quotaPlacement.getByRole('button', { name: '底部状态栏' }).click();
   await closeDetail();
   await configure('构建监控');
   await icon(buildTrigger, 'terminal', 'warning').waitFor();
@@ -185,7 +173,7 @@ try {
   await ownSettings.getByText('自动检测构建状态').waitFor();
   assert.equal(await page.getByText('仅在自己的设置中显示').count(), 0);
   await button('关闭扩展详情').click();
-  assert.equal(await page.getByText('自动检测构建状态').count(), 0);
+  await detailDialog.waitFor({ state: 'detached' });
   await configure('额度状态');
   await button('额度状态 图标与配色').click();
   await page.getByRole('group', { name: '额度状态 外观' }).getByRole('button', { name: '钱包' }).click();
@@ -195,41 +183,41 @@ try {
   await icon(above, 'cloud', 'success').waitFor();
   assert.equal(await below.count(), 0);
   assert.ok((await above.boundingBox()).y < (await composer.boundingBox()).y);
-  assert.equal(await header.getByText('12%', { exact: true }).count(), 0);
-  assert.equal(await page.evaluate(() => window.__quotaReads ?? 0), 0, 'the closed picker does not read quota');
-  await openExtensions();
-  await quotaCard.getByText('12%', { exact: true }).waitFor();
-  assert.equal(await quotaCard.locator('dd').count(), 2);
-  assert.equal(await icon(quotaCard, 'wallet', 'neutral').count(), 1);
-  await buildCard.getByText('就绪', { exact: true }).waitFor();
-  await picker.screenshot({ path: fileURLToPath(new URL('cards-light.png', output)) });
-  await quotaCard.getByRole('button', { name: '查看 额度状态 详情', exact: true }).click();
-  const quotaPanel = page.getByRole('tabpanel', { name: '额度状态', exact: true });
+  await button('打开 额度状态 详情').click();
+  const quotaPanel = page.getByRole('dialog', { name: '额度状态', exact: true });
   await quotaPanel.getByText('每日剩余').waitFor();
-  const quotaHeading = quotaPanel.locator('.extension-page-head');
-  assert.ok(await quotaHeading.getByRole('heading', { name: '额度状态', exact: true }).isVisible());
-  assert.equal(await quotaHeading.locator('.extension-slot-source').count(), 0);
-  assert.equal(await icon(quotaHeading, 'wallet', 'neutral').count(), 1);
+  await quotaPanel.locator('.popover-title').getByText('额度状态', { exact: true }).waitFor();
+  assert.equal(await icon(quotaPanel, 'wallet', 'neutral').count(), 1);
   await quotaPanel.screenshot({ path: fileURLToPath(new URL('quota-panel.png', output)) });
   await quotaPanel.getByRole('button', { name: '刷新额度' }).click();
   await quotaPanel.getByText('16%', { exact: true }).waitFor();
-  await openExtensions();
-  await quotaCard.getByText('16%', { exact: true }).waitFor();
-  await buildCard.getByRole('button', { name: '查看 构建监控 详情', exact: true }).click();
-  const buildPanel = page.getByRole('tabpanel', { name: '构建监控', exact: true });
-  await buildPanel.getByText('当前构建正常').waitFor();
-  await buildPanel.getByRole('button', { name: '构建历史' }).click();
-  await buildPanel.getByText('最近构建已完成').waitFor();
-  assert.equal(await page.getByRole('tab', { name: '构建监控', exact: true }).count(), 1);
+  await quotaPanel.getByRole('button', { name: '关闭', exact: true }).click();
+  await above.getByRole('button', { name: '打开 构建状态 详情' }).click();
+  await page.waitForFunction(() => window.lastTool?.panelId === 'user:qa.build/detail');
   assert.equal(await composer.innerText(), '切换工作台后的会话草稿');
-  await page.screenshot({ path: fileURLToPath(new URL('workbench-light.png', output)) });
-  await button('全屏').click();
-  await buildPanel.getByText('最近构建已完成').waitFor();
-  assert.equal(await page.locator('.panel-tabbar').getByText('16%', { exact: true }).count(), 0);
-  await button('退出全屏').click();
-  assert.equal(await composer.innerText(), '切换工作台后的会话草稿');
-  await button('收起右侧面板').click();
 
+  await page.getByRole('navigation', { name: '主导航' }).getByRole('button', { name: '设置' }).click();
+  const statusBar = page.getByRole('contentinfo', { name: '状态栏' });
+  const settingsRegion = page.getByRole('region', { name: '设置', exact: true });
+  await settingsRegion.getByRole('button', { name: '深色', exact: true }).click();
+  await page.waitForFunction(() => document.documentElement.dataset.theme === 'dark');
+  await page.mouse.move(0, 0);
+  await page.locator('.settings-toast-stack .settings-toast').waitFor({ state: 'hidden' });
+  await settingsRegion.getByRole('main').evaluate(canvas => { canvas.scrollTop = 0; });
+  await page.screenshot({ path: fileURLToPath(new URL('settings-statusbar.png', output)), animations: 'disabled' });
+  const branchPicker = statusBar.getByRole('button', { name: /^切换分支，当前/ });
+  await branchPicker.click();
+  await page.getByRole('dialog', { name: '切换分支' }).waitFor();
+  await page.keyboard.press('Escape');
+  await statusBar.getByRole('button', { name: '打开 额度状态 详情' }).click();
+  await quotaPanel.getByText('每日剩余').waitFor();
+  await page.keyboard.press('Escape');
+  await quotaPanel.waitFor({ state: 'hidden' });
+  assert.equal(await settingsRegion.isVisible(), true);
+  await branchPicker.click();
+  await page.getByRole('dialog', { name: '切换分支' }).getByRole('button', { name: '打开 Git' }).click();
+  await settingsRegion.waitFor({ state: 'detached' });
+  await page.getByRole('navigation', { name: '工作区视图' }).getByRole('button', { name: 'Git', pressed: true }).waitFor();
   await openSettings();
   await configure('构建监控');
   await placement.getByRole('button', { name: '输入框下方' }).click();
@@ -243,150 +231,22 @@ try {
   await icon(below, 'cloud', 'success').waitFor();
   await openSettings();
   await configure('构建监控');
-  await placement.getByRole('button', { name: '顶栏' }).click();
+  await placement.getByRole('button', { name: '底部状态栏' }).click();
   await buildTrigger.click();
   await preview.getByRole('button', { name: '恢复默认' }).click();
   await icon(preview, 'terminal', 'warning').waitFor();
   const prefs = await stored();
-  assert.equal(prefs.extensionPlacements['user:qa.build/build'], 'header');
+  assert.equal(prefs.extensionPlacements['user:qa.build/build'], 'statusbar');
   assert.deepEqual(prefs.extensionAppearances, {
     'user:pi-quota-status/quota-chip': { icon: 'wallet' },
     'user:pi-quota-status/quota-detail': { icon: 'wallet' },
   });
   await closeDetail();
   await closeSettings();
-  await icon(header.locator('.extension-summary-item'), 'terminal', 'warning').waitFor();
+  await icon(page.locator('.studio-statusbar'), 'terminal', 'warning').waitFor();
   assert.equal(await below.count(), 0);
-  await button('打开右侧面板').click();
-  await button('打开工具').click();
-  await page.getByRole('menuitem', { name: '打开扩展…' }).click();
-  await buildCard.getByRole('button', { name: '查看 构建监控 详情', exact: true }).click();
-  await buildPanel.getByText('当前构建正常').waitFor();
-  await page.setViewportSize({ width: 1176, height: 730 });
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  assert.ok(await buildPanel.evaluate(node => node.scrollWidth <= node.clientWidth + 1));
-  await page.screenshot({ path: fileURLToPath(new URL('workbench-dark.png', output)) });
-  await page.setViewportSize({ width: 980, height: 730 });
-  await page.waitForFunction(() => !document.querySelector('.file-panel.is-overlay'));
-  await page.waitForFunction(() => {
-    const heading = document.querySelector('.chat-heading');
-    const tools = document.querySelector('.chat-actions');
-    const repoLabel = heading?.querySelector('.git-repository-picker .pi-select-value');
-    const branchLabel = heading?.querySelector('.git-branch-trigger > span');
-    return repoLabel && branchLabel && getComputedStyle(repoLabel).display === 'none' && getComputedStyle(branchLabel).display === 'none'
-      && branchLabel.parentElement.getBoundingClientRect().right <= tools.getBoundingClientRect().left;
-  });
-  assert.equal(await header.locator('.chat-header-status').isVisible(), false, 'pinned summaries have room in the picker');
-  await header.getByRole('button', { name: '顶栏项目仓库' }).click();
-  await page.getByRole('listbox', { name: '顶栏项目仓库' }).waitFor();
-  await page.keyboard.press('Escape');
-  await header.getByRole('button', { name: /^切换分支，当前 / }).click();
-  await page.getByRole('dialog', { name: '切换分支', exact: true }).waitFor();
-  await page.keyboard.press('Escape');
-  await openExtensions();
-  await quotaCard.getByText('12%', { exact: true }).waitFor();
-  await buildCard.getByText('就绪', { exact: true }).waitFor();
-  assert.ok(await picker.evaluate(node => node.scrollWidth <= node.clientWidth + 1));
-  await picker.screenshot({ path: fileURLToPath(new URL('cards-docked-narrow-dark.png', output)) });
-  await page.keyboard.press('Escape');
-  await composer.fill('窄窗口仍可继续编辑');
-  assert.equal(await composer.innerText(), '窄窗口仍可继续编辑');
-  await page.setViewportSize({ width: 820, height: 730 });
-  await page.locator('.file-panel.is-overlay').waitFor();
-  assert.equal(await page.locator('.panel-tabbar').getByText('12%', { exact: true }).count(), 0);
-  await button('打开工具').click();
-  await page.getByRole('menuitem', { name: '打开扩展…' }).click();
-  await quotaCard.getByText('12%', { exact: true }).waitFor();
-  await button('收起右侧面板').click();
-  await openExtensions();
-  await quotaCard.getByText('12%', { exact: true }).waitFor();
-
-  await page.setViewportSize({ width: 1440, height: 850 });
-  await page.evaluate(() => {
-    const prefs = JSON.parse(localStorage.getItem('pi-studio:preferences'));
-    localStorage.setItem('pi-studio:preferences', JSON.stringify({ ...prefs, showCodeView: true }));
-  });
-  await page.reload();
-  await page.locator('.session-row').first().click();
-  await button('打开右侧面板').click();
-  const launcher = page.getByRole('region', { name: '工作台应用', exact: true });
-  const tile = name => launcher.getByRole('button', { name, exact: true });
-  const labels = () => launcher.locator('.panel-launcher-label').allTextContents();
-  const editor = launcher.getByRole('list', { name: '扩展顺序' });
-  const systemEditor = launcher.getByRole('list', { name: '系统工具顺序' });
-  const row = name => editor.getByRole('listitem').filter({ hasText: name });
-  const systemRow = name => systemEditor.getByRole('listitem').filter({ hasText: name });
-  await tile('构建监控').waitFor();
-  const defaultTools = ['工作区文件', 'Git', '新建终端', '进展', '子智能体', '轨迹', '浏览器', '运行服务', '临时聊天'];
-  assert.deepEqual((await labels()).slice(0, 9), defaultTools);
-  assert.equal(await tile('另一个扩展').count(), 0, 'settings-only extensions have no launcher tile');
-  await tile('排序').click();
-  await systemEditor.getByRole('button', { name: '上移 Git', exact: true }).press('Enter');
-  assert.equal((await labels())[0], 'Git');
-  const grouped = await labels();
-  await row('构建监控').locator('.panel-launcher-grip').dragTo(systemRow('工作区文件'));
-  assert.deepEqual(await labels(), grouped, 'system tools and extensions retain their own groups');
-  await systemRow('新建终端').locator('.panel-launcher-grip').dragTo(systemRow('Git'));
-  assert.equal((await labels())[0], '新建终端');
-  await launcher.screenshot({ path: fileURLToPath(new URL('launcher-order.png', output)) });
-  await tile('完成').click();
-  const arranged = await labels();
-  await page.evaluate(() => window.__installLauncherNotebook());
-  const notebookTile = tile('自定义笔记');
-  await icon(notebookTile, 'database', 'info').waitFor();
-  assert.deepEqual(await labels(), [...arranged, '自定义笔记']);
-
-  await openSettings();
-  await button('对话显示顺序').click();
-  await displayOrder.getByText('自定义笔记', { exact: true }).waitFor();
-  const spacing = await displayOrder.evaluate(panel => {
-    const frame = panel.getBoundingClientRect();
-    const title = panel.querySelector('h2').getBoundingClientRect();
-    let divider = panel.querySelector('header').getBoundingClientRect().bottom;
-    const rowInsets = [];
-    for (const row of panel.querySelectorAll('li')) {
-      const label = row.querySelector('span').getBoundingClientRect();
-      rowInsets.push(label.top - divider);
-      divider = row.getBoundingClientRect().bottom;
-      rowInsets.push(divider - label.bottom);
-    }
-    const lastLabel = panel.querySelector('li:last-child > span').getBoundingClientRect();
-    return { rowInsets, aboveTitle: title.top - frame.top, belowLastLabel: frame.bottom - lastLabel.bottom };
-  });
-  assert.ok(Math.max(...spacing.rowInsets) - Math.min(...spacing.rowInsets) <= 1, 'even spacing on both sides of every row divider');
-  assert.ok(Math.abs(spacing.aboveTitle - spacing.belowLastLabel) <= 6, 'outer whitespace balances the title and last label');
-  await displayOrder.screenshot({ path: fileURLToPath(new URL('display-order-three.png', output)) });
-  await button('关闭对话显示顺序').click();
-  await configure('自定义笔记');
-  const notebookSettings = detailDialog;
-  await notebookSettings.getByRole('button', { name: '工作区笔记 工作台图标与配色', exact: true }).click();
-  const notebookAppearance = notebookSettings.getByRole('group', { name: '工作区笔记 工作台外观' });
-  await notebookAppearance.getByRole('button', { name: '云', exact: true }).click();
-  await notebookAppearance.getByRole('button', { name: '成功绿', exact: true }).click();
-  await closeDetail();
-  await closeSettings();
-  await icon(notebookTile, 'cloud', 'success').waitFor();
-  await page.reload();
-  await page.locator('.session-row').first().click();
-  await button('打开右侧面板').click();
-  await icon(notebookTile, 'cloud', 'success').waitFor();
-  assert.deepEqual(await labels(), [...arranged, '自定义笔记']);
-
-  await page.setViewportSize({ width: 980, height: 730 });
-  await tile('排序').click();
-  assert.ok(await editor.evaluate(node => node.scrollWidth <= node.clientWidth + 1));
-  await tile('恢复默认').click();
-  await tile('完成').click();
-  assert.deepEqual((await labels()).slice(0, 9), defaultTools);
-  await button('全屏').click();
-  await page.evaluate(() => { document.documentElement.dataset.theme = 'dark'; });
-  await launcher.screenshot({ path: fileURLToPath(new URL('launcher-dark.png', output)) });
-  await notebookTile.click();
-  const notebookPanel = page.getByRole('tabpanel', { name: '自定义笔记', exact: true });
-  await notebookPanel.getByText('工作区笔记内容').waitFor();
-  await icon(page.getByRole('tab', { name: '自定义笔记', exact: true }), 'cloud', 'success').waitFor();
   assert.deepEqual(errors, []);
-  console.log('Verified extension appearance, quota, launcher ordering and persistence, new extension placement, and workbench launch.');
+  console.log('Verified extension settings, summary placement, status details and standalone tool launch.');
 } finally {
   await browser?.close();
   await server.close();

@@ -1,8 +1,8 @@
-.conversation-error { position: relative; margin-top: var(--space-4); padding: var(--space-3) var(--space-4); border-left: 2px solid var(--error); background: var(--error-soft); color: var(--error); font-size: var(--text-base); line-height: var(--leading-body); overflow-wrap: anywhere; }
+.conversation-error { position: relative; margin-top: var(--space-4); padding: var(--space-3) var(--space-4); border-left: 2px solid var(--error); background: var(--error-soft); color: var(--error); font-size: var(--text-body); line-height: var(--leading-body); overflow-wrap: anywhere; }
 .conversation-error > p { margin: 0; white-space: pre-wrap; }
 .conversation-error-details { margin-top: var(--space-2); }
-.conversation-error-details > pre { margin: var(--space-2) 0 0; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-xs)/var(--leading-body) var(--mono); }
-.conversation-error-action { margin-top: var(--space-2); padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-size: var(--text-sm); font-weight: var(--weight-semibold); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.conversation-error-details > pre { margin: var(--space-2) 0 0; max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: var(--text-code)/var(--leading-body) var(--mono); }
+.conversation-error-action { margin-top: var(--space-2); padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-size: var(--text-label); font-weight: var(--weight-semibold); text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
 .conversation-error-action:hover:not(:disabled) { text-decoration-thickness: 2px; }
 .conversation-error-action:disabled { cursor: progress; opacity: .65; }
 .conversation-error .error-card-close { position: absolute; top: var(--space-2); right: var(--space-2); display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: var(--radius-tag); color: var(--error); }

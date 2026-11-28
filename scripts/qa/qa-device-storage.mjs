@@ -30,7 +30,7 @@ try {
     await mkdir(path.join(profile, 'data', dir), { recursive: true });
     await writeFile(path.join(profile, 'data', dir, 'storage-qa.bin'), Buffer.alloc(size * 1024 ** 2));
   }
-  await page.locator('.sidebar-bottom button[title="设置"]').click();
+  await page.locator('.sidebar-bottom button[aria-label="设置"]').click();
   const nav = page.locator('.settings-navigation');
   const content = page.locator('.settings-content');
   const open = id => nav.locator('[data-settings-page="' + id + '"]').click();

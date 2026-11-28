@@ -4,6 +4,8 @@
  * 每个域一个文件，这里只负责汇总，方便一眼看清主进程暴露了哪些能力：
  *  - system       主题、首屏状态
  *  - sessions     会话、消息、侧边栏
+ *  - team         Bot 成员库与项目房间
+ *  - plans        项目计划、执行时间预览与运行记录
  *  - files        文件浏览、外部打开
  *  - attachments  附件
  *  - models       模型、提供方、API Key
@@ -20,6 +22,8 @@
 const { registerSystemIpc } = require('./system.cjs');
 const { registerNetworkIpc } = require('./network.cjs');
 const { registerConversationIpc } = require('./sessions.cjs');
+const { registerTeamIpc } = require('./team.cjs');
+const { registerPlanIpc } = require('./plans.cjs');
 const { registerFilesIpc } = require('./files.cjs');
 const { registerAttachmentsIpc } = require('./attachments.cjs');
 const { registerModelsIpc } = require('./models.cjs');
@@ -40,6 +44,8 @@ function registerIpc(waitForStartup) {
   registerSystemIpc(waitForStartup);
   registerNetworkIpc(waitForStartup);
   registerConversationIpc();
+  registerTeamIpc();
+  registerPlanIpc();
   registerFilesIpc();
   registerAttachmentsIpc();
   registerModelsIpc();

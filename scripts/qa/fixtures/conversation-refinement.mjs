@@ -13,6 +13,8 @@ export function installConversationFixture() {
     ...Array.from({ length: 120 }, (_, index) => makeSession(`history-${index}`, `历史记录 ${String(index + 1).padStart(3, '0')}`)),
     makeSession('beta', '文档核对', { cwd: beta }),
   ];
+  const temporary = { id: 'temporary-review', title: '整理评审会的问题', createdAt: now - 180_000, updatedAt: now - 120_000,
+    modelRef: model.modelRef, thinkingLevel: model.thinkingLevel };
   const image = { type: 'image', mimeType: 'image/png', data: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jP1sAAAAASUVORK5CYII=' };
   const calls = [
     { type: 'toolCall', id: 'read-1', name: 'read', arguments: { path: 'src/readable.tsx' } },
@@ -34,6 +36,12 @@ export function installConversationFixture() {
     settings: async () => ({ providers: [], customModels: [], mcp: [], skills: [] }),
     models: async () => ({ models: [], enabled: [], selection: model, defaultSelection: model }),
     conversationPage: async ({ id }) => ({ ...snapshot(id), messages, page: { hasOlder: false }, messageStart: 0 }),
+    temporaryModel: async () => model,
+    temporaryHistory: async () => [temporary],
+    temporaryRead: async id => id === temporary.id ? { ...temporary, messages: [
+      { role: 'user', timestamp: temporary.createdAt, content: [{ type: 'text', text: '评审会上有哪些问题值得先讨论？' }] },
+      { role: 'assistant', timestamp: temporary.updatedAt, content: [{ type: 'text', text: '先确认本次变更影响哪些用户，再讨论验收条件和发布时间。' }] },
+    ] } : null,
     conversationOutline: async (id) => ({ id, items: [{ sourceIndex: 0, text: '请审查这段界面实现。', timestamp: now - 100_000 }], totalMessages: messages.length }),
     conversationSnapshot: async (id) => snapshot(id),
     subscribeConversation: async (id) => snapshot(id),

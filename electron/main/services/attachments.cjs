@@ -10,7 +10,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
-const { BrowserWindow, app, dialog } = require('electron');
+const { BrowserWindow, dialog } = require('electron');
 const { makeAttachmentMarker } = require('../core/attachment-markers.cjs');
 const { readFilePath } = require('./workspace.cjs');
 const { attachmentsDirectory, studioDataDirectory } = require('../core/studio-paths.cjs');

@@ -4,7 +4,6 @@ import type {
   ComposerAttachment,
 } from '../../types/chat-types';
 import type {
-  ComposerDraft,
   ComposerDraftStore,
 } from './composer-drafts';
 import type {

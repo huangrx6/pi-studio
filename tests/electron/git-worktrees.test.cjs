@@ -26,6 +26,8 @@ test('create and open worktrees using new or available local branches without ch
   assert.deepEqual(options.branches, [{ name: 'available', head, occupied: false }, { name: 'main', head, occupied: true }]);
   const tree = await act('create', { mode: 'existing', name: 'available', folder: '已有 分支', head });
   assert.equal(await act('open', { path: tree }), tree);
+  assert.equal(await act('open', { path: tree, expectedBranch: 'available' }), tree);
+  await assert.rejects(act('open', { path: tree, expectedBranch: 'main' }), /分支已变化/);
   assert.equal(git('-C', tree, 'branch', '--show-current'), 'available');
   await assert.rejects(act('create', { mode: 'existing', name: 'available', folder: 'again' }), /使用/);
   const args = { mode: 'new', name: 'feature/新功能', folder: '新功能', head };
@@ -96,6 +98,11 @@ test('recheck ownership before removal and recover only the selected missing reg
   await assert.rejects(act('inspect', { path: tree }, { assertUnused: () => { throw Error('still running'); } }), /still running/);
   const admin = git('-C', tree, 'rev-parse', '--absolute-git-dir');
   await fs.rename(tree, path.join(dir, 'recovered'));
+  let rows = await act('list');
+  assert.equal(rows.find(row => row.path === tree).unavailable, 'prunable');
+  assert.equal(rows.find(row => row.path === other).unavailable, undefined);
+  assert.equal((await act('options')).branches.find(row => row.name === 'available').occupied, true);
+  await assert.rejects(act('open', { path: tree }), /目录已不存在/);
   await fs.mkdir(tree);
   git('-C', tree, 'init', '-q');
   await assert.rejects(act('inspect', { path: tree }), /另一个仓库/);
@@ -106,8 +113,23 @@ test('recheck ownership before removal and recover only the selected missing reg
   const review = await act('inspect', { path: tree });
   assert.equal(review.missing, true);
   await act('remove', { path: tree, version: review.version });
+  rows = await act('list');
+  assert.equal(rows.some(row => row.path === tree), false);
+  assert.equal((await act('options')).branches.find(row => row.name === 'available').occupied, false);
   assert.equal(await act('open', { path: other }), other);
   assert.ok(git('rev-parse', 'available'));
+});
+
+test('a locked worktree on an unavailable volume stays registered without offering to open it', async t => {
+  const { dir, git, act } = await fixture(t);
+  const tree = await act('create', { mode: 'existing', name: 'available', folder: 'external' });
+  git('worktree', 'lock', tree);
+  assert.equal((await act('list')).find(row => row.path === tree).unavailable, undefined);
+  await fs.rename(tree, path.join(dir, 'offline'));
+  const record = (await act('list')).find(row => row.path === tree);
+  assert.equal(record.locked, true);
+  assert.equal(record.unavailable, 'inaccessible');
+  await assert.rejects(act('inspect', { path: tree }), /锁定/);
 });
 
 test('selecting a worktree destination checks the target disk before any Git mutation', async t => {

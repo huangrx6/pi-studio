@@ -18,8 +18,8 @@ export function ExtensionAppearancePicker({ panel, label, onChange }: {
   const packageIcon = statusIconDataUrl(panel);
   const packageSelected = Boolean(statusIconDataUrl(panel, override));
   const colorLabel = packageSelected ? '插件原色' : colorLabels[appearance.color];
-  const workbench = panel.slot === 'panel.side';
-  const action = workbench ? '工作台图标与配色' : '图标与配色';
+  const detailView = (panel.slot === 'tool.view' || panel.slot === 'status.detail');
+  const action = detailView ? '视图图标与配色' : '图标与配色';
   return <>
     <button className="extension-appearance-trigger" type="button" aria-label={`${panel.title} ${action}`}
       aria-expanded={open} aria-controls={open ? editorId : undefined} onClick={() => setOpen(!open)}>
@@ -27,7 +27,7 @@ export function ExtensionAppearancePicker({ panel, label, onChange }: {
       <span className="extension-appearance-value"><ExtensionStatusIcon item={panel} />{packageSelected ? '插件默认图标' : `${iconLabels[appearance.icon]} · ${colorLabel}`}</span>
       <ChevronRight aria-hidden="true" />
     </button>
-    {open && <div id={editorId} className="extension-appearance-editor" role="group" aria-label={`${panel.title} ${workbench ? '工作台外观' : '外观'}`}>
+    {open && <div id={editorId} className="extension-appearance-editor" role="group" aria-label={`${panel.title} ${detailView ? '视图外观' : '外观'}`}>
       <fieldset><legend>图标</legend><div className="extension-icon-choices">
         {packageIcon && <button type="button" aria-pressed={packageSelected} aria-label="插件默认图标" title="插件默认图标"
           onClick={() => onChange(panel.id, override?.color ? { color: override.color } : undefined)}>

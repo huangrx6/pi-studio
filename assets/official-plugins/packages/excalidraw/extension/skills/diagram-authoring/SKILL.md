@@ -17,12 +17,12 @@ compatibility: Requires Python 3.10+; PNG/SVG/PDF exports need a browser or draw
 默认用 Excalidraw；需要 draw.io 接手或 PDF 导出时用 draw.io；需要文本图或明确要求 Mermaid 时用 Mermaid。
 前两者共享结构和布局；Mermaid 使用自己的布局引擎。各后端的形状、约束和样式不同，不承诺无损切换。
 
-## 在 Pi Studio 默认实时侧栏绘制
+## 在 Pi Studio 默认实时工具面板绘制
 
-- **凡是在 Pi Studio 中绘制架构图、流程图、依赖图、状态图、网络拓扑或思维导图，只要 `excalidraw_draw` 工具可用，确认内容与配色后默认必须直接调用 `excalidraw_draw`**（传入 [diagram-authoring 规格](references/diagram-spec.md) 作为 `spec`，可选 `colors` 和 `library`）。不要先用 `bash` 写 `.diagram.json` / `.excalidraw` 文件打开静态预览来替代侧栏实时绘制。
+- **凡是在 Pi Studio 中绘制架构图、流程图、依赖图、状态图、网络拓扑或思维导图，只要 `excalidraw_draw` 工具可用，确认内容与配色后默认必须直接调用 `excalidraw_draw`**（传入 [diagram-authoring 规格](references/diagram-spec.md) 作为 `spec`，可选 `colors` 和 `library`）。不要先用 `bash` 写 `.diagram.json` / `.excalidraw` 文件打开静态预览来替代工具面板实时绘制。
 - **同一会话支持多个独立画板切换**：当同一个会话需要画多张彼此独立的图（如总览图与局部细节图）时，为 `spec.title` 指定新标题或传 `mode: "new"`，`excalidraw_draw` 会自动在该会话中新建一块独立画板并切换过去绘制，用户可在画板顶部随时切换各个画板；需要回到某块已有画板继续追加或修改时，用 `excalidraw_read` 查看 `boards` 清单并传入对应 `boardId`。
-- 调用 `excalidraw_draw` 后侧栏会自动滑出，并在用户眼前用画笔实时逐笔画出图形、文字与连线。内部自动复用随包排版脚本，完整支持 `style.edges`（`rounded`/`curved`/`sharp`/`straight`）、无框 `shape: "icon"`、平行双向边错开与 `.excalidrawlib` 素材库（自动扫描 `~/.agent-skills/data/diagram-authoring/libraries/` 或通过 `library` 传入内联 JSON）。
-- **仅当用户明确要求** draw.io（`.drawio`）、Mermaid（`.mmd`）、或要求生成文件写入项目指定目录交付时，才执行下方的命令行 `scripts/` 流程将文件落盘。用户在侧栏看完实时绘制后，也可直接在画布工具栏导出可编辑 `.excalidraw` 文件。
+- 调用 `excalidraw_draw` 后工具面板会自动打开，并在用户眼前用画笔实时逐笔画出图形、文字与连线。内部自动复用随包排版脚本，完整支持 `style.edges`（`rounded`/`curved`/`sharp`/`straight`）、无框 `shape: "icon"`、平行双向边错开与 `.excalidrawlib` 素材库（自动扫描 `~/.agent-skills/data/diagram-authoring/libraries/` 或通过 `library` 传入内联 JSON）。
+- **仅当用户明确要求** draw.io（`.drawio`）、Mermaid（`.mmd`）、或要求生成文件写入项目指定目录交付时，才执行下方的命令行 `scripts/` 流程将文件落盘。用户在工具面板看完实时绘制后，也可直接在画布工具栏导出可编辑 `.excalidraw` 文件。
 
 ## 用户决定内容与视觉
 
@@ -55,7 +55,7 @@ compatibility: Requires Python 3.10+; PNG/SVG/PDF exports need a browser or draw
    配色确认后，按需提交图标方案（Excalidraw 与 draw.io 均支持同一套 `.excalidrawlib` 素材库）：是否使用、实际素材来源/库名、节点覆盖清单与是否用无框 `shape: "icon"`（拓扑/设备图优先）、颜色处理；
    等待用户确认后才设置 icon。Mermaid 不支持图标，此节点说明为不适用；有图标诉求先解决后端选择。
 5. 适用节点均确认后：
-   - 如果当前后端为 Excalidraw 且 `excalidraw_draw` 工具可用，且用户没有要求仅写文件到目录，**优先直接构造符合契约的 `spec`（与 `colors`）调用 `excalidraw_draw` 打开侧栏实时逐笔绘制**，不要通过命令行写出文件代替侧栏绘制。
+   - 如果当前后端为 Excalidraw 且 `excalidraw_draw` 工具可用，且用户没有要求仅写文件到目录，**优先直接构造符合契约的 `spec`（与 `colors`）调用 `excalidraw_draw` 打开工具面板实时逐笔绘制**，不要通过命令行写出文件代替工具面板绘制。
    - 仅当使用命令行落盘（draw.io / Mermaid / 用户明确要求生成文件到指定目录）时，校验规格并运行 `python3 scripts/check_semantics.py`，对照来源处理语义提示；不自动删改事实。
    Mermaid 路径先读 [Mermaid 后端](references/mermaid-backend.md)：使用 `emit_mermaid.py`，再用 `check_mermaid.py` 做官方语法检查；不运行下面的几何/观看检查，完成后进入第 8 步。
    Excalidraw/draw.io 的 emit 会校验规格、计算布局、有限调参，再原子写入；有阻塞项时不写成品。

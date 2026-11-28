@@ -4,7 +4,6 @@ import {
   ListTree, PanelLeft, Plus, RefreshCw, Save as SaveIcon, X,
 } from 'lucide-react';
 import libraryIcon from '../../../assets/official-plugins/packages/notes-library/assets/icon.png';
-import libraryIllustration from '../../../assets/official-plugins/packages/notes-library/assets/empty-notebook.webp';
 import {
   askAboutNote, label, message, notePath, request, retry, useBridge,
   type Entry, type Library, type Note, type Save, type Search, type Section, type Tree,
@@ -60,14 +59,14 @@ export function NotesApp() {
   if (state.error) surface = <div className="notes-welcome">
     <img className="welcome-mark" src={libraryIcon} alt="" />
     <h1>知识库暂不可用</h1><p role="alert">{state.error}</p>
-    <button className="secondary" type="button" onClick={retry}><RefreshCw size={15} />重试</button>
+    <button className="secondary" type="button" onClick={retry}><RefreshCw size="calc(var(--icon-sm) + 1px)" />重试</button>
   </div>;
   else if (state.loading && !state.data) surface = <div className="notes-welcome" role="status">正在打开知识库…</div>;
   else if (!state.data?.library) surface = <div className="notes-welcome">
-    <img className="library-illustration" src={libraryIllustration} alt="" draggable={false} />
+    <span className="library-start-mark" aria-hidden="true"><FolderOpen size="calc(var(--icon-lg) + 2px)" strokeWidth={1.55} /></span>
     <h1>选择你的笔记目录</h1>
     <p>在一个地方阅读、编辑和整理已有的 Markdown 与 HTML 笔记。</p>
-    <button className="primary" type="button" disabled={busy} onClick={() => void choose()}><FolderOpen size={16} />选择目录</button>
+    <button className="primary" type="button" disabled={busy} onClick={() => void choose()}><FolderOpen size="var(--icon-md)" />选择目录</button>
     {error && <p className="dialog-error" role="alert">{error}</p>}
   </div>;
   else surface = <NotesWorkspace key={state.data.library.id} library={state.data.library} sections={state.data.sections}
@@ -383,30 +382,30 @@ function NotesWorkspace({ library, sections, revision, choose, choosing, rootErr
     <section className="notes-content" aria-label="笔记阅读与编辑">
       <header className="notes-toolbar">
         <div className="breadcrumb">
-          <IconButton label={nav ? '收起目录' : '展开目录'} aria-pressed={nav} onClick={() => setNav(!nav)}><PanelLeft size={17} /></IconButton>
+          <IconButton label={nav ? '收起目录' : '展开目录'} aria-pressed={nav} onClick={() => setNav(!nav)}><PanelLeft size="calc(var(--icon-md) + 1px)" /></IconButton>
           <Breadcrumb path={activePath} />
         </div>
         <div className="toolbar-actions">
           {opened && <div className="toolbar-group toolbar-save-group">
             <SaveStatus state={saveState} label={saveLabel} />
             {dirty && <IconButton className="save-button" label="保存" disabled={conflict || saving}
-              onClick={() => void save()}><SaveIcon size={16} /></IconButton>}
+              onClick={() => void save()}><SaveIcon size="var(--icon-md)" /></IconButton>}
           </div>}
           {opened && <span className="toolbar-divider" aria-hidden="true" />}
           {opened && <div className="modes" role="group" aria-label="阅读和编辑模式">
             {MODES.map(({ key, text, icon: Icon }) => <IconButton key={key} label={text} aria-pressed={mode === key}
-              onClick={() => setMode(key)}><Icon size={16} /></IconButton>)}
+              onClick={() => setMode(key)}><Icon size="var(--icon-md)" /></IconButton>)}
           </div>}
           {opened && <span className="toolbar-divider" aria-hidden="true" />}
           <div className="toolbar-group">
             <ThemeMenu selected={appearance.theme} onChange={theme => applyAppearance({ theme })} />
-            {editable && <IconButton label="大纲与反向链接" aria-pressed={outline} onClick={() => setOutline(!outline)}><ListTree size={17} /></IconButton>}
+            {editable && <IconButton label="大纲与反向链接" aria-pressed={outline} onClick={() => setOutline(!outline)}><ListTree size="calc(var(--icon-md) + 1px)" /></IconButton>}
           </div>
         </div>
       </header>
       {(error || treeError) && <div className="error-strip" role="alert"><span>{error || treeError}</span>
         {treeError && <button type="button" onClick={() => setRefresh(value => value + 1)}>重试</button>}
-        <IconButton label="关闭提示" onClick={() => { setError(''); setTreeError(''); }}><X size={14} /></IconButton>
+        <IconButton label="关闭提示" onClick={() => { setError(''); setTreeError(''); }}><X size="var(--icon-sm)" /></IconButton>
       </div>}
       {conflict && opened && <div className="conflict-strip" role="alert">
         <span>{opened.external ? '磁盘上的版本已修改，草稿已保留。' : '磁盘上的文件已移走，草稿已保留。'}</span>
@@ -421,7 +420,7 @@ function NotesWorkspace({ library, sections, revision, choose, choosing, rootErr
       </div>}
       {opened?.note.format === 'html' && mode !== 'source' && <div className="html-toolbar">
         <span>HTML · 静态预览</span>
-        <button type="button" onClick={openFile}><ExternalLink size={13} />用浏览器打开</button>
+        <button type="button" onClick={openFile}><ExternalLink size="calc(var(--icon-xs) + 1px)" />用浏览器打开</button>
       </div>}
       <div className="notes-body">
         <div className="notes-document" data-mode={opened ? mode : 'read'}>
@@ -445,16 +444,15 @@ function NotesWorkspace({ library, sections, revision, choose, choosing, rootErr
           </> : entry && !editable ? <AttachmentReader entry={entry} library={library.id} open={openFile} />
             : entry ? <div className="note-rendering" role="status">{error ? '无法打开此笔记' : '正在读取笔记…'}</div>
               : <div className="library-start">
-                <img className="library-illustration" src={libraryIllustration} alt="" draggable={false} />
-                {!hasNotes && tree !== EMPTY_TREE && !treeError &&
-                  <button className="secondary" type="button" onClick={() => newEntry()}><Plus size={16} />新建笔记</button>}
+                <h2>{hasNotes ? '选择一篇笔记开始阅读' : '从第一篇笔记开始'}</h2>
+                <p>{hasNotes ? '在左侧目录浏览，或直接新建与检索本地笔记' : '支持 Markdown 与 HTML，按 PARA 结构整理知识'}</p>
               </div>}
         </div>
         {outline && editable && <ResizableOutline width={appearance.outlineWidth} onResize={outlineWidth => applyAppearance({ outlineWidth })}>
           <header className="notes-pane-title">
-            <ListTree size={16} aria-hidden="true" />
+            <ListTree size="var(--icon-md)" aria-hidden="true" />
             <h2>大纲与引用</h2>
-            <IconButton label="收起大纲" onClick={() => setOutline(false)}><X size={15} /></IconButton>
+            <IconButton label="收起大纲" onClick={() => setOutline(false)}><X size="calc(var(--icon-sm) + 1px)" /></IconButton>
           </header>
           <div className="outline-content">
             <div className="outline-section-label">大纲</div>
@@ -470,7 +468,7 @@ function NotesWorkspace({ library, sections, revision, choose, choosing, rootErr
             <div className="outline-section-label">反向链接</div>
             <nav aria-label="反向链接">{backlinks.length ? backlinks.map(item =>
               <button className="pane-row outline-row" type="button" key={item.path} title={item.path} onClick={() => open(item)}>
-                <FileText size={14} aria-hidden="true" />
+                <FileText size="var(--icon-sm)" aria-hidden="true" />
                 <span>{label(item.name)}</span>
               </button>)
               : <p className="outline-empty">暂无其他笔记引用</p>}</nav>
@@ -483,7 +481,7 @@ function NotesWorkspace({ library, sections, revision, choose, choosing, rootErr
     </section>
     {popup?.kind === 'settings' && <Modal title="知识库设置" onClose={close}>
       <div className="dialog-content settings-actions">
-        <small><FolderOpen size={15} />当前目录　{library.name}</small>
+        <small><FolderOpen size="calc(var(--icon-sm) + 1px)" />当前目录　{library.name}</small>
         <button className="secondary" type="button" disabled={busy} onClick={() => void mutation('initialize', {})}>补齐 PARA 目录和规范</button>
         <button className="secondary" type="button" disabled={choosing} onClick={() => guarded(() => { void choose(); })}>选择其他目录</button>
         <p className="quiet">补齐时沿用已有分类名，并保留现有笔记和规范。</p>

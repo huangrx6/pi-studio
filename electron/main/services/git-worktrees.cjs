@@ -4,14 +4,14 @@ const path = require('node:path');
 const { checkWorktreeSpace } = require('../core/worktree-space.cjs');
 const { createHash } = require('node:crypto');
 const { gitRead, runGitCommand: run, validateBranch, withRepositoryWrite, withGitLock } = require('./git-tools.cjs');
-const { parseStatus, parseWorktrees } = require('./git-workspace.cjs');
+const { parseStatus, describeWorktrees } = require('./git-workspace.cjs');
 
 function contains(parent, child) {
   const relative = path.relative(parent, child);
   return relative === '' || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative));
 }
 async function trees(cwd) {
-  const list = parseWorktrees(await run(cwd, ['worktree', 'list', '--porcelain', '-z']), cwd);
+  const list = await describeWorktrees(await run(cwd, ['worktree', 'list', '--porcelain', '-z']), cwd);
   if (!list.length) throw new Error('无法读取 Git 工作树列表。');
   return list;
 }
@@ -22,24 +22,24 @@ async function statOrMissing(target) {
 
 async function createTree(root, input) {
   const { name, folder, mode } = input;
-  if (!['existing', 'new'].includes(mode)) throw new Error('请选择分支类型。');
+  if (!['existing', 'new'].includes(mode)) throw new Error('请选择新建分支或已有分支。');
   await validateBranch(root, name);
   if (typeof folder !== 'string' || !folder.trim() || folder === '.' || folder === '..' ||
       /[<>:"/\\|?*\x00-\x1f]/.test(folder) || /[ .]$/.test(folder) ||
-      /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(folder)) throw new Error('请输入有效的文件夹名称。');
+      /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(folder)) throw new Error('工作树名称需要是有效的文件夹名。请检查特殊字符或换一个名称。');
   const [list, refs] = await Promise.all([trees(root), gitRead(root, { kind: 'branches' })]);
   const ref = refs.branches.find(row => !row.remote && row.name === name);
   if (mode === 'existing' && (!ref || ref.worktree)) throw new Error(ref ? '该分支已由另一工作树使用。' : '本地分支已不存在。');
   if (mode === 'new' && ref) throw new Error('同名分支已存在。');
   const start = input.baseBranch === undefined ? refs.head : refs.branches.find(row => !row.remote && row.name === input.baseBranch)?.head;
-  if (mode === 'new' && (!start || start !== input.head)) throw new Error('起点提交已变化，请刷新分支后确认。');
-  if (input.parent && (typeof input.parent !== 'string' || !path.isAbsolute(input.parent))) throw new Error('请选择工作树的目标目录。');
+  if (mode === 'new' && (!start || start !== input.head)) throw new Error('分支起点已变化。请重新打开创建窗口，确认新的起点。');
+  if (input.parent && (typeof input.parent !== 'string' || !path.isAbsolute(input.parent))) throw new Error('请选择新工作树的父目录。');
   const parent = await fs.realpath(input.parent || path.dirname(list[0].path));
   if (!(await fs.stat(parent)).isDirectory() || list.some(tree => contains(tree.path, parent))) {
-    throw new Error('请选择现有工作树以外的目录。');
+    throw new Error('请在现有工作树以外选择父目录。');
   }
   const target = path.join(parent, folder);
-  if (list.some(row => row.path === target) || await statOrMissing(target)) throw new Error('目标文件夹已存在，请换一个名称。');
+  if (list.some(row => row.path === target) || await statOrMissing(target)) throw new Error('目标文件夹已存在，请更改工作树名称或父目录。');
   await checkWorktreeSpace(root, mode === 'new' ? start : 'refs/heads/' + name, path.dirname(target));
   try {
     await run(root, ['worktree', 'add', ...(mode === 'new' ? ['-b', name] : []), '--', target, mode === 'new' ? start : name]);
@@ -106,6 +106,7 @@ async function reviewRemoval(root, input, assertUnused) {
 }
 
 async function manageWorktree(cwd, input, { trashItem, assertUnused } = {}) {
+  if (input?.kind === 'list') return trees(cwd);
   if (input?.kind === 'options') {
     const { head, branch, branches } = await gitRead(cwd, { kind: 'branches' });
     return { head, branch, branches: branches.filter(ref => !ref.remote).map(ref => ({ name: ref.name, head: ref.head, occupied: Boolean(ref.worktree) })) };
@@ -113,6 +114,8 @@ async function manageWorktree(cwd, input, { trashItem, assertUnused } = {}) {
   if (input?.kind === 'open') {
     const { tree, stat } = await treeAt(cwd, input.path);
     if (!stat) throw new Error('此工作树目录已不存在。');
+    if (tree.unavailable) throw new Error('此登记没有可打开的工作目录，请检查工作树。');
+    if (input.expectedBranch && tree.branch !== input.expectedBranch) throw new Error('该工作树的分支已变化，请重新选择。');
     return tree.path;
   }
   return withRepositoryWrite(cwd, async root => {

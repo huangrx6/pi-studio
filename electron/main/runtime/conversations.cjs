@@ -13,6 +13,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { randomUUID } = require('node:crypto');
+const { describeWorkspaceTrees } = require('../services/workspace-tree-directory.cjs');
 const { chatAttachments, parseAttachmentMarkers } = require('../core/attachment-markers.cjs');
 const { getStudioDatabase } = require('../core/studio-db.cjs');
 const {
@@ -43,6 +44,7 @@ const {
 } = require('../services/models.cjs');
 const { bindConversationUploads } = require('../services/conversation-assets.cjs');
 const { waitForAssetArchive } = require('../services/conversation-asset-archive.cjs');
+const { endBrowserSession } = require('../services/browser/queue.cjs');
 const { flushConversationFileCleanup, queueConversationFileCleanup } = require('../services/conversation-file-cleanup.cjs');
 const { closeConversationDataViewServices } = require('../services/extension-data-view.cjs');
 const { fileReferenceContext } = require('../services/workspace.cjs');
@@ -838,7 +840,7 @@ function validateWorkspace(cwd) {
   return path.resolve(cwd);
 }
 
-async function createConversation({ cwd, title = '新会话', goal = '' } = {}) {
+async function createConversation({ cwd, title = '新会话', goal = '', adoptDraftTools = false } = {}, { scheduledRunId } = {}) {
   const workspace = validateWorkspace(cwd);
   const cleanGoal = String(goal || '').trim();
   const runtime = await getDurableRuntime();
@@ -880,13 +882,20 @@ async function createConversation({ cwd, title = '新会话', goal = '' } = {}) 
         }
       : {}),
   }, runtime.context);
-  const row = getStudioDatabase().insertConversation({
-    id: String(conversation.id),
-    workspace,
-    kind: 'conversation',
-    title: String(title || '新会话').trim() || '新会话',
-    goal: cleanGoal,
+  const db = getStudioDatabase();
+  const row = db.transaction(() => {
+    const row = db.insertConversation({
+      id: String(conversation.id),
+      ...(scheduledRunId ? { publicId: scheduledRunId, archived: true } : {}),
+      workspace,
+      kind: 'conversation',
+      title: String(title || '新会话').trim() || '新会话',
+      goal: cleanGoal,
+    });
+    if (adoptDraftTools === true) db.adoptDraftTools(workspace, row.publicId);
+    return row;
   });
+  if (adoptDraftTools === true) require('../services/tool-window.cjs').adoptDraftTools(workspace, row.publicId, row.title);
   return conversationDto(row, {
     messages: [],
     model: await sessionModelInfo({
@@ -902,27 +911,29 @@ async function listWorkspaces() {
   await refreshRuntimeState();
   const db = getStudioDatabase();
   const groups = new Map();
-  for (const workspace of db.listWorkspaces().filter((item) => !item.hidden)) {
-    groups.set(workspace.cwd, {
-      cwd: workspace.cwd,
-      name: workspace.name,
-      sessions: [],
-    });
+  const registered = new Map(db.listWorkspaces().map(item => [item.cwd, item]));
+  function workspaceGroup(cwd) {
+    let group = groups.get(cwd);
+    if (!group) {
+      group = { cwd, name: registered.get(cwd)?.name || path.basename(cwd) || cwd, sessions: [] };
+      groups.set(cwd, group);
+    }
+    return group;
+  }
+  for (const workspace of registered.values()) {
+    if (!workspace.hidden) workspaceGroup(workspace.cwd);
   }
   for (const row of db.listConversations({ includeArchived: true })) {
-    if (!groups.has(row.workspace)) {
-      groups.set(row.workspace, {
-        cwd: row.workspace,
-        name: path.basename(row.workspace) || row.workspace,
-        sessions: [],
-      });
-    }
-    groups.get(row.workspace).sessions.push(conversationDto(row, {
+    workspaceGroup(row.workspace).sessions.push(conversationDto(row, {
       messageCount: messageCounts.get(conversationKey(row)) || 0,
       running: runningConversations.has(conversationKey(row)),
     }));
   }
-  return [...groups.values()]
+  for (const { workspace, id, name } of db.listWorkspaceRooms()) {
+    (workspaceGroup(workspace).rooms ??= []).push({ id, name });
+  }
+  const workspaces = await describeWorkspaceTrees([...groups.values()], db);
+  return workspaces
     .map((workspace) => {
       const sessions = workspace.sessions.sort((a, b) => (
         Number(b.pinned) - Number(a.pinned) || b.updatedAt - a.updatedAt
@@ -1023,13 +1034,15 @@ function submissionReferences(text, cwd, selection) {
 
 async function submitConversation(input = {}, options = {}) {
   const row = await getConversationRow(input.id || input.sessionId);
+  if (row) validateWorkspace(row.workspace);
   const conversation = await getConversationHandle(input.id || input.sessionId, {
     verifyExtensionIntegrity: true,
   });
   if (!row || !conversation) throw new Error('会话不存在');
   const runtime = await getDurableRuntime();
   const originalText = String(input.text || '').trim();
-  await guardSensitiveInput({ sessionId: row.publicId, text: originalText });
+  await guardSensitiveInput({ sessionId: row.publicId, text: originalText, signal: options.signal });
+  options.signal?.throwIfAborted();
   return withConversationMutation(row.id, () => admitConversation(row, conversation, runtime, originalText, input, options));
 }
 
@@ -1073,6 +1086,7 @@ async function admitConversation(row, conversation, runtime, originalText, input
     ? input.requestId
     : randomUUID();
   const whenBusy = options.edit ? 'reject' : busyPolicy(input.whenBusy);
+  options.signal?.throwIfAborted();
   const submission = await conversation.submit({
     type: 'input',
     content,
@@ -1671,6 +1685,7 @@ async function abortConversation(id, options = {}) {
   const row = await getConversationRow(id);
   const conversation = await getConversationHandle(id);
   if (!row || !conversation) throw new Error('会话不存在');
+  endBrowserSession(row.id);
   const wasRunning = runningConversations.has(conversationKey(row));
   const runtime = await getDurableRuntime();
   // Stop background children with the main turn. The UI exposes one stop
@@ -1830,6 +1845,7 @@ async function purgeConversationDataUnlocked(rootIds, options) {
         queueConversationFileCleanup(db, selected, rows, finalTree);
       },
     });
+    require('../services/tool-window.cjs').forgetToolWindowOwners(removed.publicIds.map(id => 'conversation:' + id));
     await waitForAssetArchive(db);
     return {
       ...removed,
@@ -1903,7 +1919,9 @@ async function conversationAction(input = {}) {
         [...removed.publicIds, ...sessions.map((item) => item.publicId)],
       );
       await purgeProjectWorkspaceState(input.id, await getDurableRuntime());
+      const rooms = db.db.prepare('SELECT id FROM team_rooms WHERE workspace = ?').all(input.id);
       db.removeWorkspace(input.id);
+      require('../services/tool-window.cjs').forgetToolWindowOwners(['draft:' + input.id, ...rooms.map(room => 'room:' + room.id)]);
       return {
         ok: true,
         deletedSessions: sessions.length,
@@ -2006,10 +2024,6 @@ async function refreshEndedConversation(row) {
   const { tasks } = await taskGraph(key);
   if (tasks.some(task => task.conversationId === String(row.id))) runningConversations.add(key);
   else runningConversations.delete(key);
-}
-
-function cloneJson(value) {
-  return value === undefined ? undefined : structuredClone(value);
 }
 
 async function disposeWatch(key) {

@@ -3,7 +3,7 @@
   "format": 1,
   "id": "pi-project-scripts",
   "name": "项目脚本速查",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "查看当前工作区的项目脚本，按包管理器生成并复制运行命令。",
   "author": "huangrx6",
   "publisher": "Pi Studio",
@@ -22,7 +22,7 @@
     "panels": [
       {
         "id": "script-list", "title": "项目脚本速查", "description": "浏览工作区中的脚本及运行命令。",
-        "slot": "panel.side", "size": "regular", "priority": 20,
+        "slot": "tool.view", "size": "regular", "priority": 20,
         "content": [{ "kind": "dataView", "sourceId": "user:pi-project-scripts/scripts" }]
       },
       {

@@ -12,7 +12,6 @@ try {
  const errors=[];page.on('pageerror',error=>{errors.push(error.message);console.error(error);});
  await page.addInitScript(()=>{
   localStorage.setItem("pi-studio:preferences",JSON.stringify({showCodeView:true}));
-  localStorage.setItem('pi-studio:panel-width','700');
   const model={modelRef:'demo/model',label:'Demo',thinkingLevel:'default',thinkingLevels:['default'],effectiveThinkingLevel:'off'};
   const file={path:'/workspace/src/session.ts',label:'src/session.ts',status:'modified',added:4,removed:2,patch:'--- a/src/session.ts\n+++ b/src/session.ts\n@@ -35,4 +35,6 @@\n const session = getSession();\n-if (session.running) return;\n+if (session.running) {\n+  await session.followUp(message);\n+  return;\n+}\n await session.prompt(message);\n // '+ 'Long line '.repeat(18)+'\n@@ -92,1 +94,1 @@\n-const done = false;\n+const done = true;\n'};
   const messages=[{role:'user',timestamp:1,content:[{type:'text',text:'检查会话运行状态并修复'}]},
@@ -45,7 +44,7 @@ try {
  assert.equal(await page.locator('.changes-file-toggle[aria-expanded=true]').count(),0);
  await page.getByRole('button',{name:'展开全部差异',exact:true}).click();
  assert.equal(await page.locator('.diff-view.is-embedded').count(),3);
- await page.waitForFunction(()=>Math.abs(document.querySelector('.file-panel').getBoundingClientRect().width-700)<2);
+ assert.equal(await page.getByRole('tabpanel',{name:'回合变更'}).count(),1);
  await page.getByRole('button',{name:'折叠全部差异',exact:true}).click();
  await page.getByRole('button',{name:'跳转到文件',exact:true}).click();
  await page.getByRole('textbox',{name:'搜索本轮文件'}).fill('session');
@@ -91,43 +90,28 @@ try {
   await page.evaluate(theme=>document.documentElement.dataset.theme=theme,theme);
   await page.screenshot({path:output+theme+'.png',animations:'disabled'});
  }
- // Each file opens separately only when explicitly requested; context menu operates on clicked tab.
- const review=page.locator('.panel-tab').filter({has:page.locator('.panel-tab-label',{hasText:/^变更$/})});
- const tabLabels=page.locator('.panel-tab-label');
- assert.deepEqual(await tabLabels.allTextContents(),['变更']);
+ const tabs=page.getByRole('tablist',{name:'工作树标签'});
+ const review=tabs.getByRole('tab',{name:'回合变更',exact:true});
  for (const name of ['src/session.ts','readme.md','other.ts']) {
   await page.getByRole('button',{name:`在新标签页打开 ${name}`,exact:true}).click();
+  const label=name.split('/').at(-1);
+  await page.getByRole('tabpanel',{name:label,exact:true}).waitFor();
+  assert.equal(await tabs.getByRole('tab',{name:label,exact:true}).getAttribute('aria-selected'),'true');
   await review.click();
  }
- assert.deepEqual(await tabLabels.allTextContents(),['变更','session.ts','readme.md','other.ts']);
- const sessionTab=page.locator('.panel-tab').filter({hasText:'session.ts'});
- await sessionTab.click({button:'right'});
- await page.getByRole('menuitem',{name:'关闭右侧标签页',exact:true}).click();
- assert.deepEqual(await tabLabels.allTextContents(),['变更','session.ts']);
- await sessionTab.click({button:'right'});
- await page.getByRole('menuitem',{name:'关闭左侧标签页',exact:true}).click();
- assert.deepEqual(await tabLabels.allTextContents(),['session.ts']);
- await page.getByRole('button',{name:'查看变更',exact:true}).click();
- await page.getByRole('button',{name:'在新标签页打开 other.ts',exact:true}).click();
- await review.click({button:'right'});
- await page.getByRole('menuitem',{name:'关闭其他标签页',exact:true}).click();
- assert.equal(await page.locator('.panel-tab').count(),1);
+ assert.deepEqual(await tabs.getByRole('tab').allTextContents(),['修复会话状态','回合变更','session.ts','readme.md','other.ts']);
+ for (const name of ['session.ts','other.ts','readme.md']) await tabs.getByRole('button',{name:'关闭 '+name,exact:true}).click();
  assert.equal(await review.getAttribute('aria-selected'),'true');
- await review.click({button:'right'});
- await page.getByRole('menuitem',{name:'关闭所有标签页',exact:true}).click();
- await page.locator('.file-panel').waitFor({state:'detached'});
+ await tabs.getByRole('button',{name:'关闭 回合变更',exact:true}).click();
+ assert.equal(await tabs.getByRole('tab',{name:'修复会话状态'}).getAttribute('aria-selected'),'true');
  await page.getByRole('button',{name:'查看变更',exact:true}).click();
  await page.locator('.changes-view').waitFor();
- assert.equal(await page.locator('.panel-tab').count(),1);
- const handle=page.getByRole('separator',{name:'调整右侧面板宽度'});
- await handle.focus(); for(let i=0;i<10;i++) await page.keyboard.press('ArrowRight');
- await page.waitForFunction(()=>document.querySelector('.file-panel').getBoundingClientRect().width<330);
+ await page.setViewportSize({width:780,height:920});
  await page.getByRole('button',{name:'展开全部差异',exact:true}).click();
- await page.locator('.diff-unified').first().waitFor();
  assert.equal(await page.locator('.changes-toolbar').evaluate(node=>node.scrollWidth>node.clientWidth),false);
  await page.getByRole('button',{name:'差异布局',exact:true}).click();
  await page.keyboard.press('Escape'); assert.equal(await page.getByRole('menu').count(),0);
  await page.screenshot({path:output+'narrow.png',animations:'disabled'});
  assert.deepEqual(errors,[]);
- console.log('PASS: round list, expand/collapse, jump, wrap alignment, layouts, full snapshot, options, preview, editor, refresh, history, separate tabs and all bulk close modes.');
-} catch(error) { const page=browser.contexts()[0]?.pages()[0]; if(page) { await page.screenshot({path:output+'failure.png'}); console.log(await page.locator('.file-panel, .changes-toolbar, .changes-scroll').evaluateAll(nodes=>nodes.map(node=>({cls:node.className,rect:node.getBoundingClientRect().toJSON()})))); } throw error; } finally {await browser.close(); await server.close();}
+ console.log('PASS: round list, expand/collapse, jump, wrap alignment, layouts, full snapshot, options, preview, editor, refresh, history and session-owned document tabs.');
+} catch(error) { const page=browser.contexts()[0]?.pages()[0]; if(page) { await page.screenshot({path:output+'failure.png'}); console.log(await page.locator('.session-document, .changes-toolbar, .changes-scroll').evaluateAll(nodes=>nodes.map(node=>({cls:node.className,rect:node.getBoundingClientRect().toJSON()})))); } throw error; } finally {await browser.close(); await server.close();}

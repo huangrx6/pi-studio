@@ -1,38 +1,28 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { studioViewTokens, type PiStudioViewHostContext, type PiStudioViewTheme } from '../../../../sdk/extensions/view-theme.mjs';
 import { errorText } from '../../shared/error-text';
+import { LoadingState } from '../../shared/LoadingState';
 import type { ExtensionViewUiDescriptor } from '../../types/extension-types';
 import type { ExtensionNotice } from './ExtensionSlot';
 import { useExtensionDataView } from './use-extension-data-view';
 import './styles/extension-view.css';
 
 const PROTOCOL = 'pi-studio:ext-view:v1';
-const SHARED_TOKENS = [
-  '--bg', '--surface', '--surface-floating', '--surface-hover', '--inline-code-bg', '--tint-neutral',
-  '--text', '--text-1', '--text-2', '--muted', '--faint', '--disabled-text',
-  '--border', '--border-hover', '--divider', '--focus-color',
-  '--accent', '--accent-soft', '--accent-border', '--accent-tint',
-  '--button-bg', '--button-hover', '--on-button',
-  '--info', '--success', '--warning', '--warning-soft', '--warning-border', '--error', '--error-soft',
-  '--font', '--font-mono', '--shadow-float', '--shadow-deep',
-  '--radius-control', '--radius-card', '--radius-panel', '--radius-tag',
-];
 
-function currentTheme(): 'light' | 'dark' {
-  return document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light';
-}
-
-function readHostTokens(): Record<string, string> {
-  const computed = getComputedStyle(document.documentElement);
+function readHostTheme(): PiStudioViewTheme {
+  const root = document.documentElement;
+  const computed = getComputedStyle(root);
   const tokens: Record<string, string> = {};
-  for (const name of SHARED_TOKENS) {
+  for (const name of studioViewTokens) {
     const value = computed.getPropertyValue(name).trim();
     if (value) tokens[name] = value;
   }
-  return tokens;
+  return { theme: root.dataset.theme === 'dark' ? 'dark' : 'light', tokens };
 }
 
 export type ExtensionViewWorkspace = { name: string; path: string };
+export type ExtensionViewSize = { url: string; height: number };
 
 export type OpenTemporaryChatOptions = {
   prompt?: string;
@@ -49,6 +39,8 @@ type ViewConnectionProps = {
   onSendPrompt?: (text: string, submit: boolean) => void;
   onOpenTemporaryChat?: (options?: OpenTemporaryChatOptions) => void;
   onNotify?: (notice: ExtensionNotice) => void;
+  onClose?: () => void;
+  compactSize?: MutableRefObject<ExtensionViewSize | undefined>;
 };
 
 function ExtensionViewConnection({
@@ -60,11 +52,15 @@ function ExtensionViewConnection({
   onSendPrompt,
   onOpenTemporaryChat,
   onNotify,
+  onClose,
+  compactSize,
 }: ViewConnectionProps) {
   const [viewParams, setViewParams] = useState<Record<string, unknown>>({});
-  const [theme, setTheme] = useState<'light' | 'dark'>(currentTheme);
-  const [tokenRevision, setTokenRevision] = useState(0);
+  const [appearance, setAppearance] = useState(readHostTheme);
   const [frameReady, setFrameReady] = useState(false);
+  const [frameLoaded, setFrameLoaded] = useState(false);
+  const [contentHeight, setContentHeight] = useState(() =>
+    compactSize?.current?.url === view.url ? compactSize.current.height : undefined);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const pendingInvokesRef = useRef(new Map<string, Set<Promise<unknown>>>());
   const lastContextKeyRef = useRef('');
@@ -98,6 +94,7 @@ function ExtensionViewConnection({
       return pending?.size ? Promise.allSettled([...pending]) : undefined;
     },
   );
+  const frameVisible = (frameReady || frameLoaded) && (!compactSize || !loading);
 
   const expectedOrigin = useMemo(() => {
     try { return new URL(view.url).origin; } catch { return ''; }
@@ -110,22 +107,15 @@ function ExtensionViewConnection({
   }, []);
 
   const invocable = !error && owned?.snapshot.viewInvocable === true;
-  const hostTokens = useMemo(() => {
-    void theme;
-    void tokenRevision;
-    return readHostTokens();
-  }, [theme, tokenRevision]);
-
-  const contextPayload = useMemo(() => ({
+  const contextPayload = useMemo<Omit<PiStudioViewHostContext, 'protocol'>>(() => ({
     type: 'host:context',
-    theme,
-    tokens: hostTokens,
+    ...appearance,
     scope: view.scope,
     cwd: scopedCwd,
     sessionId: scopedSessionId,
     workspaces: stableWorkspaces,
     invocable,
-  }), [hostTokens, invocable, scopedCwd, scopedSessionId, stableWorkspaces, theme, view.scope]);
+  }), [appearance, invocable, scopedCwd, scopedSessionId, stableWorkspaces, view.scope]);
 
   const contextKey = useMemo(() => JSON.stringify(contextPayload), [contextPayload]);
 
@@ -161,16 +151,14 @@ function ExtensionViewConnection({
     });
   }, [error, invocable, loading, owned?.snapshot.revision, owned?.snapshot.viewData, postToView]);
 
-  useEffect(() => {
-    const observer = new MutationObserver(() => {
-      setTheme(currentTheme());
-      setTokenRevision(value => value + 1);
-    });
+  useLayoutEffect(() => {
+    const refresh = () => setAppearance(readHostTheme());
+    const observer = new MutationObserver(refresh);
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ['data-theme', 'data-palette', 'data-radius', 'style', 'class'],
     });
-    setTheme(currentTheme());
+    refresh();
     return () => observer.disconnect();
   }, []);
 
@@ -186,10 +174,10 @@ function ExtensionViewConnection({
 
   const ownedRef = useRef(owned);
   ownedRef.current = owned;
-  const callbacksRef = useRef({ onSendPrompt, onOpenTemporaryChat, onNotify, retry, pushContext, pushSnapshot });
-  callbacksRef.current = { onSendPrompt, onOpenTemporaryChat, onNotify, retry, pushContext, pushSnapshot };
+  const callbacksRef = useRef({ onSendPrompt, onOpenTemporaryChat, onNotify, onClose, retry, pushContext, pushSnapshot });
+  callbacksRef.current = { onSendPrompt, onOpenTemporaryChat, onNotify, onClose, retry, pushContext, pushSnapshot };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const onMessage = (event: MessageEvent) => {
       const frameWindow = iframeRef.current?.contentWindow;
       if (!frameWindow || event.source !== frameWindow) return;
@@ -206,6 +194,17 @@ function ExtensionViewConnection({
 
       if (payload.type === 'view:retry') {
         callbacksRef.current.retry();
+        return;
+      }
+
+      if (payload.type === 'view:close') {
+        callbacksRef.current.onClose?.();
+        return;
+      }
+      if (payload.type === 'view:resize' && compactSize && Number.isSafeInteger(payload.height) && payload.height > 0) {
+        const height = Math.min(560, payload.height);
+        compactSize.current = { url: view.url, height };
+        setContentHeight(height);
         return;
       }
 
@@ -275,9 +274,11 @@ function ExtensionViewConnection({
 
     window.addEventListener('message', onMessage);
     return () => window.removeEventListener('message', onMessage);
-  }, [expectedOrigin, postToView]);
+  }, [expectedOrigin, compactSize, postToView, view.url]);
 
-  return <section className="extension-view-panel" aria-label={title}>
+  return <section className="extension-view-panel" aria-label={title}
+    style={compactSize && contentHeight ? { height: contentHeight } : undefined}>
+    {!frameVisible && !error && <LoadingState variant="panel" className="extension-view-loading">正在加载…</LoadingState>}
     {error && !frameReady && <div className="extension-view-feedback" role="status">
       <span>插件视图暂时无法读取：{error}</span>
       <button type="button" className="icon-button" aria-label="重新连接插件视图" onClick={retry}>
@@ -286,10 +287,11 @@ function ExtensionViewConnection({
     </div>}
     <iframe
       ref={iframeRef}
-      className="extension-view-frame"
+      className={`extension-view-frame${frameVisible ? ' is-ready' : ''}`}
       src={view.url}
       title={title}
       sandbox="allow-scripts allow-downloads"
+      onLoad={() => setFrameLoaded(true)}
     />
   </section>;
 }

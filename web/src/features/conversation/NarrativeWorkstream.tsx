@@ -1,4 +1,4 @@
-import { memo, useEffect, useId, useMemo, useState } from 'react';
+import { memo, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   BookOpen,
   Bot,
@@ -21,7 +21,6 @@ import { ConversationImagePreview, type ConversationImage } from './Conversation
 import {
   buildNarrativePhases,
   formatTurnDuration,
-  type NarrativePhase,
   type NarrativeStepItem,
   type StepIconKind,
 } from './narrative-stream-model.ts';
@@ -104,6 +103,19 @@ function StepLeafRow({
     && step.status !== 'error',
   );
   const canExpand = !isDirectFileStep;
+  const showLiveThought = Boolean(
+    step.entry.kind === 'thinking'
+    && isRunning
+    && !expanded
+    && !step.entry.block.redacted,
+  );
+  const liveThoughtRef = useRef<HTMLParagraphElement | null>(null);
+
+  useLayoutEffect(() => {
+    const el = liveThoughtRef.current;
+    if (!el || !showLiveThought) return;
+    el.scrollTop = el.scrollHeight;
+  }, [showLiveThought, step.liveThoughtExcerpt]);
 
   return (
     <li className={`narrative-step is-${step.icon}${isRunning ? ' is-running' : ''}${canExpand && expanded ? ' is-expanded' : ''}`}>
@@ -112,7 +124,7 @@ function StepLeafRow({
           type="button"
           className={`narrative-step-trigger${isDirectFileStep ? ' is-direct-file' : ''}`}
           aria-expanded={canExpand ? expanded : undefined}
-          title={isDirectFileStep ? `在侧边栏打开 ${step.filePath}` : undefined}
+          title={isDirectFileStep ? `在会话标签中打开 ${step.filePath}` : undefined}
           onClick={() => {
             if (isDirectFileStep && step.filePath) {
               onOpenFile?.(step.filePath);
@@ -192,8 +204,10 @@ function StepLeafRow({
         </button>
       </div>
 
-      {step.liveThoughtExcerpt && !expanded && (
-        <p className="narrative-step-thought">{step.liveThoughtExcerpt}</p>
+      {showLiveThought && (
+        <p ref={liveThoughtRef} className="narrative-step-thought">
+          {step.liveThoughtExcerpt || ''}
+        </p>
       )}
 
       {step.images.length > 0 && <StepThumbStrip images={step.images} />}
@@ -210,123 +224,6 @@ function StepLeafRow({
         </div>
       )}
     </li>
-  );
-}
-
-function PhaseGroup({
-  phase,
-  results,
-  defaultOpen,
-  live,
-  onOpenFile,
-  onOpenChangeDiff,
-}: {
-  phase: NarrativePhase;
-  results: Map<string, ChatMessage>;
-  defaultOpen: boolean;
-  live: boolean;
-  onOpenFile?: (path: string) => void;
-  onOpenChangeDiff?: (filePath?: string) => void;
-}) {
-  const [userOpen, setUserOpen] = useState<boolean | null>(null);
-  const [showEarlierSteps, setShowEarlierSteps] = useState(false);
-  const [expandedStepKeys, setExpandedStepKeys] = useState<Set<string>>(() => new Set());
-
-  const isOpen = userOpen ?? defaultOpen;
-  const Icon = STEP_ICON[phase.icon] || Wrench;
-  const isRunning = phase.status === 'running';
-
-  // While streaming, keep visible children bounded to the latest 6 steps unless user asks for earlier ones.
-  const maxLiveSteps = 6;
-  const hiddenCount = !showEarlierSteps && live && phase.steps.length > maxLiveSteps
-    ? phase.steps.length - maxLiveSteps
-    : 0;
-  const visibleSteps = hiddenCount > 0 ? phase.steps.slice(-maxLiveSteps) : phase.steps;
-  const earlierSteps = hiddenCount > 0 && (
-    <button type="button" className="narrative-earlier-btn" onClick={() => setShowEarlierSteps(true)}>
-      查看较早的 {hiddenCount} 步
-    </button>
-  );
-  const renderStep = (step: NarrativeStepItem) => (
-    <StepLeafRow
-      key={step.key}
-      step={step}
-      result={step.entry.kind === 'tool' ? results.get(step.entry.call.id) : undefined}
-      expanded={expandedStepKeys.has(step.key)}
-      onToggle={() => {
-        setExpandedStepKeys((current) => {
-          const next = new Set(current);
-          if (!next.delete(step.key)) next.add(step.key);
-          return next;
-        });
-      }}
-      onOpenFile={onOpenFile}
-      onOpenChangeDiff={onOpenChangeDiff}
-    />
-  );
-
-  if (phase.toolCount === 0 || (phase.steps.length === 1 && !isRunning)) {
-    return (
-      <div className="narrative-group is-flat">
-        {earlierSteps}
-        <ul className="narrative-flat-list">{visibleSteps.map(renderStep)}</ul>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`narrative-group${isOpen ? ' is-open' : ''}${isRunning ? ' is-running' : ''}`}>
-      <button
-        type="button"
-        className="narrative-group-trigger"
-        aria-expanded={isOpen}
-        onClick={() => setUserOpen(!isOpen)}
-      >
-        <span className={`narrative-icon is-${phase.icon}${phase.icon === 'agent' && !isRunning ? ' is-agent-done' : ''}`} aria-hidden="true">
-          <Icon />
-        </span>
-        <span className="narrative-group-title">{phase.headline}</span>
-        {phase.diff && (
-          onOpenChangeDiff ? (
-            <span
-              role="button"
-              tabIndex={0}
-              className="narrative-inline-diff is-clickable"
-              title="查看 Git 变更信息"
-              aria-label={`查看本阶段变更（+${phase.diff.added} -${phase.diff.removed}）`}
-              onClick={(event) => {
-                event.stopPropagation();
-                onOpenChangeDiff();
-              }}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  onOpenChangeDiff();
-                }
-              }}
-            >
-              <span className="is-add">{`+${phase.diff.added}`}</span>
-              <span className="is-del">{`-${phase.diff.removed}`}</span>
-            </span>
-          ) : (
-            <span className="narrative-inline-diff">
-              <span className="is-add">{`+${phase.diff.added}`}</span>
-              <span className="is-del">{`-${phase.diff.removed}`}</span>
-            </span>
-          )
-        )}
-        {isRunning && <span className="narrative-running-dot" aria-hidden="true" />}
-        <ChevronDown className="narrative-chevron" aria-hidden="true" />
-      </button>
-
-      {isOpen && (
-        <div className="narrative-branch">
-          {earlierSteps}
-          <ul className="narrative-step-list">{visibleSteps.map(renderStep)}</ul>
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -355,40 +252,71 @@ function NarrativeWorkstreamComponent({
 }: NarrativeWorkstreamProps) {
   const contentId = useId();
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const [expandedStepKeys, setExpandedStepKeys] = useState<Set<string>>(() => new Set());
   const phases = useMemo(
     () => buildNarrativePhases(entries, results, toolImages, cwd),
     [cwd, entries, results, toolImages],
   );
+  const allSteps = useMemo(
+    () => phases.flatMap((phase) => phase.steps),
+    [phases],
+  );
+  const aggregateDiff = useMemo(() => {
+    let added = 0;
+    let removed = 0;
+    for (const step of allSteps) {
+      if (step.diff) {
+        added += step.diff.added;
+        removed += step.diff.removed;
+      }
+    }
+    return added > 0 || removed > 0 ? { added, removed } : undefined;
+  }, [allSteps]);
 
-  if (phases.length === 0) return null;
+  if (allSteps.length === 0) return null;
 
-  const [firstPhase] = phases;
-  // A single tool group already has a disclosure. Flat thought rows only
-  // need a shared control when there is more than one of them.
-  const hasSummary = phases.length > 1 || (firstPhase.toolCount === 0 && firstPhase.steps.length > 1);
-  const keepOpen = policy === 'keep-open' || density === 'detailed';
-  const isOpen = userOpen ?? (live || keepOpen);
-  const activePhaseId = live
-    ? ([...phases].reverse().find((phase) => phase.status === 'running') ?? phases.at(-1))?.id
-    : undefined;
-  const groups = (!hasSummary || isOpen) && phases.map((phase) => (
-    <PhaseGroup
-      key={phase.id}
-      phase={phase}
-      results={results}
-      defaultOpen={live ? phase.id === activePhaseId : keepOpen}
-      live={live}
+  const renderStep = (step: NarrativeStepItem) => (
+    <StepLeafRow
+      key={step.key}
+      step={step}
+      result={step.entry.kind === 'tool' ? results.get(step.entry.call.id) : undefined}
+      expanded={expandedStepKeys.has(step.key)}
+      onToggle={() => {
+        setExpandedStepKeys((current) => {
+          const next = new Set(current);
+          if (!next.delete(step.key)) next.add(step.key);
+          return next;
+        });
+      }}
       onOpenFile={onOpenFile}
       onOpenChangeDiff={onOpenChangeDiff}
     />
-  ));
+  );
+
+  // Single step renders directly without a redundant collapsible wrapper.
+  if (allSteps.length === 1) {
+    return (
+      <section className={`narrative-stream${live ? ' is-live' : ''}`} aria-label="执行进展">
+        <div className="narrative-group is-flat">
+          <ul className="narrative-flat-list">{renderStep(allSteps[0])}</ul>
+        </div>
+      </section>
+    );
+  }
+
+  const singleToolPhase = phases.length === 1 && phases[0].toolCount > 0 ? phases[0] : null;
+  const SummaryIcon = singleToolPhase ? (STEP_ICON[singleToolPhase.icon] || Wrench) : ListTree;
+  const summaryTitle = singleToolPhase ? singleToolPhase.headline : '执行过程';
+  const isRunning = live && allSteps.some((step) => step.status === 'running');
+  const keepOpen = policy === 'keep-open' || density === 'detailed';
+  const isOpen = userOpen ?? (live || keepOpen);
 
   return (
     <section
       className={`narrative-stream${live ? ' is-live' : ''}`}
       aria-label="执行进展"
     >
-      {hasSummary && (
+      <div className={`narrative-group${isOpen ? ' is-open' : ''}${isRunning ? ' is-running' : ''}`}>
         <button
           type="button"
           className="narrative-group-trigger narrative-stream-summary"
@@ -396,17 +324,52 @@ function NarrativeWorkstreamComponent({
           aria-expanded={isOpen}
           onClick={() => setUserOpen(!isOpen)}
         >
-          <span className="narrative-icon" aria-hidden="true"><ListTree /></span>
-          <span className="narrative-group-title">执行过程</span>
-          <span className="narrative-stream-count">{entries.length} 步</span>
+          <span
+            className={`narrative-icon${singleToolPhase ? ` is-${singleToolPhase.icon}${singleToolPhase.icon === 'agent' && !isRunning ? ' is-agent-done' : ''}` : ''}`}
+            aria-hidden="true"
+          >
+            <SummaryIcon />
+          </span>
+          <span className="narrative-group-title">{summaryTitle}</span>
+          {!singleToolPhase && <span className="narrative-stream-count">{allSteps.length} 步</span>}
+          {aggregateDiff && (
+            onOpenChangeDiff ? (
+              <span
+                role="button"
+                tabIndex={0}
+                className="narrative-inline-diff is-clickable"
+                title="查看 Git 变更信息"
+                aria-label={`查看本阶段变更（+${aggregateDiff.added} -${aggregateDiff.removed}）`}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onOpenChangeDiff();
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    onOpenChangeDiff();
+                  }
+                }}
+              >
+                <span className="is-add">{`+${aggregateDiff.added}`}</span>
+                <span className="is-del">{`-${aggregateDiff.removed}`}</span>
+              </span>
+            ) : (
+              <span className="narrative-inline-diff">
+                <span className="is-add">{`+${aggregateDiff.added}`}</span>
+                <span className="is-del">{`-${aggregateDiff.removed}`}</span>
+              </span>
+            )
+          )}
+          {isRunning && <span className="narrative-running-dot" aria-hidden="true" />}
           <ChevronDown className="narrative-chevron" aria-hidden="true" />
         </button>
-      )}
-      <div
-        className={`narrative-stream-content${hasSummary ? ' is-grouped' : ''}`}
-        id={contentId}
-        hidden={hasSummary && !isOpen}
-      >{groups}</div>
+
+        <div className="narrative-branch" id={contentId} hidden={!isOpen}>
+          {isOpen && <ul className="narrative-step-list">{allSteps.map(renderStep)}</ul>}
+        </div>
+      </div>
     </section>
   );
 }

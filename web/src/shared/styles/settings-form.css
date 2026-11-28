@@ -1,7 +1,21 @@
-/* 复杂设置表单的分块层级；具体字段网格由所属功能负责。 */
-.settings-form-sections { display: grid; min-width: 0; gap: var(--settings-group-gap); align-items: start; }
-.settings-form-section { min-width: 0; padding: var(--settings-row-padding-x); border: 1px solid var(--border); border-radius: var(--radius-card); background: color-mix(in srgb, var(--surface-hover) 20%, var(--surface)); }
-.settings-form-section > h3 { margin: 0 0 var(--space-3); color: var(--text); font: var(--weight-semibold) var(--settings-label-size)/var(--leading-normal) var(--font); }
+/* 复杂设置表单的分块层级：弹框内去卡片套娃，改用轻分割线与克制小标题分层。 */
+.settings-form-sections { display: grid; min-width: 0; gap: 0; align-items: start; }
+.settings-form-section {
+  min-width: 0;
+  padding: var(--space-4) 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.settings-form-section:first-child { padding-top: var(--space-2); }
+.settings-form-section:last-child { padding-bottom: var(--space-1); }
+.settings-form-section + .settings-form-section { border-top: 1px solid var(--divider); }
+.settings-form-section > h3 {
+  margin: 0 0 var(--space-3);
+  color: var(--muted);
+  font: var(--weight-semibold) var(--text-subtitle)/var(--leading-normal) var(--font);
+  letter-spacing: 0.02em;
+}
 .settings-form-section > .pi-accordion-trigger { padding: 0; min-height: var(--settings-control-height); border-radius: var(--radius-sm); }
 .settings-form-section > .pi-accordion-trigger .pi-accordion-label { font-weight: var(--weight-semibold); }
 
@@ -15,32 +29,91 @@
   min-width: 0;
   gap: var(--settings-field-gap);
   color: var(--text);
-  font: var(--settings-label-font);
+  font: var(--font-label);
 }
 
 .settings-dialog .dialog-body :is(.settings-field > span:first-child, .settings-field-heading, .model-token-field > label) {
-  color: var(--text);
-  font: var(--settings-label-font);
+  color: var(--text-2);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
 }
 
 .settings-dialog .dialog-body :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="hidden"]), select, .pi-select-trigger) {
-  height: var(--settings-control-height);
-  font-size: var(--settings-label-size);
+  height: var(--control);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
+  color: var(--text);
+  font-size: var(--text-label);
   font-weight: var(--weight-regular);
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+.settings-dialog .dialog-body :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="hidden"]), select, .pi-select-trigger):hover:not(:disabled) {
+  border-color: var(--border-hover);
+}
+.settings-dialog .dialog-body :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="file"], [type="color"], [type="hidden"]), select, .pi-select-trigger):focus-visible {
+  border-color: var(--border-hover);
+  background: var(--surface-raised);
+  outline: none;
 }
 
-.settings-dialog .dialog-body textarea {
-  font-size: var(--settings-label-size);
+.settings-dialog .dialog-body textarea:not(:where(.quota-sample-input)) {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--settings-page-bg);
+  color: var(--text);
+  font-size: var(--text-label);
   font-weight: var(--weight-regular);
   line-height: var(--leading-body);
+}
+.settings-dialog .dialog-body textarea:not(:where(.quota-sample-input)):focus-visible {
+  border-color: var(--border-hover);
+  background: var(--surface-raised);
+  outline: none;
+}
+
+.settings-dialog .dialog-body :is(.settings-outline, .secondary-button, .settings-mini-button) {
+  min-height: var(--control-sm);
+  height: auto;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-2);
+  font-size: var(--text-label);
+  font-weight: var(--weight-medium);
+}
+.settings-dialog .dialog-body :is(.settings-outline, .secondary-button, .settings-mini-button):hover:not(:disabled) {
+  border-color: var(--border-hover);
+  background: var(--surface-hover);
+  color: var(--text);
 }
 
 .settings-dialog .dialog-body :is(.settings-field, label) > small {
   color: var(--muted);
-  font: var(--settings-description-font);
+  font: var(--font-description);
   overflow-wrap: anywhere;
 }
 
 @container settings-form (max-width: 480px) {
   .settings-dialog .settings-form-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.profile-identity-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+  gap: var(--space-3) var(--space-4);
+}
+.profile-identity-desc { grid-column: 1 / -1; }
+.profile-identity-field {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  gap: var(--settings-field-gap);
+}
+.profile-identity-field > span { color: var(--text-2); font-size: var(--text-label); font-weight: var(--weight-medium); }
+.profile-identity-field input { min-width: 0; width: 100%; }
+@container settings-form (max-width: 460px) {
+  .profile-identity-grid { grid-template-columns: minmax(0, 1fr); }
+  .profile-identity-id { grid-column: 1 / -1; }
 }

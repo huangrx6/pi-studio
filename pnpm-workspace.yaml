@@ -1,5 +1,8 @@
 packages:
   - '.'
+# Local macOS releases build both Intel and Apple Silicon bundles.
+supportedArchitectures:
+  cpu: [current, arm64, x64]
 # Skip the Win7-only folder lookup on Studio's supported Windows versions.
 # Upstream fix: electron-userland/electron-builder#9564.
 patchedDependencies:

@@ -120,14 +120,10 @@ test('password and system settings apps stay blocked', () => {
   assert.equal(denied.code, 'desktop_blocked');
 });
 
-test('permission helpers report readiness from injected systemPreferences', async () => {
+test('permission checks use the native helper’s screen and accessibility status', async () => {
   const missing = await getDesktopPermissionStatus({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'denied',
-      isTrustedAccessibilityClient: () => false,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'denied', accessibility: false }) },
   });
   assert.equal(missing.ready, false);
   assert.equal(missing.screenRecording, 'denied');
@@ -135,79 +131,23 @@ test('permission helpers report readiness from injected systemPreferences', asyn
 
   const ready = await getDesktopPermissionStatus({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
   });
   assert.equal(ready.ready, true);
   assert.equal(ready.screenRecording, 'granted');
 
   await assert.doesNotReject(() => assertDesktopPermissions('snapshot', {
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
   }));
 
   await assert.rejects(
     () => assertDesktopPermissions('screenshot', {
       platform: 'darwin',
-      skipScreenProbe: true,
-      systemPreferences: {
-        getMediaAccessStatus: () => 'denied',
-        isTrustedAccessibilityClient: () => true,
-      },
+      helperClient: { getPermissions: async () => ({ screenRecording: 'denied', accessibility: true }) },
     }),
     (error) => error && error.code === 'desktop_screen_permission',
   );
-});
-
-test('screen recording false positive is corrected by capture probe', async () => {
-  const falsePositive = await getDesktopPermissionStatus({
-    platform: 'darwin',
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
-    desktopCapturer: {
-      getSources: async () => [{
-        id: 'screen:0',
-        name: 'Screen',
-        thumbnail: {
-          isEmpty: () => true,
-          getSize: () => ({ width: 0, height: 0 }),
-          toBitmap: () => Buffer.alloc(0),
-        },
-      }],
-    },
-  });
-  assert.equal(falsePositive.screenRecording, 'denied');
-  assert.equal(falsePositive.ready, false);
-
-  const verified = await getDesktopPermissionStatus({
-    platform: 'darwin',
-    systemPreferences: {
-      getMediaAccessStatus: () => 'not-determined',
-      isTrustedAccessibilityClient: () => true,
-    },
-    desktopCapturer: {
-      getSources: async () => [{
-        id: 'screen:0',
-        name: 'Screen',
-        thumbnail: {
-          isEmpty: () => false,
-          getSize: () => ({ width: 16, height: 16 }),
-          toBitmap: () => Buffer.from([20, 30, 40, 255, 10, 20, 30, 255, 15, 25, 35, 255, 12, 22, 32, 255]),
-        },
-      }],
-    },
-  });
-  assert.equal(verified.screenRecording, 'granted');
-  assert.equal(verified.ready, true);
 });
 
 test('service gates apps and refuses screenshot without window id', async () => {
@@ -219,11 +159,7 @@ test('service gates apps and refuses screenshot without window id', async () => 
 
   const service = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
       { name: 'Terminal', bundleId: 'com.apple.Terminal', path: '/System/Applications/Utilities/Terminal.app' },
@@ -285,11 +221,7 @@ test('screenshot refuses window ids that do not belong to the allowed app', asyn
 
   const service = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
       { name: 'Terminal', bundleId: 'com.apple.Terminal', path: '/System/Applications/Utilities/Terminal.app' },
@@ -329,11 +261,7 @@ test('listApps works without accessibility; listWindows batches allowed apps', a
   let listWindowsCalls = 0;
   const service = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => false,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: false }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
       { name: 'Safari', bundleId: 'com.apple.Safari', path: '/Applications/Safari.app' },
@@ -361,11 +289,7 @@ test('listApps works without accessibility; listWindows batches allowed apps', a
   // With injected listWindows, batch still walks allowed apps only.
   const withAx = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
       { name: 'Safari', bundleId: 'com.apple.Safari', path: '/Applications/Safari.app' },
@@ -404,11 +328,7 @@ test('activity log records metadata and screenshot rejects minimized windows', a
 
   const service = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
     ]),
@@ -451,6 +371,114 @@ test('activity log records metadata and screenshot rejects minimized windows', a
   assert.equal(service.listActivity().length, 0);
 });
 
+test('macOS records actual keyboard denial, stops later keyboard batches, and rechecks after refresh', async () => {
+  const target = { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' };
+  setDesktopControlPreferences({ enabled: true, allowAnyApp: false, alwaysAllow: [target] });
+  const window = { windowId: 7, visible: true, bounds: { x: 0, y: 0, width: 800, height: 600 } };
+  let attempts = 0;
+  let clicks = 0;
+  let allowKey = false;
+  const service = createDesktopControlService({
+    platform: 'darwin',
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
+    listRunningApps: async () => [target],
+    listWindows: async () => [window],
+    getWindowFrame: async () => window,
+    getFocusedNode: async () => ({ role: 'AXTextField' }),
+    click: async () => { clicks++; return { ok: true }; },
+    showOverlay: () => {},
+    hotkey: async () => {
+      attempts++;
+      if (!allowKey) throw new Error('“osascript”不允许发送按键。 (1002)');
+      return { ok: true, chord: 'command+f' };
+    },
+  });
+  const query = { appName: 'Notes', windowId: 7 };
+  assert.equal((await service.permissionStatus()).keyboardInput, 'unverified');
+  const batch = await service.act({ ...query, actions: [{ type: 'hotkey', key: 'f', modifiers: ['cmd'] }], screenshot: false });
+  assert.equal(batch.failedStep.code, 'desktop_keyboard_permission');
+  const denied = await service.permissionStatus();
+  assert.equal(denied.keyboardInput, 'denied');
+  assert.equal(denied.ready, false);
+  assert.match(denied.message, /System Events.*1002/);
+  assert.equal(denied.accessibility, true);
+  await assert.doesNotReject(() => service.listWindows({ appName: 'Notes' }));
+  await assert.rejects(() => service.type({ ...query, text: 'wx' }), { code: 'desktop_keyboard_permission' });
+  await assert.rejects(() => service.act({
+    ...query, actions: [{ type: 'click', rx: 20, ry: 20 }, { type: 'type', text: 'wx' }], screenshot: false,
+  }), { code: 'desktop_keyboard_permission' });
+  assert.equal(clicks, 0);
+  assert.equal(attempts, 1);
+  allowKey = true;
+  assert.equal((await service.permissionStatus({ refresh: true })).keyboardInput, 'unverified');
+  await service.hotkey({ ...query, key: 'f', modifiers: ['cmd'] });
+  assert.equal((await service.permissionStatus()).keyboardInput, 'available');
+  assert.equal(attempts, 2);
+});
+
+test('macOS launches and scales locally while the helper captures only the target window', async () => {
+  const target = { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' };
+  setDesktopControlPreferences({ enabled: true, allowAnyApp: false, alwaysAllow: [target] });
+  let running = false;
+  const localCommands = [];
+  const helperCommands = [];
+  const service = createDesktopControlService({
+    platform: 'darwin',
+    helperClient: {
+      getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }),
+      exec: async (cmd, args) => {
+        helperCommands.push(cmd);
+        assert.equal(cmd, '/usr/sbin/screencapture');
+        assert.deepEqual(args.slice(0, -1), ['-x', '-o', '-l', '7']);
+        fs.writeFileSync(args.at(-1), Buffer.alloc(1024 * 1024));
+      },
+    },
+    localRunner: async (cmd, args) => {
+      localCommands.push(cmd);
+      if (cmd === '/usr/bin/open') {
+        assert.deepEqual(args, ['-g', '-a', target.path]);
+        running = true;
+      } else {
+        assert.equal(cmd, '/usr/bin/sips');
+        fs.writeFileSync(args.at(-1), Buffer.from('resized fixture'));
+      }
+    },
+    listInstalledApps: () => [target],
+    listWindows: async () => running ? [{ windowId: 7, visible: true }] : [],
+  });
+  const result = await service.launch({ appName: 'Notes', screenshot: true });
+  assert.equal(result.windowId, 7);
+  assert.equal(result.screenshot.scaled, true);
+  assert.deepEqual(localCommands, ['/usr/bin/open', '/usr/bin/sips']);
+  assert.deepEqual(helperCommands, ['/usr/sbin/screencapture']);
+});
+
+test('desktop_act only waits to settle for a requested screenshot with a positive delay', async (t) => {
+  const target = { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' };
+  const window = { windowId: 7, visible: true };
+  setDesktopControlPreferences({ enabled: true, allowAnyApp: false, alwaysAllow: [target] });
+  const service = createDesktopControlService({
+    platform: 'darwin',
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
+    listRunningApps: async () => [target],
+    listWindows: async () => [window],
+    getWindowFrame: async () => window,
+    hotkey: async () => ({ ok: true }),
+    captureScreenshot: async () => ({ windowId: 7, data: Buffer.from('image').toString('base64') }),
+  });
+  const delays = [];
+  t.mock.method(globalThis, 'setTimeout', (callback, ms) => {
+    delays.push(ms);
+    return setImmediate(callback);
+  });
+  const batch = { appName: 'Notes', windowId: 7, actions: [{ type: 'hotkey', key: 'f', modifiers: ['cmd'] }] };
+  assert.equal((await service.act({ ...batch, screenshot: false })).ok, true);
+  assert.equal((await service.act({ ...batch, screenshot: true, settleMs: 0 })).screenshot.windowId, 7);
+  assert.deepEqual(delays, []);
+  assert.equal((await service.act({ ...batch, screenshot: true })).screenshot.windowId, 7);
+  assert.deepEqual(delays, [260]);
+});
+
 test('status exposes setup todos via activity-aware payload shape', async () => {
   setDesktopControlPreferences({
     enabled: false,
@@ -459,11 +487,7 @@ test('status exposes setup todos via activity-aware payload shape', async () => 
   });
   const service = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'denied',
-      isTrustedAccessibilityClient: () => false,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'denied', accessibility: false }) },
   });
   const status = await service.status();
   assert.equal(status.enabled, false);
@@ -498,11 +522,7 @@ test('click requires window ownership and stays inside window bounds', async () 
   const clicks = [];
   const service = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
     ]),
@@ -552,11 +572,7 @@ test('click requires window ownership and stays inside window bounds', async () 
 
   const serviceCoords = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
     ]),
@@ -626,11 +642,7 @@ test('desktop_type validates text and never logs body', async () => {
   const typed = [];
   const service = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
     ]),
@@ -672,11 +684,7 @@ test('desktop_type validates text and never logs body', async () => {
 
   const secretService = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
     ]),
@@ -756,11 +764,7 @@ test('desktop_scroll validates delta and stays inside window', async () => {
   const scrolls = [];
   const service = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
     ]),
@@ -861,11 +865,7 @@ test('desktop_drag requires in-window endpoints and records metadata only', asyn
   const drags = [];
   const service = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
     ]),
@@ -1052,11 +1052,7 @@ test('desktop_hotkey normalizes chords and blocks dangerous system shortcuts', a
   const pressed = [];
   const service = createDesktopControlService({
     platform: 'darwin',
-    skipScreenProbe: true,
-    systemPreferences: {
-      getMediaAccessStatus: () => 'granted',
-      isTrustedAccessibilityClient: () => true,
-    },
+    helperClient: { getPermissions: async () => ({ screenRecording: 'granted', accessibility: true }) },
     listRunningApps: async () => ([
       { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Notes.app' },
     ]),
@@ -1099,4 +1095,52 @@ test('desktop_hotkey normalizes chords and blocks dangerous system shortcuts', a
   const activity = service.listActivity();
   assert.ok(activity.some((row) => row.tool === 'desktop_hotkey' && row.ok === true));
   assert.ok(activity.some((row) => String(row.detail || '').includes('command+s')));
+});
+
+test('listAppMappings and desktop_launch enforce allowlist, hard-blocks, and localized name matching', async () => {
+  setDesktopControlPreferences({
+    enabled: true,
+    allowAnyApp: false,
+    alwaysAllow: [{ name: 'Calculator', bundleId: 'com.apple.calculator', path: '/System/Applications/Calculator.app' }],
+  });
+
+  let launched = false;
+  const service = createDesktopControlService({
+    platform: 'darwin',
+
+    listInstalledApps: () => [
+      { name: 'Calculator', displayName: '计算器', bundleId: 'com.apple.calculator', executableName: 'Calculator', path: '/System/Applications/Calculator.app' },
+      { name: 'Notes', displayName: '备忘录', bundleId: 'com.apple.Notes', executableName: 'Notes', path: '/System/Applications/Notes.app' },
+      { name: 'Terminal', displayName: '终端', bundleId: 'com.apple.Terminal', executableName: 'Terminal', path: '/System/Applications/Utilities/Terminal.app' },
+    ],
+    listWindows: async (app) => (
+      launched && app.bundleId === 'com.apple.calculator'
+        ? [{ id: '88', windowId: 88, title: '计算器', appName: '计算器', minimized: false, visible: true }]
+        : []
+    ),
+    launchApp: async () => { launched = true; },
+  });
+
+  const mappings = await service.listAppMappings();
+  assert.equal(mappings.length, 3);
+  assert.equal(mappings.find((m) => m.bundleId === 'com.apple.calculator')?.allowed, true);
+  assert.equal(mappings.find((m) => m.bundleId === 'com.apple.Terminal')?.blocked, true);
+
+  // Blocked app refuses even when targeted by Chinese display name.
+  await assert.rejects(
+    () => service.launch({ appName: '终端' }),
+    (error) => error && error.code === 'desktop_blocked',
+  );
+  // Unallowed app refuses under strict allowlist.
+  await assert.rejects(
+    () => service.launch({ appName: '备忘录' }),
+    (error) => error && error.code === 'desktop_needs_approval',
+  );
+  // Allowed app launches by Chinese displayName and returns its new windowId.
+  const res = await service.launch({ appName: '计算器', waitMs: 500 });
+  assert.equal(res.ok, true);
+  assert.equal(res.alreadyRunning, false);
+  assert.equal(res.bundleId, 'com.apple.calculator');
+  assert.equal(res.windowId, 88);
+  assert.ok(service.listActivity().some((row) => row.tool === 'desktop_launch' && row.ok === true));
 });
