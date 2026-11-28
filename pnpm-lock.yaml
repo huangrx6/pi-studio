@@ -142,8 +142,8 @@ importers:
         specifier: 0.58.0
         version: 0.58.0
       playwright-core:
-        specifier: 1.61.1
-        version: 1.61.1
+        specifier: 1.65.1
+        version: 1.65.1
       remark-math:
         specifier: 6.0.0
         version: 6.0.0(supports-color@8.1.1)
@@ -3263,9 +3263,9 @@ packages:
     resolution: {integrity: sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA==}
     engines: {node: '>=12'}
 
-  playwright-core@1.61.1:
-    resolution: {integrity: sha512-h7Qlt6m4REp25qvIdvbDtVmD4LqVXfpRxhORv9L0jzETM05p4fuPJ3dKyuSXQxDSbXnmS79HAgi9589lGSpLkg==}
-    engines: {node: '>=18'}
+  playwright-core@1.65.1:
+    resolution: {integrity: sha512-hqPpz7blSMPxWVdoeE1yiBSzXsKiVOd2k+kjCvmUywD2GPO2Dd9HfcWnq9NN0GHbNZDFgZ9JfBFr+X5/BLo0qw==}
+    engines: {node: '>=20'}
     hasBin: true
 
   plist@3.1.1:
@@ -7656,7 +7656,7 @@ snapshots:
 
   picomatch@4.0.7: {}
 
-  playwright-core@1.61.1: {}
+  playwright-core@1.65.1: {}
 
   plist@3.1.1:
     dependencies:
